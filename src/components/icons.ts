@@ -65,6 +65,10 @@ export const icons = {
   favoriteFilled: Icon.select({ ios: 'heart.fill', android: require('@/assets/icons/favorite_fill.xml') }),
   train: Icon.select({ ios: 'tram', android: import('@expo/material-symbols/train.xml') }),
   otherHouses: Icon.select({ ios: 'house.and.flag', android: import('@expo/material-symbols/other_houses.xml') }),
+  // Exposed dropdown menu arrow (Android kit PickerRow).
+  dropDown: Icon.select({ ios: 'chevron.up.chevron.down', android: import('@expo/material-symbols/arrow_drop_down.xml') }),
+  // MonthCalendar's "jump to today" button.
+  today: Icon.select({ ios: 'calendar.circle', android: import('@expo/material-symbols/today.xml') }),
 };
 
 export type IconKey = keyof typeof icons;
