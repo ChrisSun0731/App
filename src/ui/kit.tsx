@@ -439,7 +439,7 @@ export function MonthCalendar({ title, weekdays, cells, selectedKey, onSelect, o
           </Pressable>
         ))}
       </View>
-      <View style={styles.wrap}>
+      <View style={styles.grid}>
         {weekdays.map((weekday) => (
           <Text key={weekday} style={[styles.cell, styles.center, { color: palette.textSecondary }]}>{weekday}</Text>
         ))}
@@ -545,7 +545,9 @@ const styles = StyleSheet.create({
   tiles: { gap: 0, padding: 6 },
   tile: { padding: 6 },
   tileInner: { borderRadius: 16, paddingVertical: 20, paddingHorizontal: 8, alignItems: 'center' },
-  cell: { width: `${100 / 7 - 1.2}%`, paddingVertical: 6, borderRadius: 12, alignItems: 'center' },
+  // Seven columns with no gap between them: a gap would push the seventh cell to the next line.
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  cell: { width: '14.28%', paddingVertical: 6, borderRadius: 12, alignItems: 'center' },
   indicators: { height: 6, gap: 2 },
   indicator: { width: 5, height: 5, borderRadius: 1 },
   round: { borderRadius: 2.5 },

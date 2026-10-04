@@ -1,0 +1,109 @@
+// Pure helpers for the SwiftUI kit. Nothing here imports @expo/ui at runtime,
+// so Jest can run them without the native module (see helpers.test.ts).
+import type { ImageProps } from '@expo/ui/swift-ui';
+import { Children, isValidElement, type ReactNode } from 'react';
+
+import { fromDateKey, isDateKey } from '@/lib/dates';
+
+import type { IconValue, RowAction } from '../types';
+
+/** An SF Symbol name, as @expo/ui's SwiftUI views type it. */
+export type SFSymbol = NonNullable<ImageProps['systemName']>;
+
+/**
+ * The SF Symbol of a kit icon. `Icon.select` resolves to the iOS string in the
+ * iOS bundle; anything else (an Android asset) has no symbol to draw.
+ */
+export function sf(icon: IconValue | undefined): SFSymbol | undefined {
+  return typeof icon === 'string' && icon.length > 0 ? icon : undefined;
+}
+
+/** One VoiceOver phrase from visible texts in reading order; blanks are skipped. */
+export function spokenLabel(parts: readonly (string | false | null | undefined)[]): string {
+  return parts
+    .filter((part): part is string => typeof part === 'string' && part.trim() !== '')
+    .join('，');
+}
+
+/**
+ * What VoiceOver should read for kit inline elements in `Row.footer`: a
+ * CrowdBar's own label, a MetricPills' metric labels, or plain text. The row
+ * reads as one element, so these have to be part of its label.
+ */
+export function footerSpeech(node: ReactNode): string[] {
+  const spoken: string[] = [];
+  Children.forEach(node, (child) => {
+    if (typeof child === 'string' || typeof child === 'number') {
+      spoken.push(String(child));
+      return;
+    }
+    if (!isValidElement(child)) return;
+    const props = child.props as {
+      accessibilityLabel?: unknown;
+      metrics?: unknown;
+      children?: ReactNode;
+    };
+    if (typeof props.accessibilityLabel === 'string') {
+      spoken.push(props.accessibilityLabel);
+    } else if (Array.isArray(props.metrics)) {
+      for (const metric of props.metrics as { label?: unknown }[]) {
+        if (typeof metric.label === 'string') spoken.push(metric.label);
+      }
+    } else if (props.children != null) {
+      spoken.push(...footerSpeech(props.children));
+    }
+  });
+  return spoken;
+}
+
+/** SwiftUI shows only a few swipe buttons comfortably; the rest stay in the context menu. */
+export const MAX_SWIPE_ACTIONS = 3;
+
+/**
+ * Trailing swipe buttons, edge first. SwiftUI puts the first button at the
+ * row's edge, where a full swipe triggers it, so destructive actions lead
+ * (like Mail's Trash).
+ */
+export function trailingSwipeActions(actions: readonly RowAction[]): RowAction[] {
+  const destructive = actions.filter((action) => action.destructive);
+  const others = actions.filter((action) => !action.destructive);
+  return [...destructive, ...others].slice(0, MAX_SWIPE_ACTIONS);
+}
+
+/** Splits `items` into rows of `size` (the last row may be shorter). */
+export function chunk<T>(items: readonly T[], size: number): T[][] {
+  const width = Math.max(1, Math.floor(size));
+  const rows: T[][] = [];
+  for (let index = 0; index < items.length; index += width) {
+    rows.push(items.slice(index, index + width));
+  }
+  return rows;
+}
+
+/** The major iOS version from `Platform.Version` ("17.4" -> 17). */
+export function iosMajorVersion(version: string | number): number {
+  const major = Number.parseInt(String(version), 10);
+  return Number.isFinite(major) ? major : 0;
+}
+
+/**
+ * The Date a SwiftUI DatePicker shows for a local "YYYY-MM-DD" key: local
+ * midnight, so the picker (which works in the device's calendar and time zone)
+ * lands on that calendar day. A malformed key falls back to today instead of
+ * throwing while rendering.
+ */
+export function pickerDate(key: string, now: Date = new Date()): Date {
+  if (isDateKey(key)) return fromDateKey(key);
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+/**
+ * A "#RRGGBB" colour at `alpha` (0–1) as "#RRGGBBAA", which @expo/ui's colour
+ * parser reads CSS-style. Anything else (a named or platform colour) is
+ * returned unchanged.
+ */
+export function withAlpha(color: string, alpha: number): string {
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return color;
+  const value = Math.round(Math.min(1, Math.max(0, alpha)) * 255);
+  return `${color}${value.toString(16).padStart(2, '0')}`.toUpperCase();
+}

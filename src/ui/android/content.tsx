@@ -1,10 +1,10 @@
 import {
   Box,
   Column,
-  FilledTonalButton,
   FlowRow,
   Icon,
   LoadingIndicator,
+  OutlinedButton,
   RNHostView,
   Row,
   Spacer,
@@ -78,9 +78,9 @@ export function EmptyState({ title, description, icon, action, secondaryAction }
       {action || secondaryAction ? (
         <Row horizontalArrangement={{ spacedBy: 8 }} verticalAlignment="center" modifiers={[padding(0, 8, 0, 0)]}>
           {action ? (
-            <FilledTonalButton onClick={action.onPress}>
+            <OutlinedButton onClick={action.onPress}>
               <Text style={{ typography: 'labelLarge' }}>{action.label}</Text>
-            </FilledTonalButton>
+            </OutlinedButton>
           ) : null}
           {secondaryAction ? (
             <TextButton onClick={secondaryAction.onPress}>

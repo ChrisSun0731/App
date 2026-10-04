@@ -16,9 +16,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BRAND } from '@/theme/brand';
 
-import type { ListScreenProps, SectionProps } from '../types';
+import type { ButtonRowProps, ListScreenProps, SectionProps } from '../types';
 import { flattenChildren } from './helpers';
+import { ButtonRow, CheckRow, DateRow, Row, ToggleRow } from './rows';
 import { CARD_RADIUS, iconSource, InCardContext, useM3 } from './theme';
+
+/** Kit rows drawn as a Material ListItem. */
+const LIST_ITEMS = new Set<unknown>([Row, CheckRow, ToggleRow, DateRow, ButtonRow]);
+
+function isListItem(element: ReactElement): boolean {
+  if (!LIST_ITEMS.has(element.type)) return false;
+  return !(element.type === ButtonRow && (element.props as ButtonRowProps).prominent);
+}
 
 /** Room the extended FAB (56dp + its 16dp margin) takes over the list's end. */
 const FAB_CLEARANCE = 80;
@@ -97,17 +106,19 @@ export function Section({ title, footer, plain = false, children }: SectionProps
       </Column>
     );
   } else if (rows.length > 0) {
-    // A filled card on surfaceContainerLow, rows separated by inset dividers.
-    // The clip gives the rounder Settings-style corners and keeps row ripples
-    // (and row background colours) inside them.
+    // A filled card on surfaceContainerLow. The clip gives the rounder
+    // Settings-style corners and keeps row ripples (and row background
+    // colours) inside them. Inset dividers separate adjacent list items only:
+    // outlined fields, chips, tiles and text blocks carry their own padding,
+    // and a line between two outlined fields reads as clutter in a form.
     body = (
       <Card
         colors={{ containerColor: m.surfaceContainerLow }}
         modifiers={[fillMaxWidth(), clip(Shapes.RoundedCorner(CARD_RADIUS))]}>
         {rows.flatMap((row, index) =>
-          index === 0
-            ? [row]
-            : [<HorizontalDivider key={`divider:${row.key}`} modifiers={[padding(16, 0, 16, 0)]} />, row],
+          index > 0 && isListItem(rows[index - 1]) && isListItem(row)
+            ? [<HorizontalDivider key={`divider:${row.key}`} modifiers={[padding(16, 0, 16, 0)]} />, row]
+            : [row],
         )}
       </Card>
     );
