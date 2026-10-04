@@ -61,7 +61,7 @@ Both a `vX.Y.Z` tag and a manually dispatched build workflow build, sign, and up
 
 Keep signing credentials in GitHub Secrets and local API configuration in `.env.local`. Never commit private keys, provisioning profiles, or real API credentials.
 
-**Legacy Capacitor WebView localStorage has not been migrated to SQLite.** Complete and test recovery of tasks, events, timetable edits, favorites, pins, and settings before shipping updates to existing users. PRs and release notes should clearly communicate this limitation.
+**Legacy Capacitor WebView localStorage is imported on first launch by `src/features/legacy-import`.** When you change a store's shape or defaults, update that folder's transform/merge logic and tests too. Before release, validate the import by upgrading from a real previous build on Android and iOS.
 
 ## Contact
 

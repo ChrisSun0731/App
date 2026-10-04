@@ -96,9 +96,9 @@ Android 由 Gradle 使用既有 `PLAY_SIGNING_KEY`、`PLAY_SIGNING_KEY_ALIAS`、
 
 ## 發布更新前必須完成的項目
 
-**尚未實作舊版 Capacitor WebView localStorage 的自動復原。** 新版 Zustand 使用 Expo SQLite，與舊版 WebView 的儲存位置／資料格式不同；即使保留相同 bundle／package ID，也不會自動取回舊版的待辦、活動、課表修改、最愛、釘選與設定。正式提供既有使用者更新前，必須實作並驗證跨儲存機制的遷移或匯出／匯入流程。
+**舊版資料匯入需要實機驗證。** 新版 Zustand 使用 Expo SQLite，與舊版 Capacitor WebView 的 localStorage 分開。`src/features/legacy-import` 會在首次啟動時以隱藏 WebView 讀取舊版的待辦、活動、課表修改、班級、最愛、釘選、追蹤車站與設定，轉換後合併到新版（不覆蓋新版已建立的資料），詳見 [docs/native-rewrite-progress.md](docs/native-rewrite-progress.md)。正式提供既有使用者更新前，必須在 Android 與 iOS 上以實際的舊版（例如 3.4.0）安裝、建立資料後升級，確認資料完整匯入。
 
-網路來源首次讀取失敗且沒有快取時，功能會顯示錯誤／空白狀態。商店簽署、既有資料遷移與雙平台實機操作仍需要完整發布驗證。
+網路來源首次讀取失敗且沒有快取時，功能會顯示錯誤／空白狀態。商店簽署、舊版資料匯入與雙平台實機操作仍需要完整發布驗證。
 
 ## 貢獻與聯絡
 
