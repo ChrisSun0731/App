@@ -5,6 +5,7 @@ import { Alert, View } from 'react-native';
 import { ActionButton, Body, Card, Screen, Title, Toggle } from '@/components/ui/page';
 import { FEATURES, MAX_FEATURE_TABS } from '@/features/registry';
 import { useTimetables } from '@/features/schedule/use-timetables';
+import { useConfirmedPicker } from '@/hooks/use-confirmed-picker';
 import { queryClient } from '@/lib/query-client';
 import { useFoodStore } from '@/store/food';
 import { useNewsStore } from '@/store/news';
@@ -19,13 +20,14 @@ export default function SettingsScreen() {
   const timetable = useTimetables();
   const userClass = useScheduleStore((state) => state.userClass);
   const count = visibleTabs(settings.toolbar).length;
+  const classPicker = useConfirmedPicker();
   function changeClass(id: string) {
+    if (id === userClass) return;
     const rows = timetable.data?.byClass[id];
-    if (!rows || id === userClass) return;
-    Alert.alert(`更改為 ${id} 班？`, '更改班級會取代自訂科目、備註及顏色。', [
-      { text: '取消', style: 'cancel' },
-      { text: '更改', onPress: () => useScheduleStore.getState().setClass(id, rows) },
-    ]);
+    // The native picker has already moved to `id`; put it back.
+    if (!rows) { classPicker.resync(); return; }
+    classPicker.confirm(`更改為 ${id} 班？`, '更改班級會取代自訂科目、備註及顏色。',
+      { text: '更改', onPress: () => useScheduleStore.getState().setClass(id, rows) });
   }
   function clearData() {
     Alert.alert('重設個人資料與設定？', '自訂課表、活動、待辦、釘選、收藏、追蹤車站及設定會刪除，無法復原。', [
@@ -40,7 +42,7 @@ export default function SettingsScreen() {
   }
   return <Screen>
     <Card><Title>我的班級</Title><Body secondary>班級用於匯入課表。</Body>
-      {timetable.data ? <Host matchContents={{ vertical: true }} seedColor={BRAND}>
+      {timetable.data ? <Host key={classPicker.pickerKey} matchContents={{ vertical: true }} seedColor={BRAND}>
         <Picker selectedValue={userClass} onValueChange={changeClass}>
           {Array.from(new Set([userClass, ...timetable.data.classIds])).sort().map((id) => <Picker.Item key={id} label={`${id} 班`} value={id} />)}
         </Picker>

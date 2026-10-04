@@ -4,6 +4,7 @@ import { Alert, Pressable, Text, View } from 'react-native';
 
 import { ActionButton, Body, Card, Screen, Segment, Title } from '@/components/ui/page';
 import { ChoiceField } from '@/features/todo/form-controls';
+import { useConfirmedPicker } from '@/hooks/use-confirmed-picker';
 import { useScheduleStore } from '@/store/schedule';
 import { usePalette } from '@/theme/palette';
 
@@ -28,6 +29,7 @@ export default function ScheduleScreen() {
   const [now, setNow] = useState(() => new Date());
   const [dayIndex, setDayIndex] = useState(() => Math.max(0, WEEKDAYS.indexOf(weekdayOf(new Date()) ?? 'Monday')));
   const day = WEEKDAYS[dayIndex];
+  const classPicker = useConfirmedPicker();
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
@@ -41,11 +43,12 @@ export default function ScheduleScreen() {
   }, [resetRows, rows.length, timetable.data, userClass]);
 
   function changeClass(next: string) {
-    if (next === userClass || !timetable.data?.byClass[next]) return;
-    Alert.alert('更改班級', `改為 ${next} 班會清除目前課表的修改。`, [
-      { text: '取消', style: 'cancel' },
-      { text: '更改', style: 'destructive', onPress: () => setClass(next, timetable.data!.byClass[next]) },
-    ]);
+    if (next === userClass) return;
+    const nextRows = timetable.data?.byClass[next];
+    // The native picker has already moved to `next`; put it back.
+    if (!nextRows) { classPicker.resync(); return; }
+    classPicker.confirm('更改班級', `改為 ${next} 班會清除目前課表的修改。`,
+      { text: '更改', style: 'destructive', onPress: () => setClass(next, nextRows) });
   }
 
   function resetTimetable() {
@@ -72,7 +75,7 @@ export default function ScheduleScreen() {
         {[timetable.data?.academicYear, week ? `第${week}週` : '', parity === 'odd' ? '單週' : '雙週'].filter(Boolean).join(' · ')}
       </Body>
       <Card>
-        <ChoiceField label="班級" value={userClass} options={options} onChange={changeClass} disabled={!timetable.data} />
+        <ChoiceField key={classPicker.pickerKey} label="班級" value={userClass} options={options} onChange={changeClass} disabled={!timetable.data} />
         <ActionButton label="重新匯入課表" onPress={resetTimetable} disabled={!timetable.data?.byClass[userClass]} />
       </Card>
       <Segment options={['一', '二', '三', '四', '五']} selectedIndex={dayIndex} onChange={setDayIndex} />
@@ -107,14 +110,14 @@ export default function ScheduleScreen() {
               </View>
               <View style={{ flex: 1, gap: 6 }}>
                 <Text style={{ color: palette.text, fontSize: 18, fontWeight: '600' }}>{subjectFor(cell, parity) || '空堂'}</Text>
-                {alternating && <Text style={{ color: palette.textSecondary }}>單週：{alternating.odd}　雙週：{alternating.even}</Text>}
+                {alternating && <Text style={{ color: palette.textSecondary }}>單週：{alternating.odd || '空堂'}　雙週：{alternating.even || '空堂'}</Text>}
                 {!!cell.note && <Text style={{ color: palette.textSecondary }}>{cell.note}</Text>}
               </View>
             </View>
           </Pressable>
         );
       })}
-      <Body secondary>點選課程可修改科目、備註與顏色。</Body>
+      <Body secondary>點選課程可修改科目、單雙週輪替、備註與顏色。</Body>
     </Screen>
   );
 }
