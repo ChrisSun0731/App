@@ -3,9 +3,10 @@
 //
 // Hours come from the Data repo's restaurantData.json, one string per weekday:
 // "06:00-14:00,16:30-19:30", or "休息" for closed all day. A range may close
-// after midnight, written either "17:00-25:00" or "17:00-01:00". The Quasar app only compared
-// against today's ranges, so after midnight such a shop showed as closed; the
-// previous day's overnight ranges are now checked too (refactor plan item 6-B).
+// after midnight, written either "17:00-25:00" or "17:00-01:00", or end at
+// "24:00" and carry on in the next day's "00:00-..." range. The Quasar app only
+// compared against today's ranges, so after midnight such a shop showed as
+// closed; yesterday's and tomorrow's ranges are now taken into account too.
 import { minutesOfDay, parseClockTime } from '@/lib/dates';
 
 export const DAY_KEYS = [
@@ -87,17 +88,26 @@ interface Range {
   close: number;
 }
 
-/** Parses "06:00-14:00,16:30-19:30" into minute ranges; "休息" and junk give []. */
+const DAY = 24 * 60;
+
+/**
+ * Parses "06:00-14:00,16:30-19:30" into minute ranges; "休息" and junk give [].
+ * "00:00-24:00" is the whole day.
+ */
 export function parseRanges(hours: string | undefined): Range[] {
   if (!hours || hours.trim() === CLOSED_ALL_DAY) return [];
   return hours.split(',').flatMap((part) => {
     const [openText, closeText] = part.split(/[-–]/);
     if (openText === undefined || closeText === undefined) return [];
     const open = parseClockTime(openText);
-    const close = parseClockTime(closeText);
+    let close = parseClockTime(closeText);
     if (open === null || close === null || close === open) return [];
     // "22:00-02:00" means the same as "22:00-26:00".
-    return [{ open, close: close < open ? close + 24 * 60 : close }];
+    if (close < open) close += DAY;
+    // A range opening after midnight belongs on the next day's line, and none
+    // lasts over a day; rejecting both keeps getOpenStatus's three-day window
+    // enough to see every range that can touch today.
+    return open < DAY && close - open <= DAY ? [{ open, close }] : [];
   });
 }
 
@@ -105,32 +115,36 @@ export function dayKeyOf(date: Date): DayKey {
   return DAY_KEYS[date.getDay()];
 }
 
-/** The ranges in effect at `date`, as minutes on today's clock. */
-function rangesAround(hours: OpeningHours, date: Date): Range[] {
-  const today = parseRanges(hours[dayKeyOf(date)]);
-  // Yesterday's ranges that run past midnight, shifted onto today's clock.
-  const yesterdayKey = DAY_KEYS[(date.getDay() + 6) % 7];
-  const overnight = parseRanges(hours[yesterdayKey])
-    .filter((range) => range.close > 24 * 60)
-    .map((range) => ({ open: range.open - 24 * 60, close: range.close - 24 * 60 }));
-  return [...overnight, ...today];
+/**
+ * Opening periods from yesterday to tomorrow as minutes on today's clock
+ * (negative = yesterday, 1440+ = tomorrow). Ranges that overlap or touch are
+ * merged, so "11:00-24:00" followed by tomorrow's "00:00-03:00", or
+ * "00:00-24:00" every day, is one period rather than one closing at midnight.
+ */
+function periodsAround(hours: OpeningHours, date: Date): Range[] {
+  const ranges = [-1, 0, 1]
+    .flatMap((offset) =>
+      parseRanges(hours[DAY_KEYS[(date.getDay() + offset + 7) % 7]]).map(({ open, close }) => ({
+        open: open + offset * DAY,
+        close: close + offset * DAY,
+      })),
+    )
+    .sort((a, b) => a.open - b.open);
+  const periods: Range[] = [];
+  for (const range of ranges) {
+    const last = periods[periods.length - 1];
+    if (last && range.open <= last.close) last.close = Math.max(last.close, range.close);
+    else periods.push(range);
+  }
+  return periods;
 }
 
 export function getOpenStatus(hours: OpeningHours, date: Date = new Date()): OpenStatus {
   const now = minutesOfDay(date);
-  const ranges = rangesAround(hours, date);
-
-  for (const { open, close } of ranges) {
-    if (now >= open && now < close) {
-      return close - now <= SOON_MINUTES ? 'closingSoon' : 'open';
-    }
-  }
-  for (const { open } of ranges) {
-    if (now < open && open - now <= SOON_MINUTES) {
-      return 'openingSoon';
-    }
-  }
-  return 'closed';
+  const periods = periodsAround(hours, date);
+  const current = periods.find(({ open, close }) => now >= open && now < close);
+  if (current) return current.close - now <= SOON_MINUTES ? 'closingSoon' : 'open';
+  return periods.some(({ open }) => open > now && open - now <= SOON_MINUTES) ? 'openingSoon' : 'closed';
 }
 
 export function isOpenNow(hours: OpeningHours, date: Date = new Date()): boolean {

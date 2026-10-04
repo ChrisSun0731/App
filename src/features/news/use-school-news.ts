@@ -25,7 +25,8 @@ export function useSchoolNews() {
   return useQuery({
     queryKey: ['school-news'],
     queryFn: async ({ signal }) => {
-      const items = await fetchSchoolNews(signal);
+      // The cache is passed in so a feed that fails this round keeps its items.
+      const items = await fetchSchoolNews(signal, useNewsStore.getState().cached);
       useNewsStore.getState().setFetched(items, new Date().toISOString());
       return items;
     },
