@@ -74,6 +74,10 @@ export const icons = {
   // 美食's filter menu; the filled glyph shows (as in Mail) that a filter is on.
   filter: Icon.select({ ios: 'line.3.horizontal.decrease.circle', android: import('@expo/material-symbols/filter_list.xml') }),
   filterActive: Icon.select({ ios: 'line.3.horizontal.decrease.circle.fill', android: import('@expo/material-symbols/filter_list.xml') }),
+  // 校網's pin toggle in its pinned state. Android reuses the outlined glyph
+  // (the kit tints an active toggle) as only outlined symbols ship.
+  pinFilled: Icon.select({ ios: 'pin.fill', android: import('@expo/material-symbols/keep.xml') }),
+  share: Icon.select({ ios: 'square.and.arrow.up', android: import('@expo/material-symbols/share.xml') }),
 };
 
 export type IconKey = keyof typeof icons;

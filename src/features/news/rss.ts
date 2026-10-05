@@ -126,6 +126,16 @@ export function mergeSchoolNews(
   return dedupeNewest([...fresh, ...retained]);
 }
 
+/** One refresh round: what to show and cache, and which feeds did not answer. */
+export interface SchoolNewsRound {
+  items: NewsItem[];
+  /**
+   * Feeds that failed this round while another loaded. Their part of `items`
+   * is carried over from the cached list, so it may be out of date.
+   */
+  failed: NewsFeed[];
+}
+
 /**
  * Both feeds merged with mergeSchoolNews. Succeeds as long as one feed loads;
  * rejects with the first error only when every feed fails.
@@ -133,7 +143,7 @@ export function mergeSchoolNews(
 export async function fetchSchoolNews(
   signal?: AbortSignal,
   previous: readonly NewsItem[] = [],
-): Promise<NewsItem[]> {
+): Promise<SchoolNewsRound> {
   const results = await Promise.allSettled(
     SCHOOL_NEWS_FEEDS.map(async ({ url }) => parseRss(await getText(url, { signal, timeoutMs: 15_000 }))),
   );
@@ -144,7 +154,15 @@ export async function fetchSchoolNews(
   const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
   // A cancelled query rejects too, rather than caching a half-finished round.
   if (failure && (!Object.keys(loaded).length || signal?.aborted)) throw failure.reason;
-  return mergeSchoolNews(loaded, previous);
+  return {
+    items: mergeSchoolNews(loaded, previous),
+    failed: SCHOOL_NEWS_FEEDS.map(({ id }) => id).filter((id) => !loaded[id]),
+  };
+}
+
+/** The feeds' display names (重要公告, 最新消息), in feed order. */
+export function feedLabels(feeds: readonly NewsFeed[]): string[] {
+  return SCHOOL_NEWS_FEEDS.filter(({ id }) => feeds.includes(id)).map(({ label }) => label);
 }
 
 /**
