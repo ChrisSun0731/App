@@ -71,6 +71,9 @@ export const icons = {
   today: Icon.select({ ios: 'calendar.circle', android: import('@expo/material-symbols/today.xml') }),
   // 建北特約's area links.
   mapPin: Icon.select({ ios: 'mappin', android: import('@expo/material-symbols/location_on.xml') }),
+  // 美食's filter menu; the filled glyph shows (as in Mail) that a filter is on.
+  filter: Icon.select({ ios: 'line.3.horizontal.decrease.circle', android: import('@expo/material-symbols/filter_list.xml') }),
+  filterActive: Icon.select({ ios: 'line.3.horizontal.decrease.circle.fill', android: import('@expo/material-symbols/filter_list.xml') }),
 };
 
 export type IconKey = keyof typeof icons;

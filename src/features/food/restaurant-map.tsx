@@ -1,13 +1,16 @@
-import Constants from 'expo-constants';
 import { useEffect, useRef } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 
-import { Body } from '@/components/ui/page';
-
+import { STATUS_COLORS } from './food-view';
+import { MAP_AVAILABLE } from './map-availability';
 import { getOpenStatus, STATUS_LABELS } from './opening-hours';
 import type { RestaurantMapProps } from './restaurant-map.types';
 
+/**
+ * Restaurants near 建中 as pins in their status colour. It fills the kit's
+ * Embedded row, which gives it its size and rounded corners.
+ */
 export default function RestaurantMap({ restaurants, selected, now, onSelect }: RestaurantMapProps) {
   const map = useRef<MapView>(null);
   useEffect(() => {
@@ -20,9 +23,9 @@ export default function RestaurantMap({ restaurants, selected, now, onSelect }: 
     }, 350);
   }, [selected]);
 
-  if (Platform.OS === 'android' && Constants.expoConfig?.extra?.googleMapsConfigured !== true) {
-    return <Body secondary>地圖暫時無法使用。請切換列表查看餐廳與營業資訊。</Body>;
-  }
+  // 美食 only offers the map when it is available; this guards against
+  // mounting Google Maps on Android without a built-in API key, which crashes.
+  if (!MAP_AVAILABLE) return null;
 
   return (
     <MapView
@@ -44,7 +47,7 @@ export default function RestaurantMap({ restaurants, selected, now, onSelect }: 
             coordinate={{ latitude: restaurant.position[0], longitude: restaurant.position[1] }}
             title={restaurant.name}
             description={STATUS_LABELS[status]}
-            pinColor={MARKER_COLORS[status]}
+            pinColor={STATUS_COLORS[status]}
             onPress={() => onSelect(restaurant)}
           />
         );
@@ -53,11 +56,4 @@ export default function RestaurantMap({ restaurants, selected, now, onSelect }: 
   );
 }
 
-const MARKER_COLORS = {
-  open: '#1B873F',
-  closingSoon: '#C77800',
-  openingSoon: '#2965B3',
-  closed: '#777777',
-};
-
-const styles = StyleSheet.create({ map: { height: 360, width: '100%', borderRadius: 16 } });
+const styles = StyleSheet.create({ map: { flex: 1 } });
