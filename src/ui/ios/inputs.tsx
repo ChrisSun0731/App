@@ -17,12 +17,12 @@ import {
   type ModifierConfig,
 } from '@expo/ui/swift-ui/modifiers';
 
-import { fromDateKey, isDateKey, toDateKey } from '@/lib/dates';
+import { fromDateKey, toDateKey } from '@/lib/dates';
 
 import type { DateRowProps, PickerRowProps, TextFieldRowProps } from '../types';
 import { useSyncedText } from '../use-synced-text';
 import { secondaryText, useRowChrome } from './chrome';
-import { pickerDate, sf } from './helpers';
+import { pickerDate, pickerMinimum, sf } from './helpers';
 import { useSnapBack } from './use-snap-back';
 
 /**
@@ -132,17 +132,18 @@ export function TextFieldRow({
 /**
  * A compact SwiftUI DatePicker for a local "YYYY-MM-DD" day. Keys become
  * local midnight and picked dates are read back in local time (lib/dates), so
- * the day never shifts with the time zone.
+ * the day never shifts with the time zone. `minimumDate` bounds the picker
+ * only down to `value` (helpers.pickerMinimum), so it always shows `value`.
  */
 export function DateRow({ label, value, onChange, minimumDate }: DateRowProps) {
   const { identity, choose } = useSnapBack(value, onChange);
   const chrome = useRowChrome();
-  const start = minimumDate && isDateKey(minimumDate) ? fromDateKey(minimumDate) : undefined;
+  const minimum = pickerMinimum(value, minimumDate);
   return (
     <DatePicker
       title={label}
       selection={pickerDate(value)}
-      range={start ? { start } : undefined}
+      range={minimum ? { start: fromDateKey(minimum) } : undefined}
       displayedComponents={['date']}
       onDateChange={(date) => choose(toDateKey(date))}
       modifiers={[datePickerStyle('compact'), id(identity), ...chrome]}

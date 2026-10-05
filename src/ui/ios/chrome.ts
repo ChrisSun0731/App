@@ -18,6 +18,14 @@ export const primaryText = foregroundStyle({ type: 'hierarchical', style: 'prima
 export const secondaryText = foregroundStyle({ type: 'hierarchical', style: 'secondary' });
 export const tertiaryText = foregroundStyle({ type: 'hierarchical', style: 'tertiary' });
 
+// UIKit's semantic label colours, for content inside a default-style List
+// button (a tappable Row): that style sets the tint as the foreground style,
+// which would turn the hierarchical styles above blue. These stay fixed and
+// still follow light/dark mode and Increase Contrast.
+export const labelText = foregroundStyle(PlatformColor('label'));
+export const secondaryLabelText = foregroundStyle(PlatformColor('secondaryLabel'));
+export const tertiaryLabelText = foregroundStyle(PlatformColor('tertiaryLabel'));
+
 /** The quiet grey fill iOS uses behind small controls (pills, tiles). */
 export const QUIET_FILL = PlatformColor('tertiarySystemFill');
 export const DESTRUCTIVE = PlatformColor('systemRed');

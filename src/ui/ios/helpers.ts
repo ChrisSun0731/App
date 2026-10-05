@@ -98,6 +98,32 @@ export function pickerDate(key: string, now: Date = new Date()): Date {
 }
 
 /**
+ * The earliest day a DateRow's picker may offer, as a key, or undefined for
+ * no bound. UIDatePicker shows its minimum instead of a selection below it,
+ * and DatePickerView reports nothing for that, so the bound never excludes
+ * `value` (e.g. an imported event that ends before it starts, which the
+ * screen explains in a Notice). Keys are zero-padded, so they compare as
+ * strings.
+ */
+export function pickerMinimum(value: string, minimumDate: string | undefined): string | undefined {
+  if (!isDateKey(minimumDate) || !isDateKey(value)) return undefined;
+  return value < minimumDate ? value : minimumDate;
+}
+
+// React Native's iOS font scale for UIContentSizeCategoryAccessibilityMedium
+// (1.786), the smallest of the accessibility text sizes.
+const ACCESSIBILITY_FONT_SCALE = 1.75;
+
+/**
+ * Whether `fontScale` (useWindowDimensions) is one of the accessibility text
+ * sizes, where SwiftUI's DynamicTypeSize.isAccessibilitySize is true and
+ * horizontal layouts should stack.
+ */
+export function isAccessibilityTextSize(fontScale: number): boolean {
+  return fontScale >= ACCESSIBILITY_FONT_SCALE;
+}
+
+/**
  * A "#RRGGBB" colour at `alpha` (0–1) as "#RRGGBBAA", which @expo/ui's colour
  * parser reads CSS-style. Anything else (a named or platform colour) is
  * returned unchanged.

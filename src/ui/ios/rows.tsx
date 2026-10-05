@@ -52,9 +52,12 @@ import type {
 } from '../types';
 import {
   DESTRUCTIVE,
+  labelText,
   NEUTRAL,
   primaryText,
+  secondaryLabelText,
   secondaryText,
+  tertiaryLabelText,
   tertiaryText,
   useIsPlainSection,
   useRowChrome,
@@ -62,12 +65,15 @@ import {
 import { footerSpeech, sf, spokenLabel, trailingSwipeActions } from './helpers';
 
 const FULL_ROW = contentShape(shapes.rectangle());
+/** Extra tappable margin around CheckRow's circle (see CheckRow). */
+const CHECK_SLOP = 10;
 
 /**
  * A list row: leading symbol or dot, overline / title / subtitle / footer,
- * trailing detail, active-toggle symbol and accessory. Tappable rows are plain
- * buttons over the whole row rectangle; `actions` and `toggle` become swipe
- * actions plus a long-press context menu.
+ * trailing detail, active-toggle symbol and accessory. Tappable rows are
+ * default-style List buttons (the whole row highlights while pressed, like
+ * Settings); `actions` and `toggle` become swipe actions plus a long-press
+ * context menu, none of which a disabled row offers.
  */
 export function Row({
   title,
@@ -91,17 +97,24 @@ export function Row({
 }: RowProps) {
   const palette = usePalette();
   const chrome = useRowChrome({ background: rowBackground });
-  const hasMenus = (actions?.length ?? 0) > 0 || toggle !== undefined;
+  // `.disabled` on the row's button does not reach the swipe actions and
+  // context menu attached outside it, so a disabled row simply has none
+  // (Android shows its overflow menu and toggle disabled instead).
+  const hasMenus = !disabled && ((actions?.length ?? 0) > 0 || toggle !== undefined);
 
   const spoken = spokenOverride ?? spokenLabel([title, overline, subtitle, ...footerSpeech(footer), detail, badge]);
   const traits: AccessibilityTrait[] = [];
-  if (accessory === 'checkmark') traits.push('isSelected');
+  // State is spoken, not only drawn: a checkmark accessory, or an active
+  // toggle (favourite, pinned) whose only visible sign is a trailing symbol.
+  if (accessory === 'checkmark' || toggle?.active) traits.push('isSelected');
   if (accessory === 'external') traits.push('isLink');
   const a11y: ModifierConfig[] = [accessibilityLabel(spoken)];
   if (traits.length) a11y.push(accessibilityAddTraits(traits));
 
-  const titleStyle = disabled ? tertiaryText : emphasized ? foregroundStyle(palette.tint) : primaryText;
-  const detailStyle = disabled ? tertiaryText : secondaryText;
+  // Fixed label colours: the default List button style would tint
+  // hierarchical ones (see chrome.labelText).
+  const titleStyle = disabled ? tertiaryLabelText : emphasized ? foregroundStyle(palette.tint) : labelText;
+  const detailStyle = disabled ? tertiaryLabelText : secondaryLabelText;
 
   const content = (extra: ModifierConfig[]) => (
     <HStack spacing={12} modifiers={[FULL_ROW, ...extra]}>
@@ -148,13 +161,13 @@ export function Row({
     </HStack>
   );
 
-  // The row's own view: a plain button (the label keeps its own colours and
-  // the whole rectangle is tappable), or one static accessibility element.
+  // The row's own view: a default-style button, which SwiftUI's List turns
+  // into a whole-row tap target with the grey selection highlight (the only
+  // button in the row, so nothing else fires with it), or one static
+  // accessibility element.
   const rootChrome = hasMenus ? [] : chrome;
   const main = onPress ? (
-    <Button
-      onPress={onPress}
-      modifiers={[buttonStyle('plain'), disabledModifier(disabled), ...a11y, ...rootChrome]}>
+    <Button onPress={onPress} modifiers={[disabledModifier(disabled), ...a11y, ...rootChrome]}>
       {content([])}
     </Button>
   ) : (
@@ -194,6 +207,13 @@ export function CheckRow({ title, subtitle, checked, onCheckedChange, onPress, a
         modifiers={[
           font({ textStyle: 'title2', weight: 'light' }),
           checked ? foregroundStyle(palette.tint) : tertiaryText,
+          // A 44pt hit area around the ~24pt circle without moving it: the
+          // padded rectangle takes the taps and the negative padding gives
+          // the space back to the layout. The extra 10pt fits in the row's
+          // leading inset and the 12pt gap before the body button.
+          padding({ all: CHECK_SLOP }),
+          FULL_ROW,
+          padding({ all: -CHECK_SLOP }),
         ]}
       />
     </Button>
@@ -239,7 +259,9 @@ export function CheckRow({ title, subtitle, checked, onCheckedChange, onPress, a
 export function ToggleRow({ label, subtitle, icon, value, onValueChange, disabled = false, actions }: ToggleRowProps) {
   const chrome = useRowChrome();
   const symbol = sf(icon);
-  const hasMenu = (actions?.length ?? 0) > 0;
+  // No context menu while disabled, as for Row: `.disabled` on the Toggle
+  // does not reach a menu attached outside it.
+  const hasMenu = !disabled && (actions?.length ?? 0) > 0;
   const modifiers = [disabledModifier(disabled), ...(hasMenu ? [] : chrome)];
 
   let control: ReactElement;
@@ -332,9 +354,13 @@ function RowLeading({ icon, iconColor, dotColor, dimmed }: {
         systemName={symbol}
         modifiers={[
           font({ textStyle: 'body' }),
-          dimmed ? tertiaryText : foregroundStyle(iconColor ?? palette.tint),
-          // A fixed column keeps titles aligned whatever the symbol's width.
-          frame({ width: 28 }),
+          dimmed ? tertiaryLabelText : foregroundStyle(iconColor ?? palette.tint),
+          // A minimum column keeps titles aligned whatever the symbol's width,
+          // and lets wide symbols grow at large text sizes instead of
+          // overflowing into the title. fixedSize keeps the HStack from
+          // squeezing the column back to 28pt for the higher-priority title.
+          frame({ minWidth: 28 }),
+          fixedSize({ horizontal: true }),
         ]}
       />
     );
@@ -386,7 +412,7 @@ function Accessory({ kind }: { kind: RowAccessory }) {
       return (
         <Image
           systemName={kind === 'chevron' ? 'chevron.right' : 'arrow.up.right'}
-          modifiers={[font({ textStyle: 'footnote', weight: 'semibold' }), tertiaryText]}
+          modifiers={[font({ textStyle: 'footnote', weight: 'semibold' }), tertiaryLabelText]}
         />
       );
     case 'checkmark':

@@ -8,7 +8,9 @@ import {
   chunk,
   footerSpeech,
   iosMajorVersion,
+  isAccessibilityTextSize,
   pickerDate,
+  pickerMinimum,
   sf,
   spokenLabel,
   trailingSwipeActions,
@@ -62,6 +64,23 @@ describe('SwiftUI kit helpers', () => {
     const date = pickerDate('2026-10-04');
     expect([date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()]).toEqual([2026, 9, 4, 0]);
     expect(toDateKey(pickerDate('not-a-date', new Date(2026, 0, 31, 23, 30)))).toBe('2026-01-31');
+  });
+
+  test('never bounds the date picker above the value it must show', () => {
+    expect(pickerMinimum('2026-10-12', '2026-10-10')).toBe('2026-10-10');
+    expect(pickerMinimum('2026-10-10', '2026-10-10')).toBe('2026-10-10');
+    // An end date before the start: the picker still shows the end date.
+    expect(pickerMinimum('2026-10-05', '2026-10-10')).toBe('2026-10-05');
+    expect(pickerMinimum('2026-10-05', undefined)).toBeUndefined();
+    expect(pickerMinimum('not-a-date', '2026-10-10')).toBeUndefined();
+    expect(pickerMinimum('2026-10-05', '2026-13-01')).toBeUndefined();
+  });
+
+  test('treats only accessibility text sizes as large', () => {
+    expect(isAccessibilityTextSize(1)).toBe(false);
+    expect(isAccessibilityTextSize(1.353)).toBe(false);
+    expect(isAccessibilityTextSize(1.786)).toBe(true);
+    expect(isAccessibilityTextSize(3.571)).toBe(true);
   });
 
   test('adds an alpha channel to hex colours only', () => {

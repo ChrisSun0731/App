@@ -6,6 +6,7 @@ import {
   scrollDismissesKeyboard,
   type ModifierConfig,
 } from '@expo/ui/swift-ui/modifiers';
+import { useState } from 'react';
 
 import { usePalette } from '@/theme/palette';
 
@@ -27,20 +28,32 @@ const LOCALE = environment('locale', 'zh_Hant_TW');
  * (scrolling under translucent bars, stopping above the tab bar). Keeping the
  * keyboard region lets the List lift a focused field above the keyboard in the
  * modal editors.
+ *
+ * Pull to refresh: @expo/ui wraps the view in one AnyView per modifier
+ * (View+ModifierArray.swift), so adding or removing `refreshable` changes the
+ * List's view type and SwiftUI rebuilds it, losing the scroll position and
+ * any focused field. Once a screen has passed `onRefresh` the modifier stays;
+ * while the handler is missing (e.g. `data ? refetch : undefined` after an
+ * error) a pull just ends at once. Screens that refresh should pass
+ * `onRefresh` from their first render, so the List is never rebuilt.
  */
 export function ListScreen({ children, onRefresh }: ListScreenProps) {
   const palette = usePalette();
+  const [refreshes, setRefreshes] = useState(onRefresh !== undefined);
+  // Adjusting state while rendering (see above): latched on first sight.
+  if (onRefresh && !refreshes) setRefreshes(true);
+
   const listModifiers: ModifierConfig[] = [
     listStyle('insetGrouped'),
     scrollDismissesKeyboard('interactively'),
   ];
-  if (onRefresh) {
+  if (refreshes) {
     listModifiers.push(
       refreshable(async () => {
         // SwiftUI keeps the spinner until this resolves; a failed refresh is
         // shown by the screen itself, so it must not reject here.
         try {
-          await onRefresh();
+          await onRefresh?.();
         } catch {
           // Swallowed on purpose (see above).
         }
