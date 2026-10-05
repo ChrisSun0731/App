@@ -1,22 +1,38 @@
-import { ActionButton, Body, Card, Screen, Title } from '@/components/ui/page';
+import { icons } from '@/components/icons';
 import { openWebsite } from '@/lib/open-link';
+import { ListScreen, Row, Section, TextBlock } from '@/ui';
 
-const AREAS = [
-  ['官方網站', ''], ['建中地區', '/ckhs'], ['北車地區', '/taipeimainstation'],
-  ['西門地區', '/ximen'], ['其他地區', '/other'],
+const PROMO_SITE = 'https://cktfgpromo.cksc.tw';
+
+const LINKS = [
+  { label: '官方網站', path: '', icon: icons.store },
+  { label: '建中地區', path: '/ckhs', icon: icons.mapPin },
+  { label: '北車地區', path: '/taipeimainstation', icon: icons.mapPin },
+  { label: '西門地區', path: '/ximen', icon: icons.mapPin },
+  { label: '其他地區', path: '/other', icon: icons.mapPin },
 ] as const;
 
 export default function PromoScreen() {
-  return <Screen>
-    <Card>
-      <Title>建北特約</Title>
-      <Body>特約店家會在店內明顯處張貼建北特約專用貼紙。</Body>
-      <Body>使用優惠時，請出示學生證或教師證。店家可以拒絕僅穿著制服的使用者。</Body>
-    </Card>
-    <Card>
-      <Title>尋找特約店家</Title>
-      {AREAS.map(([label, path]) => <ActionButton key={label} label={label}
-        onPress={() => { void openWebsite(`https://cktfgpromo.cksc.tw${path}`); }} />)}
-    </Card>
-  </Screen>;
+  return (
+    <ListScreen>
+      <Section title="建北特約">
+        <TextBlock text="特約店家會在店內明顯處張貼建北特約專用貼紙。" />
+        <TextBlock text="使用優惠時，請出示學生證或教師證。店家可以拒絕僅穿著制服的使用者。" />
+      </Section>
+
+      <Section title="尋找特約店家">
+        {LINKS.map(({ label, path, icon }) => (
+          <Row
+            key={label}
+            title={label}
+            icon={icon}
+            accessory="external"
+            onPress={() => {
+              void openWebsite(`${PROMO_SITE}${path}`);
+            }}
+          />
+        ))}
+      </Section>
+    </ListScreen>
+  );
 }

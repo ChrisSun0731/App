@@ -69,6 +69,8 @@ export const icons = {
   dropDown: Icon.select({ ios: 'chevron.up.chevron.down', android: import('@expo/material-symbols/arrow_drop_down.xml') }),
   // MonthCalendar's "jump to today" button.
   today: Icon.select({ ios: 'calendar.circle', android: import('@expo/material-symbols/today.xml') }),
+  // 建北特約's area links.
+  mapPin: Icon.select({ ios: 'mappin', android: import('@expo/material-symbols/location_on.xml') }),
 };
 
 export type IconKey = keyof typeof icons;
