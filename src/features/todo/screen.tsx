@@ -1,124 +1,262 @@
-import { Checkbox, Host } from '@expo/ui';
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+// 行事曆: a month calendar with the selected day's events and todos, or the
+// todo list grouped by date. Layout per docs/design/native-ui.md, "行事曆
+// (Todo)". School 行事曆 events are merged in read-only.
+import { router } from 'expo-router';
+import { useState } from 'react';
 
-import { ActionButton, Body, Card, Screen, Segment, Title } from '@/components/ui/page';
-import { formatFullDate, formatMonthDay, fromDateKey, toDateKey, WEEKDAY_ZH } from '@/lib/dates';
+import { HeaderActions } from '@/components/header-actions';
+import { icons } from '@/components/icons';
+import { fromDateKey, toDateKey, WEEKDAY_ZH } from '@/lib/dates';
 import { useTodoStore } from '@/store/todo';
 import { BRAND, usePalette } from '@/theme/palette';
+import {
+  ButtonRow,
+  CheckRow,
+  ListScreen,
+  Loading,
+  MonthCalendar,
+  Notice,
+  PickerRow,
+  Row,
+  Section,
+  TextBlock,
+  type ChoiceOption,
+  type RowAction,
+} from '@/ui';
 
-import { buildMonthGrid, groupTodosByDate, itemsForDay, MAX_DAY_INDICATORS, monthTitle } from './calendar-grid';
-import { TodoCategoryManager } from './category-managers';
-import { ChoiceField } from './form-controls';
+import { itemsForDay, monthTitle } from './calendar-grid';
+import {
+  ALL_TODOS,
+  calendarCells,
+  effectiveFilter,
+  eventRowText,
+  filterTodos,
+  formatDayTitle,
+  todoFilterOptions,
+  todoSections,
+} from './calendar-view';
+import { confirmDeleteEvent, confirmDeleteTodo } from './confirm-delete';
 import { isSchoolEvent } from './school-calendar';
-import type { CalendarEvent, Todo } from './types';
+import type { CalendarEvent, Todo, TodoView } from './types';
 import { useSchoolEvents } from './use-school-events';
 
-function TodoItem({ todo }: { todo: Todo }) {
-  const router = useRouter();
+const VIEW_OPTIONS: readonly ChoiceOption<TodoView>[] = [
+  { label: '月曆', value: 'calendar' },
+  { label: '待辦', value: 'todoList' },
+];
+
+/**
+ * The todo squares' colour: the tint as "#RRGGBB", which the kit's
+ * indicators take. Android's palette roles are already hex strings; iOS's
+ * tint is a DynamicColorIOS, so pick its variant (use-palette.ios.ts).
+ */
+function useTodoColor(): string {
   const palette = usePalette();
-  const completeTodo = useTodoStore((state) => state.completeTodo);
-  return <Card>
-    <Host matchContents={{ vertical: true }} seedColor={BRAND} colorScheme={palette.scheme} style={{ width: '100%' }} ignoreSafeArea={Platform.OS === 'ios' ? 'all' : undefined}>
-      <Checkbox label={todo.title} value={false} onValueChange={(checked) => { if (checked) completeTodo(todo.id); }} />
-    </Host>
-    {todo.category && <Body secondary>{todo.category.name}</Body>}
-    <ActionButton label="編輯待辦" onPress={() => router.push({ pathname: '/todo-editor', params: { id: todo.id } })} />
-  </Card>;
+  if (typeof palette.tint === 'string') return palette.tint;
+  return palette.scheme === 'dark' ? '#8EAEFF' : BRAND;
 }
 
-function EventItem({ event }: { event: CalendarEvent }) {
-  const router = useRouter();
-  const school = isSchoolEvent(event);
-  return <Card>
-    <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: event.category.color }} />
-      <View style={{ flex: 1 }}><Body>{event.title}</Body></View>
-    </View>
-    <Body secondary>{event.category.name} · {formatFullDate(fromDateKey(event.startDate))}{event.endDate !== event.startDate ? ` – ${formatFullDate(fromDateKey(event.endDate))}` : ''}</Body>
-    {school ? <>
-      <Body secondary>{[event.school?.department, event.school?.tentative ? '暫定日期' : '', event.school?.approximate ? '約略日期' : '', '學校活動，僅供查看'].filter(Boolean).join(' · ')}</Body>
-    </> : <ActionButton label="編輯活動" onPress={() => router.push({ pathname: '/event-editor', params: { id: event.id } })} />}
-  </Card>;
+function editTodo(todo: Todo) {
+  router.push({ pathname: '/todo-editor', params: { id: todo.id } });
+}
+
+function editEvent(event: CalendarEvent) {
+  router.push({ pathname: '/event-editor', params: { id: event.id } });
+}
+
+function completeTodo(todo: Todo, checked: boolean) {
+  // Checking a todo completes it, which removes it (as before).
+  if (checked) useTodoStore.getState().completeTodo(todo.id);
+}
+
+function todoActions(todo: Todo): RowAction[] {
+  return [{ key: 'delete', label: '刪除', icon: icons.delete, destructive: true, onPress: () => confirmDeleteTodo(todo) }];
+}
+
+function eventActions(event: CalendarEvent): RowAction[] {
+  return [
+    { key: 'edit', label: '編輯', icon: icons.edit, onPress: () => editEvent(event) },
+    { key: 'delete', label: '刪除', icon: icons.delete, destructive: true, onPress: () => confirmDeleteEvent(event) },
+  ];
 }
 
 export default function TodoScreen() {
-  const router = useRouter();
-  const palette = usePalette();
-  const { events, todos, todoCategories, view, setView } = useTodoStore();
+  const events = useTodoStore((state) => state.events);
+  const todos = useTodoStore((state) => state.todos);
+  const todoCategories = useTodoStore((state) => state.todoCategories);
+  const view = useTodoStore((state) => state.view);
+  const setView = useTodoStore((state) => state.setView);
   const school = useSchoolEvents();
-  const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-  const [selectedDate, setSelectedDate] = useState(() => toDateKey(new Date()));
-  const [category, setCategory] = useState('');
-  const [manageCategories, setManageCategories] = useState(false);
-  const allEvents = useMemo(() => [...events, ...school.events], [events, school.events]);
-  const days = buildMonthGrid(month.getFullYear(), month.getMonth());
-  const selectedItems = itemsForDay(selectedDate, allEvents, todos);
-  const filteredTodos = category ? todos.filter((todo) => todo.category?.name === category) : todos;
-  const categoryNames = [...new Set([...todoCategories.map((item) => item.name), ...todos.flatMap((todo) => todo.category ? [todo.category.name] : [])])];
+  const todoColor = useTodoColor();
 
-  function moveMonth(offset: number) {
-    const next = new Date(month.getFullYear(), month.getMonth() + offset, 1);
-    setMonth(next);
-    setSelectedDate(toDateKey(next));
+  const [month, setMonth] = useState(() => {
+    const today = new Date();
+    return { year: today.getFullYear(), month: today.getMonth() };
+  });
+  const [selectedDate, setSelectedDate] = useState(() => toDateKey(new Date()));
+  // Not persisted, as before: the list opens on every todo.
+  const [filter, setFilter] = useState(ALL_TODOS);
+
+  const today = new Date();
+  const todayKey = toDateKey(today);
+  // The React Compiler memoizes these on their inputs (todayKey included, so
+  // the today marker moves after midnight).
+  const allEvents = [...events, ...school.events];
+  const cells = calendarCells(month.year, month.month, allEvents, todos, todoColor, fromDateKey(todayKey));
+
+  function showMonth(offset: number) {
+    const first = new Date(month.year, month.month + offset, 1);
+    setMonth({ year: first.getFullYear(), month: first.getMonth() });
+    // Moving month selects its first day, as before.
+    setSelectedDate(toDateKey(first));
   }
 
-  return <Screen refreshing={school.isRefetching} onRefresh={() => { void school.refetch(); }}>
-    <Title>行事曆與待辦</Title>
-    <Segment options={['月曆', '待辦']} selectedIndex={view === 'calendar' ? 0 : 1} onChange={(index) => setView(index === 0 ? 'calendar' : 'todoList')} />
-    <View style={{ flexDirection: 'row', gap: 10 }}>
-      <View style={{ flex: 1 }}><ActionButton label="新增待辦" onPress={() => router.push({ pathname: '/todo-editor', params: { date: selectedDate } })} /></View>
-      <View style={{ flex: 1 }}><ActionButton label="新增活動" onPress={() => router.push({ pathname: '/event-editor', params: { date: selectedDate } })} /></View>
-    </View>
-    {view === 'calendar' ? <>
-      <Card>
-        <Text style={{ color: palette.text, fontSize: 20, fontWeight: '600', textAlign: 'center' }}>{monthTitle(month.getFullYear(), month.getMonth())}</Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <View style={{ flex: 1 }}><ActionButton label="上月" onPress={() => moveMonth(-1)} /></View>
-          <View style={{ flex: 1 }}><ActionButton label="今天" onPress={() => { const today = new Date(); setMonth(new Date(today.getFullYear(), today.getMonth(), 1)); setSelectedDate(toDateKey(today)); }} /></View>
-          <View style={{ flex: 1 }}><ActionButton label="下月" onPress={() => moveMonth(1)} /></View>
-        </View>
-        <View style={{ flexDirection: 'row' }}>
-          {WEEKDAY_ZH.map((day) => <Text key={day} style={{ width: `${100 / 7}%`, textAlign: 'center', color: palette.textSecondary }}>{day}</Text>)}
-        </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {days.map((day) => {
-            const items = itemsForDay(day.key, allEvents, todos);
-            const selected = day.key === selectedDate;
-            return <Pressable
-              key={day.key}
-              accessibilityRole="button"
-              accessibilityLabel={`${formatFullDate(day.date)}，${items.length}個活動與待辦`}
-              accessibilityState={{ selected }}
-              onPress={() => setSelectedDate(day.key)}
-              style={{ width: `${100 / 7}%`, minHeight: 62, padding: 4, alignItems: 'center', gap: 6, borderRadius: 12, backgroundColor: selected ? palette.tintContainer : 'transparent' }}>
-              <Text style={{ color: selected ? palette.onTintContainer : day.inMonth ? palette.text : palette.textTertiary, fontSize: 16, fontWeight: day.isToday || selected ? '700' : '400', textDecorationLine: day.isToday ? 'underline' : 'none' }}>{day.date.getDate()}</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, maxWidth: 30, justifyContent: 'center' }}>
-                {items.slice(0, MAX_DAY_INDICATORS).map((item) => <View key={item.key} style={{ width: 6, height: 6, borderRadius: item.type === 'event' ? 3 : 1, backgroundColor: item.type === 'event' ? item.event.category.color : palette.tint }} />)}
-              </View>
-            </Pressable>;
+  function showToday() {
+    const now = new Date();
+    setMonth({ year: now.getFullYear(), month: now.getMonth() });
+    setSelectedDate(toDateKey(now));
+  }
+
+  // New items default to the selected day, as before (in both views).
+  function addTodo() {
+    router.push({ pathname: '/todo-editor', params: { date: selectedDate } });
+  }
+
+  function addEvent() {
+    router.push({ pathname: '/event-editor', params: { date: selectedDate } });
+  }
+
+  function renderCalendar() {
+    const items = itemsForDay(selectedDate, allEvents, todos);
+    const hasSchoolEvents = items.some((item) => item.type === 'event' && isSchoolEvent(item.event));
+    return (
+      <>
+        <Section key="calendar" footer={`${school.term ? `${school.term} · ` : ''}圓點為活動，方點為待辦。`}>
+          <MonthCalendar
+            title={monthTitle(month.year, month.month)}
+            weekdays={WEEKDAY_ZH}
+            cells={cells}
+            selectedKey={selectedDate}
+            onSelect={setSelectedDate}
+            onPrevious={() => showMonth(-1)}
+            onNext={() => showMonth(1)}
+            onToday={showToday}
+          />
+          {school.isPending ? <Loading label="正在載入學校行事曆…" /> : null}
+          {school.error ? (
+            <Notice
+              tone="error"
+              title="學校行事曆暫時無法更新。"
+              message="下拉可重試。"
+              action={{ label: '重試', onPress: () => void school.refetch() }}
+            />
+          ) : null}
+        </Section>
+
+        <Section
+          key="day"
+          title={formatDayTitle(selectedDate, today)}
+          footer={hasSchoolEvents ? '學校活動僅供查看，無法修改。' : undefined}>
+          {items.length === 0 ? <TextBlock text="這一天沒有活動或待辦。" secondary /> : null}
+          {items.map((item) => {
+            if (item.type === 'todo') {
+              return (
+                <CheckRow
+                  key={item.key}
+                  title={item.todo.title}
+                  subtitle={item.todo.category?.name}
+                  checked={false}
+                  onCheckedChange={(checked) => completeTodo(item.todo, checked)}
+                  onPress={() => editTodo(item.todo)}
+                  actions={todoActions(item.todo)}
+                />
+              );
+            }
+            const { event } = item;
+            const readOnly = isSchoolEvent(event);
+            return (
+              <Row
+                key={item.key}
+                title={event.title}
+                dotColor={event.category.color}
+                {...eventRowText(event)}
+                accessory={readOnly ? 'none' : 'chevron'}
+                onPress={readOnly ? undefined : () => editEvent(event)}
+                actions={readOnly ? undefined : eventActions(event)}
+              />
+            );
           })}
-        </View>
-      </Card>
-      <Body secondary>{school.term ? `${school.term} · ` : ''}圓點為活動，方點為待辦。</Body>
-      {school.isPending && <Body secondary>正在載入學校行事曆…</Body>}
-      {school.error && <Body secondary>學校行事曆暫時無法更新。下拉可重試。</Body>}
-      <Title>{formatMonthDay(fromDateKey(selectedDate))}</Title>
-      {selectedItems.length === 0 && <Body secondary>這一天沒有活動或待辦。</Body>}
-      {selectedItems.map((item) => item.type === 'event' ? <EventItem key={item.key} event={item.event} /> : <TodoItem key={item.key} todo={item.todo} />)}
-    </> : <>
-      <Card>
-        <ChoiceField label="顯示類別" value={category} options={[{ label: `所有待辦 (${todos.length})`, value: '' }, ...categoryNames.map((name) => ({ label: `${name} (${todos.filter((todo) => todo.category?.name === name).length})`, value: name }))]} onChange={setCategory} />
-        <ActionButton label={manageCategories ? '關閉類別管理' : '管理待辦類別'} onPress={() => setManageCategories(!manageCategories)} />
-      </Card>
-      {manageCategories && <TodoCategoryManager />}
-      {filteredTodos.length === 0 && <Body secondary>目前沒有待辦事項。</Body>}
-      {groupTodosByDate(filteredTodos).map((group) => <View key={group.dateKey ?? 'undated'} style={{ gap: 12 }}>
-        <Text style={{ color: group.dateKey && group.dateKey < toDateKey(new Date()) ? palette.danger : palette.textSecondary, fontSize: 17, fontWeight: '600' }}>{group.dateKey ? `${formatFullDate(fromDateKey(group.dateKey))} (${WEEKDAY_ZH[fromDateKey(group.dateKey).getDay()]})` : '無日期'}</Text>
-        {group.todos.map((todo) => <TodoItem key={todo.id} todo={todo} />)}
-      </View>)}
-      <Body secondary>勾選待辦即完成並移除。</Body>
-    </>}
-  </Screen>;
+        </Section>
+      </>
+    );
+  }
+
+  function renderTodoList() {
+    const activeFilter = effectiveFilter(filter, todos, todoCategories);
+    const sections = todoSections(filterTodos(todos, activeFilter), today);
+    return (
+      <>
+        <Section key="filter" footer="勾選待辦即完成並移除。">
+          <PickerRow
+            label="顯示類別"
+            icon={icons.label}
+            value={activeFilter}
+            options={todoFilterOptions(todos, todoCategories)}
+            onChange={setFilter}
+          />
+          <ButtonRow
+            label="管理待辦類別"
+            icon={icons.folder}
+            onPress={() => router.push({ pathname: '/categories', params: { kind: 'todo' } })}
+          />
+        </Section>
+
+        {sections.length === 0 ? (
+          <Section key="empty">
+            <TextBlock text="目前沒有待辦事項。" secondary />
+          </Section>
+        ) : null}
+        {sections.map((section) => (
+          <Section key={section.key} title={section.title} footer={section.overdue ? '已過期' : undefined}>
+            {section.todos.map((todo) => (
+              <CheckRow
+                key={todo.id}
+                title={todo.title}
+                subtitle={todo.category?.name}
+                checked={false}
+                onCheckedChange={(checked) => completeTodo(todo, checked)}
+                onPress={() => editTodo(todo)}
+                actions={todoActions(todo)}
+              />
+            ))}
+          </Section>
+        ))}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <HeaderActions
+        right={[
+          {
+            kind: 'menu',
+            key: 'add',
+            label: '新增',
+            icon: icons.add,
+            actions: [
+              { key: 'todo', label: '新增待辦', icon: icons.todo, onPress: addTodo },
+              { key: 'event', label: '新增活動', icon: icons.event, onPress: addEvent },
+            ],
+          },
+        ]}
+      />
+      <ListScreen onRefresh={() => school.refetch()} fab={{ label: '新增待辦', icon: icons.add, onPress: addTodo }}>
+        <Section key="view" plain>
+          <PickerRow label="檢視" variant="segmented" value={view} options={VIEW_OPTIONS} onChange={setView} />
+        </Section>
+        {view === 'calendar' ? renderCalendar() : renderTodoList()}
+      </ListScreen>
+    </>
+  );
 }
