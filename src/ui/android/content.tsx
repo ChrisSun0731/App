@@ -15,6 +15,7 @@ import {
 import {
   background,
   clip,
+  combinedClickable,
   fillMaxSize,
   fillMaxWidth,
   height as heightModifier,
@@ -26,8 +27,9 @@ import {
   size,
   weight,
 } from '@expo/ui/jetpack-compose/modifiers';
+import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
-import { useWindowDimensions, View } from 'react-native';
+import { Platform, ToastAndroid, useWindowDimensions, View } from 'react-native';
 
 import { icons } from '@/components/icons';
 
@@ -41,19 +43,31 @@ import type {
   TextBlockProps,
   TileGridProps,
 } from '../types';
-import { chunk, joinLabel, withAlpha } from './helpers';
-import { CARD_RADIUS, iconSource, roundedShape, useInCard, useM3 } from './theme';
+import { chunk, joinLabel, labelWidth, withAlpha } from './helpers';
+import { CARD_RADIUS, iconSource, roundedShape, useContentWidth, useInCard, useM3 } from './theme';
 
-export function TextBlock({ text, secondary = false, size: textSize = 'body' }: TextBlockProps) {
+/** Copies `text`, confirming with a toast where the system does not (before Android 13). */
+function copyText(text: string) {
+  void Clipboard.setStringAsync(text).then((copied) => {
+    if (copied && Platform.OS === 'android' && Platform.Version < 33) ToastAndroid.show('已複製', ToastAndroid.SHORT);
+  });
+}
+
+export function TextBlock({ text, secondary = false, size: textSize = 'body', selectable = false }: TextBlockProps) {
   const m = useM3();
   const inCard = useInCard();
-  // `selectable` has no Compose counterpart in @expo/ui (no SelectionContainer).
   const typography = textSize === 'large' ? 'headlineSmall' : secondary ? 'bodyMedium' : 'bodyLarge';
   return (
     <Text
       color={secondary ? m.onSurfaceVariant : m.onSurface}
       style={{ typography }}
-      modifiers={[fillMaxWidth(), inCard ? padding(16, 12, 16, 12) : padding(16, 0, 16, 0)]}>
+      modifiers={[
+        fillMaxWidth(),
+        inCard ? padding(16, 12, 16, 12) : padding(16, 0, 16, 0),
+        // @expo/ui has no SelectionContainer, so selectable text copies as a
+        // whole on long press instead. No ripple: it should still read as text.
+        ...(selectable ? [combinedClickable({ onLongClick: () => copyText(text) }, { indication: false })] : []),
+      ]}>
       {text}
     </Text>
   );
@@ -151,10 +165,17 @@ export function Loading({ label }: LoadingProps) {
 export function TileGrid({ tiles, columns = 3 }: TileGridProps) {
   const m = useM3();
   const inCard = useInCard();
+  const contentWidth = useContentWidth();
+  const { fontScale } = useWindowDimensions();
   const perRow = Math.max(1, Math.floor(columns));
   const gap = inCard ? 8 : 12;
   // One step up from the surface the tiles sit on: the section card or the screen.
   const tileColor = inCard ? m.surfaceContainerHigh : m.surfaceContainerLow;
+  // Titles may take two lines (選擇障礙小幫手 needs ~98dp; a tile on a 360dp
+  // phone has ~80dp). When any title will wrap, every tile reserves both lines
+  // so the tiles in a row keep one height.
+  const titleWidth = (contentWidth - (inCard ? 24 : 0) - gap * (perRow - 1)) / perRow - 16;
+  const titleLines = tiles.some((tile) => labelWidth(tile.title, fontScale) > titleWidth) ? 2 : 1;
 
   return (
     <Column verticalArrangement={{ spacedBy: gap }} modifiers={[fillMaxWidth(), ...(inCard ? [paddingAll(12)] : [])]}>
@@ -173,7 +194,11 @@ export function TileGrid({ tiles, columns = 3 }: TileGridProps) {
                 verticalArrangement={{ spacedBy: 8 }}
                 modifiers={[fillMaxWidth(), padding(8, 16, 8, 14)]}>
                 <Icon source={iconSource(tile.icon)} size={28} tint={m.primary} />
-                <Text maxLines={1} overflow="ellipsis" style={{ typography: 'labelLarge', textAlign: 'center' }}>
+                <Text
+                  maxLines={2}
+                  minLines={titleLines}
+                  overflow="ellipsis"
+                  style={{ typography: 'labelLarge', textAlign: 'center' }}>
                   {tile.title}
                 </Text>
               </Column>
@@ -194,10 +219,9 @@ const DEFAULT_EMBEDDED_HEIGHT = 240;
 
 export function Embedded({ children, height, aspectRatio }: EmbeddedProps) {
   const inCard = useInCard();
-  const { width: windowWidth } = useWindowDimensions();
-  // Rows span the window minus the 16dp list gutters; the measured width
-  // replaces this estimate after the first layout.
-  const [width, setWidth] = useState(windowWidth - 32);
+  const estimatedWidth = useContentWidth();
+  // The measured width replaces this estimate after the first layout.
+  const [width, setWidth] = useState(estimatedWidth);
   const resolvedHeight =
     height ?? (aspectRatio && aspectRatio > 0 ? Math.round(width / aspectRatio) : DEFAULT_EMBEDDED_HEIGHT);
 

@@ -9,7 +9,9 @@ import {
   formatDateLabel,
   joinLabel,
   keyFromDialogDate,
+  labelWidth,
   segmentsFit,
+  slotDividers,
   withAlpha,
 } from './helpers';
 
@@ -60,6 +62,34 @@ describe('Compose kit helpers', () => {
     expect(segmentsFit(['一', '二', '三', '四', '五'], 328, 1.3)).toBe(false);
     expect(segmentsFit(['一', '二', '三', '四', '五'], 380, 1.3)).toBe(true);
     expect(segmentsFit([], 100)).toBe(true);
+  });
+
+  test('estimates label widths for CJK and Latin text', () => {
+    // 選擇障礙小幫手 needs about 98dp: two lines in a three-column tile on a 360dp phone.
+    expect(labelWidth('選擇障礙小幫手')).toBe(98);
+    expect(labelWidth('BL')).toBeCloseTo(16.8);
+    expect(labelWidth('校慶', 1.5)).toBe(42);
+  });
+
+  test('puts card dividers between list rows only, counting wrapper components as rows', () => {
+    // Direct kit children: a divider between adjacent rows, none next to fields.
+    expect(slotDividers(['row', 'row', 'content', 'row', 'row'])).toEqual([
+      { rowsDraw: false, maskFirst: false },
+      { rowsDraw: true, maskFirst: false },
+      { rowsDraw: false, maskFirst: false },
+      { rowsDraw: false, maskFirst: false },
+      { rowsDraw: true, maskFirst: false },
+    ]);
+    // Wrappers (TodoItem, StationBlock): every row inside draws, and the first
+    // one is masked at the top of the card or after a field.
+    expect(slotDividers(['unknown', 'unknown', 'content', 'unknown', 'row'])).toEqual([
+      { rowsDraw: true, maskFirst: true },
+      { rowsDraw: true, maskFirst: false },
+      { rowsDraw: false, maskFirst: false },
+      { rowsDraw: true, maskFirst: true },
+      { rowsDraw: true, maskFirst: false },
+    ]);
+    expect(slotDividers([])).toEqual([]);
   });
 
   test('chunks items into rows', () => {

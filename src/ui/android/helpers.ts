@@ -47,8 +47,8 @@ export function dialogMinimumFromKey(key: string | undefined): Date | undefined 
   return key && isDateKey(key) ? fromDateKey(key) : undefined;
 }
 
-/** Approximate rendered width of `label` in dp at a 14sp label size. */
-function labelWidth(label: string, fontScale: number): number {
+/** Approximate rendered width of `label` in dp at a 14sp label size (labelLarge). */
+export function labelWidth(label: string, fontScale = 1): number {
   let em = 0;
   for (const char of label) {
     // CJK and full-width glyphs are about 1em wide; Latin glyphs about 0.6em.
@@ -97,4 +97,35 @@ export function flattenChildren(children: ReactNode, prefix = ''): ReactElement[
     }
   }
   return result;
+}
+
+/**
+ * How a Section child takes part in card dividers: a kit ListItem row, kit
+ * content with its own padding (fields, pickers, notices, tiles, a prominent
+ * button), or a component the Section cannot see into (a screen's TodoItem,
+ * memo(Row), a StationBlock returning several rows).
+ */
+export type SlotKind = 'row' | 'content' | 'unknown';
+
+export interface SlotDividers {
+  /** Context value for the rows inside the child: draw a leading inset divider. */
+  rowsDraw: boolean;
+  /** Paint over the first row's divider, which the Section cannot leave out itself. */
+  maskFirst: boolean;
+}
+
+/**
+ * Where the inset dividers of a section card go. A divider separates two list
+ * rows only: outlined fields, chips, tiles and text carry their own padding,
+ * and a line between two outlined fields reads as clutter in a form. Unknown
+ * components count as rows, since per-item wrappers are how screens render
+ * lists. Their rows all draw a divider (so rows inside a multi-row wrapper are
+ * separated too) and the first one is masked where it must not show.
+ */
+export function slotDividers(kinds: readonly SlotKind[]): SlotDividers[] {
+  return kinds.map((kind, index) => {
+    const afterRow = index > 0 && kinds[index - 1] !== 'content';
+    if (kind === 'unknown') return { rowsDraw: true, maskFirst: !afterRow };
+    return { rowsDraw: kind === 'row' && afterRow, maskFirst: false };
+  });
 }

@@ -2,7 +2,8 @@
 // the "inside a section card" context.
 import { Shape, useMaterialColors, type MaterialColors } from '@expo/ui/jetpack-compose';
 import { createContext, useContext } from 'react';
-import type { ImageSourcePropType } from 'react-native';
+import { useWindowDimensions, type ImageSourcePropType } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { IconValue } from '../types';
 
@@ -15,6 +16,19 @@ export function useM3(): MaterialColors {
 }
 
 export const TRANSPARENT = '#00000000';
+
+/** ListScreen's side gutter, added to the side system insets (landscape navigation bar, cutouts). */
+export const GUTTER = 16;
+
+/**
+ * Estimated width (dp) of a Section's content: the window minus the list
+ * gutters and side insets. For layout decisions taken before Compose measures.
+ */
+export function useContentWidth(): number {
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  return width - 2 * GUTTER - insets.left - insets.right;
+}
 
 /** Corner radius of section cards (Material's large shape is 16dp; Settings-style groups use 20dp+). */
 export const CARD_RADIUS = 20;

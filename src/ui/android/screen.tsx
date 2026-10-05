@@ -3,7 +3,6 @@ import {
   Card,
   Column,
   ExtendedFloatingActionButton,
-  HorizontalDivider,
   Host,
   Icon,
   LazyColumn,
@@ -11,22 +10,58 @@ import {
   Text,
 } from '@expo/ui/jetpack-compose';
 import { align, clip, fillMaxSize, fillMaxWidth, imePadding, padding, Shapes } from '@expo/ui/jetpack-compose/modifiers';
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
+import { Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BRAND } from '@/theme/brand';
 
 import type { ButtonRowProps, ListScreenProps, SectionProps } from '../types';
-import { flattenChildren } from './helpers';
+import { MonthCalendar } from './calendar';
+import { Embedded, EmptyState, Loading, Notice, TextBlock, TileGrid } from './content';
+import { FilterChips, PickerRow, TextFieldRow } from './controls';
+import { MaskFirstDivider, RowDividerContext } from './divider';
+import { flattenChildren, slotDividers, type SlotKind } from './helpers';
 import { ButtonRow, CheckRow, DateRow, Row, ToggleRow } from './rows';
-import { CARD_RADIUS, iconSource, InCardContext, useM3 } from './theme';
+import { CARD_RADIUS, GUTTER, iconSource, InCardContext, useM3 } from './theme';
 
-/** Kit rows drawn as a Material ListItem. */
-const LIST_ITEMS = new Set<unknown>([Row, CheckRow, ToggleRow, DateRow, ButtonRow]);
+/** Kit rows drawn as a Material ListItem (they draw their own leading divider). */
+const ROWS = new Set<unknown>([Row, CheckRow, ToggleRow, DateRow, ButtonRow]);
 
-function isListItem(element: ReactElement): boolean {
-  if (!LIST_ITEMS.has(element.type)) return false;
-  return !(element.type === ButtonRow && (element.props as ButtonRowProps).prominent);
+/** Kit content with its own padding, which never sits next to a divider. */
+const CONTENT = new Set<unknown>([
+  PickerRow,
+  TextFieldRow,
+  TextBlock,
+  EmptyState,
+  Notice,
+  Loading,
+  FilterChips,
+  TileGrid,
+  MonthCalendar,
+  Embedded,
+]);
+
+function slotKind(element: ReactElement): SlotKind {
+  // A prominent ButtonRow is a filled button, not a list item.
+  if (element.type === ButtonRow && (element.props as ButtonRowProps).prominent) return 'content';
+  if (ROWS.has(element.type)) return 'row';
+  // Anything else is a screen's own component, most likely wrapping rows.
+  return CONTENT.has(element.type) ? 'content' : 'unknown';
+}
+
+/** Whether the soft keyboard is up (Android reports only the Did events). */
+function useKeyboardVisible(): boolean {
+  const [visible, setVisible] = useState(() => Keyboard.isVisible());
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return visible;
 }
 
 /** Room the extended FAB (56dp + its 16dp margin) takes over the list's end. */
@@ -34,6 +69,7 @@ const FAB_CLEARANCE = 80;
 
 export function ListScreen({ children, onRefresh, fab }: ListScreenProps) {
   const insets = useSafeAreaInsets();
+  const keyboardVisible = useKeyboardVisible();
   const [refreshing, setRefreshing] = useState(false);
 
   async function refresh() {
@@ -50,17 +86,22 @@ export function ListScreen({ children, onRefresh, fab }: ListScreenProps) {
   }
 
   // Each direct child of LazyColumn becomes one lazy item (LazyColumnView.kt),
-  // which is why a Section renders as a single Column.
+  // which is why a Section renders as a single Column. The window is
+  // edge-to-edge, so the content clears the system bars itself: the side
+  // insets matter in landscape (3-button navigation bar, cutouts).
   const list = (
     <LazyColumn
       // imePadding keeps a focused text field in modal editors above the
       // keyboard: the window is edge-to-edge, so it no longer resizes.
       modifiers={[fillMaxSize(), imePadding()]}
       contentPadding={{
-        start: 16,
+        start: GUTTER + insets.left,
         top: 8,
-        end: 16,
-        bottom: insets.bottom + 16 + (fab ? FAB_CLEARANCE : 0),
+        end: GUTTER + insets.right,
+        // The IME inset already includes the navigation bar, and the FAB
+        // stays behind the keyboard, so neither is cleared while it is up
+        // (@expo/ui has no consumeWindowInsets to do this natively).
+        bottom: keyboardVisible ? 16 : insets.bottom + 16 + (fab ? FAB_CLEARANCE : 0),
       }}
       verticalArrangement={{ spacedBy: 16 }}>
       {children}
@@ -80,7 +121,7 @@ export function ListScreen({ children, onRefresh, fab }: ListScreenProps) {
         {fab ? (
           <ExtendedFloatingActionButton
             onClick={fab.onPress}
-            modifiers={[align('bottomEnd'), padding(0, 0, 16, insets.bottom + 16)]}>
+            modifiers={[align('bottomEnd'), padding(0, 0, 16 + insets.right, insets.bottom + 16)]}>
             <ExtendedFloatingActionButton.Icon>
               <Icon source={iconSource(fab.icon)} size={24} />
             </ExtendedFloatingActionButton.Icon>
@@ -108,18 +149,28 @@ export function Section({ title, footer, plain = false, children }: SectionProps
   } else if (rows.length > 0) {
     // A filled card on surfaceContainerLow. The clip gives the rounder
     // Settings-style corners and keeps row ripples (and row background
-    // colours) inside them. Inset dividers separate adjacent list items only:
-    // outlined fields, chips, tiles and text blocks carry their own padding,
-    // and a line between two outlined fields reads as clutter in a form.
+    // colours) inside them. Rows draw their own inset dividers where
+    // slotDividers() says, so wrappers around rows get them too.
+    const dividers = slotDividers(rows.map(slotKind));
     body = (
       <Card
         colors={{ containerColor: m.surfaceContainerLow }}
         modifiers={[fillMaxWidth(), clip(Shapes.RoundedCorner(CARD_RADIUS))]}>
-        {rows.flatMap((row, index) =>
-          index > 0 && isListItem(rows[index - 1]) && isListItem(row)
-            ? [<HorizontalDivider key={`divider:${row.key}`} modifiers={[padding(16, 0, 16, 0)]} />, row]
-            : [row],
-        )}
+        {rows.map((row, index) => {
+          const { rowsDraw, maskFirst } = dividers[index];
+          const slot = (
+            <RowDividerContext.Provider key={row.key} value={rowsDraw}>
+              {row}
+            </RowDividerContext.Provider>
+          );
+          return maskFirst ? (
+            <MaskFirstDivider key={row.key} color={m.surfaceContainerLow}>
+              {slot}
+            </MaskFirstDivider>
+          ) : (
+            slot
+          );
+        })}
       </Card>
     );
   }

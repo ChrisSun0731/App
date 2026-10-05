@@ -13,7 +13,7 @@ import {
   type ObservableState,
   type TextFieldKeyboardType,
 } from '@expo/ui/jetpack-compose';
-import { fillMaxWidth, menuAnchor, padding, rotate } from '@expo/ui/jetpack-compose/modifiers';
+import { fillMaxWidth, menuAnchor, padding, rotate, semantics } from '@expo/ui/jetpack-compose/modifiers';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useWindowDimensions } from 'react-native';
 
@@ -22,7 +22,7 @@ import { icons } from '@/components/icons';
 import type { FilterChipsProps, PickerRowProps, TextFieldRowProps } from '../types';
 import { useSyncedText } from '../use-synced-text';
 import { segmentsFit } from './helpers';
-import { iconSource, useInCard, useM3 } from './theme';
+import { iconSource, useContentWidth, useInCard, useM3 } from './theme';
 
 // Every control below draws its selection from props on each composition:
 // Compose's SegmentedButton, FilterChip and ExposedDropdownMenu are stateless
@@ -96,16 +96,19 @@ function MenuPicker<T extends string>({ label, value, options, onChange, icon, d
   );
 }
 
-function SegmentedPicker<T extends string>({ value, options, onChange, disabled = false }: PickerRowProps<T>) {
+function SegmentedPicker<T extends string>({ label, value, options, onChange, disabled = false }: PickerRowProps<T>) {
   const inCard = useInCard();
-  const { width, fontScale } = useWindowDimensions();
+  const { fontScale } = useWindowDimensions();
   const modifiers = [fillMaxWidth(), ...(inCard ? [padding(16, 12, 16, 12)] : [])];
-  // 16dp list gutters on both sides, plus the card's padding.
-  const available = width - 32 - (inCard ? 32 : 0);
+  // The row's width minus the card's padding.
+  const available = useContentWidth() - (inCard ? 32 : 0);
 
   const choose = (next: T) => {
     if (next !== value) onChange(next);
   };
+  // Like iOS, the segments show no label, so each one tells TalkBack what it
+  // picks (e.g. "顯示：未讀") instead of only its own text.
+  const describe = (option: { label: string }) => semantics({ contentDescription: `${label}：${option.label}` });
 
   if (!segmentsFit(options.map((option) => option.label), available, fontScale)) {
     // Too many or too long for equal segments: single-select filter chips,
@@ -117,7 +120,8 @@ function SegmentedPicker<T extends string>({ value, options, onChange, disabled 
             key={option.value}
             selected={option.value === value}
             enabled={!disabled}
-            onClick={() => choose(option.value)}>
+            onClick={() => choose(option.value)}
+            modifiers={[describe(option)]}>
             <FilterChip.Label>
               <Text style={{ typography: 'labelLarge' }}>{option.label}</Text>
             </FilterChip.Label>
@@ -141,7 +145,8 @@ function SegmentedPicker<T extends string>({ value, options, onChange, disabled 
           key={option.value}
           selected={option.value === value}
           enabled={!disabled}
-          onClick={() => choose(option.value)}>
+          onClick={() => choose(option.value)}
+          modifiers={[describe(option)]}>
           <SegmentedButton.Label>
             <Text maxLines={1} overflow="ellipsis" style={{ typography: 'labelLarge' }}>
               {option.label}

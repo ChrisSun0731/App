@@ -45,6 +45,7 @@ import type {
   RowProps,
   ToggleRowProps,
 } from '../types';
+import { RowDivider } from './divider';
 import {
   dialogDateFromKey,
   dialogMinimumFromKey,
@@ -125,70 +126,80 @@ export function Row({
     </Text>
   );
 
+  // Every ListItem row below returns its Section-controlled leading divider
+  // next to the item (see divider.tsx); both land in the card's column.
   return (
-    <ListItem colors={rowColors(m, disabled, background)} modifiers={modifiers}>
-      {overline ? (
-        <ListItem.OverlineContent>
-          <Text color={titleColor} style={{ typography: 'labelMedium' }}>
-            {overline}
-          </Text>
-        </ListItem.OverlineContent>
-      ) : null}
-      <ListItem.HeadlineContent>
-        {badge ? (
-          // A FlowRow puts the badge right after a short title and moves it
-          // under a long one instead of squeezing the title.
-          <FlowRow horizontalArrangement={{ spacedBy: 8 }} verticalArrangement={{ spacedBy: 4 }}>
-            {titleText}
-            <Badge label={badge} />
-          </FlowRow>
-        ) : (
-          titleText
-        )}
-      </ListItem.HeadlineContent>
-      {subtitle || footer ? (
-        <ListItem.SupportingContent>
-          <Column verticalArrangement={{ spacedBy: 6 }}>
-            {subtitle ? <Text style={{ typography: 'bodyMedium' }}>{subtitle}</Text> : null}
-            {footer}
-          </Column>
-        </ListItem.SupportingContent>
-      ) : null}
-      {icon || dotColor ? (
-        <ListItem.LeadingContent>
-          {icon ? (
-            <Icon source={iconSource(icon)} size={24} tint={fade(iconColor ?? m.primary)} />
+    <>
+      <RowDivider />
+      <ListItem colors={rowColors(m, disabled, background)} modifiers={modifiers}>
+        {overline ? (
+          <ListItem.OverlineContent>
+            <Text color={titleColor} style={{ typography: 'labelMedium' }}>
+              {overline}
+            </Text>
+          </ListItem.OverlineContent>
+        ) : null}
+        <ListItem.HeadlineContent>
+          {badge ? (
+            // A FlowRow puts the badge right after a short title and moves it
+            // under a long one instead of squeezing the title.
+            <FlowRow horizontalArrangement={{ spacedBy: 8 }} verticalArrangement={{ spacedBy: 4 }}>
+              {titleText}
+              <Badge label={badge} />
+            </FlowRow>
           ) : (
-            <Dot color={fade(dotColor ?? m.primary)} />
+            titleText
           )}
-        </ListItem.LeadingContent>
-      ) : null}
-      {detail || toggle || hasActions || accessory !== 'none' ? (
-        <ListItem.TrailingContent>
-          <ComposeRow verticalAlignment="center" horizontalArrangement={{ spacedBy: 4 }}>
-            {detail ? (
-              <Text maxLines={2} overflow="ellipsis" style={{ typography: 'bodyMedium', textAlign: 'end' }}>
-                {detail}
-              </Text>
-            ) : null}
-            {toggle ? (
-              <IconButton onClick={toggle.onPress} enabled={!disabled}>
-                <Icon
-                  source={iconSource(toggle.active ? toggle.activeIcon : toggle.icon)}
-                  size={24}
-                  tint={toggle.active ? fade(m.primary) : undefined}
-                  contentDescription={toggle.label}
+        </ListItem.HeadlineContent>
+        {subtitle || footer ? (
+          <ListItem.SupportingContent>
+            <Column verticalArrangement={{ spacedBy: 6 }}>
+              {subtitle ? <Text style={{ typography: 'bodyMedium' }}>{subtitle}</Text> : null}
+              {footer}
+            </Column>
+          </ListItem.SupportingContent>
+        ) : null}
+        {icon || dotColor ? (
+          <ListItem.LeadingContent>
+            {icon ? (
+              <Icon source={iconSource(icon)} size={24} tint={fade(iconColor ?? m.primary)} />
+            ) : (
+              <Dot color={fade(dotColor ?? m.primary)} />
+            )}
+          </ListItem.LeadingContent>
+        ) : null}
+        {detail || toggle || hasActions || accessory !== 'none' ? (
+          <ListItem.TrailingContent>
+            <ComposeRow verticalAlignment="center" horizontalArrangement={{ spacedBy: 4 }}>
+              {detail ? (
+                <Text maxLines={2} overflow="ellipsis" style={{ typography: 'bodyMedium', textAlign: 'end' }}>
+                  {detail}
+                </Text>
+              ) : null}
+              {toggle ? (
+                <IconButton onClick={toggle.onPress} enabled={!disabled}>
+                  <Icon
+                    source={iconSource(toggle.active ? toggle.activeIcon : toggle.icon)}
+                    size={24}
+                    tint={toggle.active ? fade(m.primary) : undefined}
+                    contentDescription={toggle.label}
+                  />
+                </IconButton>
+              ) : null}
+              {hasActions ? (
+                <OverflowMenu
+                  actions={actions}
+                  expanded={menuOpen}
+                  onExpandedChange={setMenuOpen}
+                  disabled={disabled}
                 />
-              </IconButton>
-            ) : null}
-            {hasActions ? (
-              <OverflowMenu actions={actions} expanded={menuOpen} onExpandedChange={setMenuOpen} disabled={disabled} />
-            ) : null}
-            <Accessory accessory={accessory} m={m} />
-          </ComposeRow>
-        </ListItem.TrailingContent>
-      ) : null}
-    </ListItem>
+              ) : null}
+              <Accessory accessory={accessory} m={m} />
+            </ComposeRow>
+          </ListItem.TrailingContent>
+        ) : null}
+      </ListItem>
+    </>
   );
 }
 
@@ -289,30 +300,39 @@ export function CheckRow({ title, subtitle, checked, onCheckedChange, onPress, a
     : [toggleable(checked, () => onCheckedChange(!checked), { role: 'checkbox' })];
 
   return (
-    <ListItem colors={rowColors(m, false)} modifiers={modifiers}>
-      <ListItem.LeadingContent>
-        <Checkbox value={checked} onCheckedChange={onPress ? onCheckedChange : undefined} />
-      </ListItem.LeadingContent>
-      <ListItem.HeadlineContent>
-        <Text
-          color={checked ? m.onSurfaceVariant : undefined}
-          maxLines={2}
-          overflow="ellipsis"
-          style={{ typography: 'bodyLarge', textDecoration: checked ? 'lineThrough' : undefined }}>
-          {title}
-        </Text>
-      </ListItem.HeadlineContent>
-      {subtitle ? (
-        <ListItem.SupportingContent>
-          <Text style={{ typography: 'bodyMedium' }}>{subtitle}</Text>
-        </ListItem.SupportingContent>
-      ) : null}
-      {hasActions ? (
-        <ListItem.TrailingContent>
-          <OverflowMenu actions={actions} expanded={menuOpen} onExpandedChange={setMenuOpen} />
-        </ListItem.TrailingContent>
-      ) : null}
-    </ListItem>
+    <>
+      <RowDivider />
+      <ListItem colors={rowColors(m, false)} modifiers={modifiers}>
+        <ListItem.LeadingContent>
+          {/* With onCheckedChange the box is a TalkBack stop of its own (only
+              the body merges into the row), so it is named after the item. */}
+          <Checkbox
+            value={checked}
+            onCheckedChange={onPress ? onCheckedChange : undefined}
+            modifiers={onPress ? [semantics({ contentDescription: title })] : undefined}
+          />
+        </ListItem.LeadingContent>
+        <ListItem.HeadlineContent>
+          <Text
+            color={checked ? m.onSurfaceVariant : undefined}
+            maxLines={2}
+            overflow="ellipsis"
+            style={{ typography: 'bodyLarge', textDecoration: checked ? 'lineThrough' : undefined }}>
+            {title}
+          </Text>
+        </ListItem.HeadlineContent>
+        {subtitle ? (
+          <ListItem.SupportingContent>
+            <Text style={{ typography: 'bodyMedium' }}>{subtitle}</Text>
+          </ListItem.SupportingContent>
+        ) : null}
+        {hasActions ? (
+          <ListItem.TrailingContent>
+            <OverflowMenu actions={actions} expanded={menuOpen} onExpandedChange={setMenuOpen} />
+          </ListItem.TrailingContent>
+        ) : null}
+      </ListItem>
+    </>
   );
 }
 
@@ -322,34 +342,44 @@ export function ToggleRow({ label, subtitle, icon, value, onValueChange, disable
   const hasActions = !!actions?.length;
 
   return (
-    <ListItem
-      colors={rowColors(m, disabled)}
-      // The whole row flips the switch, as in Android Settings.
-      modifiers={disabled ? [] : [toggleable(value, () => onValueChange(!value), { role: 'switch' })]}>
-      {icon ? (
-        <ListItem.LeadingContent>
-          <Icon source={iconSource(icon)} size={24} tint={disabled ? withAlpha(m.primary, DISABLED) : m.primary} />
-        </ListItem.LeadingContent>
-      ) : null}
-      <ListItem.HeadlineContent>
-        <Text maxLines={2} overflow="ellipsis" style={{ typography: 'bodyLarge' }}>
-          {label}
-        </Text>
-      </ListItem.HeadlineContent>
-      {subtitle ? (
-        <ListItem.SupportingContent>
-          <Text style={{ typography: 'bodyMedium' }}>{subtitle}</Text>
-        </ListItem.SupportingContent>
-      ) : null}
-      <ListItem.TrailingContent>
-        <ComposeRow verticalAlignment="center" horizontalArrangement={{ spacedBy: 4 }}>
-          <Switch value={value} enabled={!disabled} onCheckedChange={onValueChange} />
-          {hasActions ? (
-            <OverflowMenu actions={actions} expanded={menuOpen} onExpandedChange={setMenuOpen} disabled={disabled} />
-          ) : null}
-        </ComposeRow>
-      </ListItem.TrailingContent>
-    </ListItem>
+    <>
+      <RowDivider />
+      <ListItem
+        colors={rowColors(m, disabled)}
+        // The whole row flips the switch, as in Android Settings.
+        modifiers={disabled ? [] : [toggleable(value, () => onValueChange(!value), { role: 'switch' })]}>
+        {icon ? (
+          <ListItem.LeadingContent>
+            <Icon source={iconSource(icon)} size={24} tint={disabled ? withAlpha(m.primary, DISABLED) : m.primary} />
+          </ListItem.LeadingContent>
+        ) : null}
+        <ListItem.HeadlineContent>
+          <Text maxLines={2} overflow="ellipsis" style={{ typography: 'bodyLarge' }}>
+            {label}
+          </Text>
+        </ListItem.HeadlineContent>
+        {subtitle ? (
+          <ListItem.SupportingContent>
+            <Text style={{ typography: 'bodyMedium' }}>{subtitle}</Text>
+          </ListItem.SupportingContent>
+        ) : null}
+        <ListItem.TrailingContent>
+          <ComposeRow verticalAlignment="center" horizontalArrangement={{ spacedBy: 4 }}>
+            {/* @expo/ui's Switch always passes onCheckedChange, which makes it
+                a TalkBack stop of its own next to the row; give it the label. */}
+            <Switch
+              value={value}
+              enabled={!disabled}
+              onCheckedChange={onValueChange}
+              modifiers={[semantics({ contentDescription: label })]}
+            />
+            {hasActions ? (
+              <OverflowMenu actions={actions} expanded={menuOpen} onExpandedChange={setMenuOpen} disabled={disabled} />
+            ) : null}
+          </ComposeRow>
+        </ListItem.TrailingContent>
+      </ListItem>
+    </>
   );
 }
 
@@ -379,18 +409,21 @@ export function ButtonRow({ label, icon, role = 'default', prominent = false, di
   // colour, the whole row as the tap target.
   const tint = disabled ? withAlpha(destructive ? m.error : m.primary, DISABLED) : destructive ? m.error : m.primary;
   return (
-    <ListItem colors={rowColors(m, disabled)} modifiers={disabled ? [] : [clickable(onPress)]}>
-      {icon ? (
-        <ListItem.LeadingContent>
-          <Icon source={iconSource(icon)} size={24} tint={tint} />
-        </ListItem.LeadingContent>
-      ) : null}
-      <ListItem.HeadlineContent>
-        <Text color={tint} style={{ typography: 'bodyLarge', fontWeight: '500' }}>
-          {label}
-        </Text>
-      </ListItem.HeadlineContent>
-    </ListItem>
+    <>
+      <RowDivider />
+      <ListItem colors={rowColors(m, disabled)} modifiers={disabled ? [] : [clickable(onPress)]}>
+        {icon ? (
+          <ListItem.LeadingContent>
+            <Icon source={iconSource(icon)} size={24} tint={tint} />
+          </ListItem.LeadingContent>
+        ) : null}
+        <ListItem.HeadlineContent>
+          <Text color={tint} style={{ typography: 'bodyLarge', fontWeight: '500' }}>
+            {label}
+          </Text>
+        </ListItem.HeadlineContent>
+      </ListItem>
+    </>
   );
 }
 
@@ -400,32 +433,35 @@ export function DateRow({ label, value, onChange, minimumDate }: DateRowProps) {
   const valid = isDateKey(value);
 
   return (
-    // One view: the dialog lives next to the row and takes no space.
-    <Box modifiers={[fillMaxWidth()]}>
-      <ListItem colors={rowColors(m, false)} modifiers={[clickable(() => setOpen(true))]}>
-        <ListItem.LeadingContent>
-          <Icon source={iconSource(icons.calendar)} size={24} tint={m.primary} />
-        </ListItem.LeadingContent>
-        <ListItem.HeadlineContent>
-          <Text style={{ typography: 'bodyLarge' }}>{label}</Text>
-        </ListItem.HeadlineContent>
-        <ListItem.SupportingContent>
-          <Text style={{ typography: 'bodyMedium' }}>{valid ? formatDateLabel(value) : '未選擇日期'}</Text>
-        </ListItem.SupportingContent>
-      </ListItem>
-      {open ? (
-        <DatePickerDialog
-          initialDate={valid ? dialogDateFromKey(value) : null}
-          selectableDates={minimumDate ? { start: dialogMinimumFromKey(minimumDate) } : undefined}
-          confirmButtonLabel="確定"
-          dismissButtonLabel="取消"
-          onDateSelected={(date) => {
-            setOpen(false);
-            onChange(keyFromDialogDate(date));
-          }}
-          onDismissRequest={() => setOpen(false)}
-        />
-      ) : null}
-    </Box>
+    <>
+      <RowDivider />
+      {/* The dialog lives next to the row in the Box and takes no space. */}
+      <Box modifiers={[fillMaxWidth()]}>
+        <ListItem colors={rowColors(m, false)} modifiers={[clickable(() => setOpen(true))]}>
+          <ListItem.LeadingContent>
+            <Icon source={iconSource(icons.calendar)} size={24} tint={m.primary} />
+          </ListItem.LeadingContent>
+          <ListItem.HeadlineContent>
+            <Text style={{ typography: 'bodyLarge' }}>{label}</Text>
+          </ListItem.HeadlineContent>
+          <ListItem.SupportingContent>
+            <Text style={{ typography: 'bodyMedium' }}>{valid ? formatDateLabel(value) : '未選擇日期'}</Text>
+          </ListItem.SupportingContent>
+        </ListItem>
+        {open ? (
+          <DatePickerDialog
+            initialDate={valid ? dialogDateFromKey(value) : null}
+            selectableDates={minimumDate ? { start: dialogMinimumFromKey(minimumDate) } : undefined}
+            confirmButtonLabel="確定"
+            dismissButtonLabel="取消"
+            onDateSelected={(date) => {
+              setOpen(false);
+              onChange(keyFromDialogDate(date));
+            }}
+            onDismissRequest={() => setOpen(false)}
+          />
+        ) : null}
+      </Box>
+    </>
   );
 }
