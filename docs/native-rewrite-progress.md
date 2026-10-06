@@ -124,9 +124,11 @@ Both platforms:
   fetch ends, and repeated taps do not restart it.
 - The todo and event editors' not-found states offer 返回 / 返回行事曆;
   `/youbike-rename` for a removed station shows only 完成 / the close icon.
-- Not fixed, known: iOS multiline `TextFieldRow` repeats its section title as
-  a caption (課表 editor's 備註), and a refused iOS `ToggleRow` change does not
-  snap back (no screen refuses one now).
+- iOS multiline `TextFieldRow` always draws its label as a caption, so a
+  multiline field should not also sit under a section titled the same (the
+  課表 editor's 備註 section has no title for that reason).
+- Not fixed, known: a refused iOS `ToggleRow` change does not snap back (no
+  screen refuses one now).
 
 ## Verification (before the redesign)
 

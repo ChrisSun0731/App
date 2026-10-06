@@ -107,8 +107,9 @@ function CellForm({ target, cell, onClose }: { target: EditorTarget; cell: Sched
           )}
         </Section>
 
-        <Section title="備註">
-          {/* An example rather than the label again: the section title already says 備註. */}
+        {/* No section title: the field's own label (iOS caption, Android outlined
+            label) already says 備註, and the placeholder gives an example. */}
+        <Section>
           <TextFieldRow
             label="備註"
             value={draft.note}

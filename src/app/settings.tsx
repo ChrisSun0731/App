@@ -44,7 +44,7 @@ export default function SettingsScreen() {
   const shownTabs = visibleTabs(settings.toolbar).length;
   // The same classes and confirmation as 課表's picker and menu.
   const { userClass, options: classOptions, changeClass } = useChangeClass(timetable.data);
-  // 重新載入 shows a loading row in place of the error notice until it settles.
+  // 重試 shows a loading row in place of the error notice until it settles.
   const reload = useRefresh(() => timetable.refetch({ cancelRefetch: false }));
 
   // The labels name the feature, as the old buttons did: TalkBack reads only
