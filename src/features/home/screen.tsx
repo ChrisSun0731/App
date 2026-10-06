@@ -27,7 +27,14 @@ import {
   type IconValue,
 } from '@/ui';
 
-import { formatPeriodOverline, formatPinnedDate, formatTodayTitle, getTodayPeriod, todosDueOn } from './today';
+import {
+  formatPeriodOverline,
+  formatPeriodTitle,
+  formatPinnedDate,
+  formatTodayTitle,
+  getTodayPeriod,
+  todosDueOn,
+} from './today';
 import { useNow } from './use-now';
 import { useTimetableAutofill } from './use-timetable-autofill';
 
@@ -77,7 +84,7 @@ export default function HomeScreen() {
   if (period) {
     periodRow = (
       <Row
-        title={period.subject || '本節沒有課程'}
+        title={formatPeriodTitle(period)}
         overline={formatPeriodOverline(period.period)}
         subtitle={period.note || undefined}
         badge={period.status === 'current' ? '目前' : '下一節'}
@@ -109,7 +116,12 @@ export default function HomeScreen() {
           { kind: 'icon', key: 'about', label: '關於', icon: icons.info, onPress: () => router.push('/about') },
         ]}
       />
-      <ListScreen>
+      {/*
+        Pull to refresh reloads the bell times and class timetables (the only
+        remote data here). onRefresh from the first render: the iOS List is
+        rebuilt if it appears later.
+      */}
+      <ListScreen onRefresh={() => timetable.refetch()}>
         <Section title="今天">
           <Row title={formatTodayTitle(now)} subtitle={`${userClass} 班`} />
           {widgets.schedule ? periodRow : null}

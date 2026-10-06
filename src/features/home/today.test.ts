@@ -6,6 +6,7 @@ import type { Todo } from '@/features/todo/types';
 
 import {
   formatPeriodOverline,
+  formatPeriodTitle,
   formatPinnedDate,
   formatTodayTitle,
   getTodayPeriod,
@@ -104,6 +105,16 @@ describe('home screen labels', () => {
     expect(formatTodayTitle(at(8, 0, 4))).toBe('10月4日 星期日');
     expect(formatPinnedDate(new Date(2026, 8, 30, 15, 0).toISOString())).toBe('2026/9/30');
     expect(formatPinnedDate('not a date')).toBeUndefined();
+  });
+
+  test('titles a free period by whether it is in session or ahead', () => {
+    expect(formatPeriodTitle({ status: 'current', subject: '國文' })).toBe('國文');
+    expect(formatPeriodTitle({ status: 'next', subject: '英文' })).toBe('英文');
+    expect(formatPeriodTitle({ status: 'current', subject: '' })).toBe('本節沒有課程');
+    // An upcoming free period with only a note must not say 本節 next to the 下一節 badge.
+    const rows = rowsWithMonday([empty, { subject: '', note: '自習' }]);
+    const upcoming = getTodayPeriod(PERIODS, rows, at(7, 30), SEMESTER_START);
+    expect(upcoming && formatPeriodTitle(upcoming)).toBe('空堂');
   });
 });
 

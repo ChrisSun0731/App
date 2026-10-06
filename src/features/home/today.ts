@@ -29,8 +29,8 @@ export interface TodayPeriod {
  * the last class, or before the timetable has loaded.
  *
  * A free period in session is still returned (as 本節沒有課程) because that
- * is what is happening now; free periods ahead are skipped so the row points
- * at the next real class instead of "第八節 · 本節沒有課程".
+ * is what is happening now; free periods ahead are skipped unless they carry
+ * a note, so the row points at the next real class instead of "第八節 · 空堂".
  */
 export function getTodayPeriod(
   periods: Period[],
@@ -64,6 +64,17 @@ export function getTodayPeriod(
     if (next && (next.subject || next.note)) return { status: 'next', period, ...next };
   }
   return null;
+}
+
+/**
+ * The row title for a period: its subject, else wording that fits the status.
+ * A free period in session reads 本節沒有課程 ("this period"); an upcoming one
+ * (returned only because it has a note) reads 空堂 as on 課表, so the title
+ * never contradicts the 下一節 badge.
+ */
+export function formatPeriodTitle(period: Pick<TodayPeriod, 'status' | 'subject'>): string {
+  if (period.subject) return period.subject;
+  return period.status === 'current' ? '本節沒有課程' : '空堂';
 }
 
 /** e.g. "第三節 10:10–11:00". */
