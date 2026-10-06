@@ -3,7 +3,7 @@
 // date groups of the 待辦 view. Kept out of the screen so they can be unit
 // tested without a renderer.
 import { formatFullDate, fromDateKey, toDateKey, WEEKDAY_ZH } from '@/lib/dates';
-import type { CalendarCell, CalendarIndicator, ChoiceOption } from '@/ui/types';
+import { CALENDAR_CELL_INDICATORS, type CalendarCell, type CalendarIndicator, type ChoiceOption } from '@/ui/types';
 
 import { buildMonthGrid, groupTodosByDate, itemsForDay, type DayItem } from './calendar-grid';
 import type { CalendarEvent, Todo, TodoCategory } from './types';
@@ -38,18 +38,13 @@ function daySummary(items: readonly DayItem[]): string {
 }
 
 /**
- * Indicators a day cell can count on showing on every platform: the Android
- * (and fallback) kit MonthCalendar draws only the first 3 (iOS draws 6).
- */
-export const MAX_DAY_INDICATORS = 3;
-
-/**
- * A day's MonthCalendar indicators, at most MAX_DAY_INDICATORS: one dot per
- * distinct event category colour, then one square in `todoColor` when the day
- * has any todo. Deduplicating matters because a busy school day is many
- * same-colour 學校事務 events, which would otherwise fill every slot; and the
- * todo square always keeps its slot so a todo never hides behind events. The
- * exact counts are in the cell's spoken label and the day list.
+ * A day's MonthCalendar indicators, at most CALENDAR_CELL_INDICATORS (all a
+ * cell draws on every platform): one dot per distinct event category colour,
+ * then one square in `todoColor` when the day has any todo. Deduplicating
+ * matters because a busy school day is many same-colour 學校事務 events, which
+ * would otherwise fill every slot; and the todo square always keeps its slot
+ * so a todo never hides behind events. The exact counts are in the cell's
+ * spoken label and the day list.
  */
 export function dayIndicators(items: readonly DayItem[], todoColor: string): CalendarIndicator[] {
   const hasTodo = items.some((item) => item.type === 'todo');
@@ -60,7 +55,7 @@ export function dayIndicators(items: readonly DayItem[], todoColor: string): Cal
     const key = `event-${item.event.category.color.toLowerCase()}`;
     if (!dots.has(key)) dots.set(key, { key, color: item.event.category.color, shape: 'dot' });
   }
-  const shown = [...dots.values()].slice(0, MAX_DAY_INDICATORS - (hasTodo ? 1 : 0));
+  const shown = [...dots.values()].slice(0, CALENDAR_CELL_INDICATORS - (hasTodo ? 1 : 0));
   return hasTodo ? [...shown, { key: 'todo', color: todoColor, shape: 'square' }] : shown;
 }
 

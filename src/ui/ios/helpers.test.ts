@@ -47,6 +47,16 @@ describe('SwiftUI kit helpers', () => {
     expect(ordered.map((item) => item.key)).toEqual(['remove', 'rename', 'share']);
   });
 
+  test('leaves disabled actions out of the swipe buttons, so a full swipe cannot fire one', () => {
+    const ordered = trailingSwipeActions([
+      action('rename'),
+      { ...action('remove', true), disabled: true },
+      { ...action('share'), disabled: true },
+      action('pin'),
+    ]);
+    expect(ordered.map((item) => item.key)).toEqual(['rename', 'pin']);
+  });
+
   test('splits tiles and calendar cells into rows', () => {
     expect(chunk([1, 2, 3, 4, 5, 6, 7], 3)).toEqual([[1, 2, 3], [4, 5, 6], [7]]);
     expect(chunk(Array.from({ length: 42 }, (_, index) => index), 7)).toHaveLength(6);

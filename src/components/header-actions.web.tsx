@@ -1,13 +1,20 @@
 import { Stack } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
-import type { HeaderActionsProps, HeaderItem } from './header-actions.types';
+import type { HeaderActionsProps, HeaderItem, HeaderMenuEntry } from './header-actions.types';
+
+/** Every pressable a header item offers: menus (and their submenus) are spread out as plain buttons. */
+function buttonsOf(item: HeaderItem): { key: string; label: string; onPress: () => void; disabled?: boolean }[] {
+  if (item.kind !== 'menu') return [item];
+  const actions = item.actions.flatMap((entry: HeaderMenuEntry) => (entry.kind === 'submenu' ? entry.actions : [entry]));
+  return actions.map((action) => ({ ...action, disabled: item.disabled }));
+}
 
 function ActionRow({ items }: { items: HeaderItem[] }) {
   return <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 12 }}>
-    {items.flatMap((item) => item.kind === 'menu' ? item.actions : [item]).map((item) =>
+    {items.flatMap(buttonsOf).map((item) =>
       <Pressable key={item.key} accessibilityRole="button" onPress={item.onPress}
-        disabled={'disabled' in item && item.disabled === true} style={{ padding: 8 }}><Text>{item.label}</Text></Pressable>)}
+        disabled={item.disabled === true} style={{ padding: 8 }}><Text>{item.label}</Text></Pressable>)}
   </View>;
 }
 

@@ -28,28 +28,30 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatMonthDay, fromDateKey, isDateKey } from '@/lib/dates';
 import { usePalette } from '@/theme/palette';
 
-import type {
-  ButtonRowProps,
-  CheckRowProps,
-  CrowdBarProps,
-  DateRowProps,
-  EmbeddedProps,
-  EmptyStateProps,
-  FilterChipsProps,
-  Kit,
-  ListScreenProps,
-  LoadingProps,
-  MetricPillsProps,
-  MonthCalendarProps,
-  NoticeProps,
-  PickerRowProps,
-  RowAction,
-  RowProps,
-  SectionProps,
-  TextBlockProps,
-  TextFieldRowProps,
-  TileGridProps,
-  ToggleRowProps,
+import { overflowMenuLabel } from './labels';
+import {
+  CALENDAR_CELL_INDICATORS,
+  type ButtonRowProps,
+  type CheckRowProps,
+  type CrowdBarProps,
+  type DateRowProps,
+  type EmbeddedProps,
+  type EmptyStateProps,
+  type FilterChipsProps,
+  type Kit,
+  type ListScreenProps,
+  type LoadingProps,
+  type MetricPillsProps,
+  type MonthCalendarProps,
+  type NoticeProps,
+  type PickerRowProps,
+  type RowAction,
+  type RowProps,
+  type SectionProps,
+  type TextBlockProps,
+  type TextFieldRowProps,
+  type TileGridProps,
+  type ToggleRowProps,
 } from './types';
 
 /** Kit children with fragments expanded, so sections can separate rows. */
@@ -60,19 +62,19 @@ function rowsOf(children: ReactNode): ReactElement[] {
   });
 }
 
-export function ListScreen({ children, onRefresh, fab }: ListScreenProps) {
+export function ListScreen({ children, onRefresh, refreshing = false, fab }: ListScreenProps) {
   const palette = usePalette();
   const insets = useSafeAreaInsets();
-  const [refreshing, setRefreshing] = useState(false);
+  const [pulling, setPulling] = useState(false);
   async function refresh() {
     if (!onRefresh) return;
-    setRefreshing(true);
+    setPulling(true);
     try {
       await onRefresh();
     } catch {
       // Screens show their own error state.
     } finally {
-      setRefreshing(false);
+      setPulling(false);
     }
   }
   return (
@@ -80,7 +82,9 @@ export function ListScreen({ children, onRefresh, fab }: ListScreenProps) {
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
-        refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} /> : undefined}
+        refreshControl={
+          onRefresh ? <RefreshControl refreshing={refreshing || pulling} onRefresh={() => void refresh()} /> : undefined
+        }
         contentContainerStyle={[styles.screen, { paddingBottom: insets.bottom + (fab ? 96 : 24) }]}>
         {children}
       </ScrollView>
@@ -121,12 +125,17 @@ export function Section({ title, footer, plain = false, children }: SectionProps
   );
 }
 
-function Actions({ actions }: { actions: readonly RowAction[] }) {
+/** A row's actions behind a ⋯ button named after the row; available on a disabled row too. */
+function Actions({ actions, rowName }: { actions: readonly RowAction[]; rowName: string }) {
   const palette = usePalette();
   const [open, setOpen] = useState(false);
   return (
     <View style={styles.actions}>
-      <Pressable accessibilityRole="button" accessibilityLabel="更多選項" onPress={() => setOpen(!open)} hitSlop={8}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={overflowMenuLabel(rowName)}
+        onPress={() => setOpen(!open)}
+        hitSlop={8}>
         <Text style={[styles.detail, { color: palette.textSecondary }]}>⋯</Text>
       </Pressable>
       {open
@@ -134,6 +143,9 @@ function Actions({ actions }: { actions: readonly RowAction[] }) {
             <Pressable
               key={action.key}
               accessibilityRole="button"
+              accessibilityState={{ disabled: action.disabled }}
+              disabled={action.disabled}
+              style={action.disabled ? styles.disabled : null}
               onPress={() => {
                 setOpen(false);
                 action.onPress();
@@ -156,6 +168,8 @@ export function Row(props: RowProps) {
   const palette = usePalette();
   const { title, subtitle, overline, detail, dotColor, background, badge, emphasized, titleLines = 2, accessory = 'none' } = props;
   const label = props.accessibilityLabel ?? [title, overline, subtitle, detail, badge].filter(Boolean).join('，');
+  // `disabled` dims the row's own content and turns off its tap; the toggle
+  // and actions stay usable.
   return (
     <Pressable
       accessibilityRole={props.onPress ? 'button' : undefined}
@@ -163,9 +177,9 @@ export function Row(props: RowProps) {
       accessibilityState={{ disabled: props.disabled }}
       disabled={props.disabled || !props.onPress}
       onPress={props.onPress}
-      style={[styles.row, background ? { backgroundColor: background } : null, props.disabled ? styles.disabled : null]}>
+      style={[styles.row, background ? { backgroundColor: background } : null]}>
       {dotColor && !props.icon ? <Dot color={dotColor} /> : null}
-      <View style={styles.rowBody}>
+      <View style={[styles.rowBody, props.disabled ? styles.disabled : null]}>
         {overline ? <Text style={[styles.overline, { color: palette.textSecondary }]}>{overline}</Text> : null}
         <View style={styles.inline}>
           <Text
@@ -193,7 +207,7 @@ export function Row(props: RowProps) {
           <Text style={[styles.detail, { color: palette.tint }]}>{props.toggle.active ? '★' : '☆'}</Text>
         </Pressable>
       ) : null}
-      {props.actions?.length ? <Actions actions={props.actions} /> : null}
+      {props.actions?.length ? <Actions actions={props.actions} rowName={title} /> : null}
       {accessory !== 'none' ? (
         <Text style={[styles.detail, { color: accessory === 'checkmark' ? palette.tint : palette.textTertiary }]}>
           {accessory === 'chevron' ? '›' : accessory === 'external' ? '↗' : '✓'}
@@ -219,21 +233,22 @@ export function CheckRow({ title, subtitle, checked, onCheckedChange, onPress, a
         <Text style={[styles.title, { color: checked ? palette.textSecondary : palette.text }]}>{title}</Text>
         {subtitle ? <Text style={[styles.subtitle, { color: palette.textSecondary }]}>{subtitle}</Text> : null}
       </Pressable>
-      {actions?.length ? <Actions actions={actions} /> : null}
+      {actions?.length ? <Actions actions={actions} rowName={title} /> : null}
     </View>
   );
 }
 
 export function ToggleRow({ label, subtitle, value, onValueChange, disabled, actions }: ToggleRowProps) {
   const palette = usePalette();
+  // Only the switch (and its label) dim while disabled; the actions stay usable.
   return (
-    <View style={[styles.row, disabled ? styles.disabled : null]}>
-      <View style={styles.rowBody}>
+    <View style={styles.row}>
+      <View style={[styles.rowBody, disabled ? styles.disabled : null]}>
         <Text style={[styles.title, { color: palette.text }]}>{label}</Text>
         {subtitle ? <Text style={[styles.subtitle, { color: palette.textSecondary }]}>{subtitle}</Text> : null}
       </View>
       <Switch accessibilityLabel={label} value={value} onValueChange={onValueChange} disabled={disabled} />
-      {actions?.length ? <Actions actions={actions} /> : null}
+      {actions?.length ? <Actions actions={actions} rowName={label} /> : null}
     </View>
   );
 }
@@ -462,7 +477,7 @@ export function MonthCalendar({ title, weekdays, cells, selectedKey, onSelect, o
                 {cell.day}
               </Text>
               <View style={[styles.inline, styles.indicators]}>
-                {cell.indicators.slice(0, 3).map((indicator) => (
+                {cell.indicators.slice(0, CALENDAR_CELL_INDICATORS).map((indicator) => (
                   <View
                     key={indicator.key}
                     style={[styles.indicator, { backgroundColor: indicator.color }, indicator.shape === 'dot' ? styles.round : null]}

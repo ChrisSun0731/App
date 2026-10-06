@@ -29,8 +29,9 @@ src/ui/
   kit.ios.tsx              SwiftUI implementation
   kit.android.tsx          Compose Material 3 implementation
   kit.tsx                  fallback (web/tests) — plain React Native views
+  labels.ts                shared spoken labels (e.g. 「<row>」的更多選項)
   use-synced-text.ts       shared helper: native text state <-> React state
-  use-reverting-choice.ts  shared helper: native pickers always show `value`
+  ios/use-snap-back.ts     SwiftUI pickers always show `value`
 ```
 
 Screens are written **once** against the kit (`import { ListScreen, Section,
@@ -39,6 +40,26 @@ platform, with the platform idioms built in (e.g. `Row.actions` become swipe
 actions + a context menu on iOS and an overflow menu on Android). A screen may
 still add `screen.ios.tsx` / `screen.android.tsx` when the platforms need a
 genuinely different layout, but sharing is the default.
+
+Row states the kits share:
+
+- `disabled` on `Row` / `ToggleRow` turns off the row's own tap or switch and
+  dims it, nothing more: `actions` (and a `Row`'s `toggle`) stay available,
+  so a feature greyed out at a limit can still be moved. An action is greyed
+  on its own with `RowAction.disabled` (greyed menu item; left out of iOS
+  swipe buttons). On a disabled iOS row a full swipe only reveals the swipe
+  buttons instead of firing the edge one.
+- Android's overflow button is spoken as `「<title>」的更多選項`, so TalkBack can
+  tell rows apart (the fallback kit does the same). iOS has no visible
+  trigger: the actions live in the swipe actions and long-press menu of a row
+  that VoiceOver reads by its title.
+- `ListScreen.refreshing` shows refresh progress the screen started itself
+  (a header 重新整理 button). Android and the fallback show pull to refresh's
+  own indicator; SwiftUI cannot start `refreshable`'s spinner from code, so
+  iOS shows a spinner row above the first section while no pull is running.
+- `MonthCalendar` draws at most `CALENDAR_CELL_INDICATORS` (3, from
+  `@/ui/types`) indicators per day on every platform; callers pick which ones
+  (行事曆 keeps a slot for the todo square).
 
 Rules for kit children: a `ListScreen` contains only `Section`s. A `Section`
 contains rows (`Row`,
@@ -61,6 +82,14 @@ unit-tested). Platform kit files must not contain feature logic.
   `Stack.Toolbar` buttons/menus; Android top-app-bar icon buttons and an
   overflow `DropdownMenu`). Primary "add" actions additionally show as an
   Android extended FAB (`ListScreen.fab`); iOS ignores `fab`.
+- A header menu may hold one level of submenus (`{ kind: 'submenu' }`, e.g.
+  課表's 選擇班級): a nested `Stack.Toolbar.Menu` (UIMenu child) on iOS; on
+  Android an item with a trailing arrow that swaps the open dropdown's items
+  for the submenu's, under a back item. Selected actions get a checkmark
+  (`isOn` on iOS, a leading check on Android, where every item of a menu keeps
+  the leading slot once one has an icon or check, so labels line up).
+- Disabled header icons and menu triggers are greyed on both platforms (iOS
+  by UIKit; Android in Material's disabled colour, onSurface at 38%).
 - Search uses the native header search bar (`Stack.SearchBar`), not an
   in-content text field.
 - Editors (`/todo-editor`, `/event-editor`, `/schedule-editor`, new
@@ -134,7 +163,10 @@ remote data.
   subtitle, external accessory) opening the link; `ButtonRow` 查看校網.
 
 ### 課表 (Schedule)
-- Header: menu with 選擇班級 (class picker) and 重新匯入課表.
+- Header: menu with a 選擇班級 submenu (every class, the current one checked;
+  choosing one goes through the same confirm Alert as the 班級 picker and
+  leaves the check unchanged when declined) and 重新匯入課表, once the
+  timetables have loaded.
 - Section (no title) — segmented `PickerRow` 一 二 三 四 五 (defaults to today).
 - Section titled `星期X` with footer `{academicYear} · 第N週 · 單/雙週`
   — one `Row` per period: overline `第一節 · 08:10`, title = subject or 空堂,
@@ -188,8 +220,10 @@ remote data.
   existing hints.
 
 ### 交通 (Transport)
-- Header: refresh icon; `+` menu (YouBike 站點 / 捷運車站); Android FAB 新增站點
-  opens the same choice (menu on the header is enough; FAB → YouBike picker).
+- Header: refresh icon (greyed while a refresh runs, with progress shown via
+  `ListScreen.refreshing`); `+` menu (YouBike 站點 / 捷運車站); Android FAB
+  新增站點 opens the same choice (menu on the header is enough; FAB → YouBike
+  picker).
 - Section "YouBike 站點" (footer: 約每 10 秒更新 · 站點更新 HH:MM:SS): one
   `Row` per followed station: title nickname, subtitle `城市 · 站名`,
   footer `MetricPills` 可借 N / 可還 N with availability colours, status
@@ -235,6 +269,9 @@ remote data.
   article (external accessory), actions 開啟公告 / 分享 (iOS `ShareLink` not
   needed — use `Share.share`) / 釘選.
 - "顯示更多" `ButtonRow`. Errors → `Notice` with 重試.
+- 重新整理 / 重試 progress is a labelled `Loading` row in the status section
+  (in place of the notice), not `ListScreen.refreshing`, so there is one
+  indicator, not two.
 
 ### 熱食部 (Menu)
 - Header: previous week / next week icons and a 本週 text button.
@@ -258,6 +295,11 @@ remote data.
   mode via `List.ForEach onMove` is preferred if feasible inside the kit as
   `ReorderableSection`; otherwise context-menu/overflow 上移/下移); Section
   "個人資料" destructive `ButtonRow` 重設個人資料與設定 + footer.
+- Settings, as built: 上移/下移 are row `actions`. At the 4-tab limit a hidden
+  feature's switch is `disabled` (greyed rather than refused), and its
+  上移/下移 stay available. iOS adds 長按功能可調整順序。 to the 自訂工具列
+  footer, because its actions live only in the long-press menu, which nothing
+  on screen reveals; Android's overflow button is visible, so it has no hint.
 
 ### 紀念品 (Souvenir)
 - Keeps the WebView (it is a website). Failure → kit `EmptyState` 目前無法載入

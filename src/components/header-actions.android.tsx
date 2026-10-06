@@ -1,4 +1,5 @@
 import {
+  Box,
   DropdownMenu,
   DropdownMenuItem,
   Host,
@@ -8,13 +9,27 @@ import {
   Text,
   TextButton,
 } from '@expo/ui/jetpack-compose';
+import { size } from '@expo/ui/jetpack-compose/modifiers';
 import { Stack } from 'expo-router';
 import { useState } from 'react';
 import type { ImageSourcePropType } from 'react-native';
 
 import { usePalette } from '@/theme/palette';
+import { withAlpha } from '@/ui/android/helpers';
 
-import type { HeaderActionsProps, HeaderItem } from './header-actions.types';
+import type {
+  HeaderActionsProps,
+  HeaderItem,
+  HeaderMenuAction,
+  HeaderMenuEntry,
+  HeaderSubmenu,
+} from './header-actions.types';
+import { icons } from './icons';
+
+/** Material's disabled-content opacity. */
+const DISABLED_ALPHA = 0.38;
+
+type MenuItem = Extract<HeaderItem, { kind: 'menu' }>;
 
 /**
  * Top app bar actions for the current screen, drawn with Material 3 Compose
@@ -43,22 +58,20 @@ function ActionRow({ items }: { items: HeaderItem[] }) {
   );
 }
 
-function Action({ item }: { item: HeaderItem }) {
+/**
+ * The tint of a header icon: the top app bar's secondary colour, or
+ * Material's disabled content colour (onSurface at 38%) while disabled. The
+ * tint is explicit, so IconButton's own disabled colour would never show.
+ */
+function useIconTint(disabled: boolean | undefined): string {
   const palette = usePalette();
-  const [expanded, setExpanded] = useState(false);
+  return disabled ? withAlpha(palette.text as string, DISABLED_ALPHA) : (palette.textSecondary as string);
+}
 
+function Action({ item }: { item: HeaderItem }) {
   switch (item.kind) {
     case 'icon':
-      return (
-        <IconButton onClick={item.onPress} enabled={!item.disabled}>
-          <Icon
-            source={item.icon as ImageSourcePropType}
-            size={24}
-            tint={palette.textSecondary as string}
-            contentDescription={item.label}
-          />
-        </IconButton>
-      );
+      return <HeaderIconButton item={item} />;
     case 'text':
       return (
         <TextButton onClick={item.onPress} enabled={!item.disabled}>
@@ -66,46 +79,124 @@ function Action({ item }: { item: HeaderItem }) {
         </TextButton>
       );
     case 'menu':
-      return (
-        <DropdownMenu expanded={expanded} onDismissRequest={() => setExpanded(false)}>
-          <DropdownMenu.Trigger>
-            <IconButton onClick={() => setExpanded(true)}>
-              <Icon
-                source={item.icon as ImageSourcePropType}
-                size={24}
-                tint={palette.textSecondary as string}
-                contentDescription={item.label}
-              />
-            </IconButton>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Items>
-            {item.actions.map((action) => (
-              <DropdownMenuItem
-                key={action.key}
-                onClick={() => {
-                  setExpanded(false);
-                  action.onPress();
-                }}>
-                <DropdownMenuItem.Text>
-                  <Text color={action.destructive ? (palette.danger as string) : undefined}>
-                    {action.label}
-                  </Text>
-                </DropdownMenuItem.Text>
-                {action.icon || action.selected ? (
-                  <DropdownMenuItem.LeadingIcon>
-                    <Icon
-                      source={(action.selected ? CHECK : action.icon) as ImageSourcePropType}
-                      size={24}
-                      tint={palette.textSecondary as string}
-                    />
-                  </DropdownMenuItem.LeadingIcon>
-                ) : null}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenu.Items>
-        </DropdownMenu>
-      );
+      return <HeaderMenu item={item} />;
   }
 }
 
-const CHECK = require('@expo/material-symbols/check.xml');
+function HeaderIconButton({ item }: { item: Extract<HeaderItem, { kind: 'icon' }> }) {
+  const tint = useIconTint(item.disabled);
+  return (
+    <IconButton onClick={item.onPress} enabled={!item.disabled}>
+      <Icon source={item.icon as ImageSourcePropType} size={24} tint={tint} contentDescription={item.label} />
+    </IconButton>
+  );
+}
+
+/**
+ * An icon button opening a DropdownMenu. A submenu entry (trailing arrow)
+ * swaps the open menu's items for the submenu's actions under a back item,
+ * as Material's cascading menus do on phones; closing the menu returns it to
+ * the top level.
+ */
+function HeaderMenu({ item }: { item: MenuItem }) {
+  const palette = usePalette();
+  const tint = useIconTint(item.disabled);
+  const [expanded, setExpanded] = useState(false);
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const submenu = item.actions.find(
+    (entry): entry is HeaderSubmenu => entry.kind === 'submenu' && entry.key === openKey,
+  );
+
+  function close() {
+    setExpanded(false);
+    setOpenKey(null);
+  }
+
+  // Labels line up: once any entry shows a leading icon or check, every entry
+  // keeps the leading slot (empty where it has none). The back item always
+  // has one.
+  const entries: HeaderMenuEntry[] = submenu ? submenu.actions : item.actions;
+  const leadingSlot = submenu !== undefined || entries.some(hasLeading);
+  const textSecondary = palette.textSecondary as string;
+
+  return (
+    <DropdownMenu expanded={expanded} onDismissRequest={close}>
+      <DropdownMenu.Trigger>
+        <IconButton onClick={() => setExpanded(true)} enabled={!item.disabled}>
+          <Icon source={item.icon as ImageSourcePropType} size={24} tint={tint} contentDescription={item.label} />
+        </IconButton>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Items>
+        {submenu ? (
+          <DropdownMenuItem key="back" onClick={() => setOpenKey(null)}>
+            <DropdownMenuItem.Text>
+              <Text>{submenu.label}</Text>
+            </DropdownMenuItem.Text>
+            <DropdownMenuItem.LeadingIcon>
+              <Icon
+                source={icons.back as ImageSourcePropType}
+                size={24}
+                tint={textSecondary}
+                contentDescription="返回"
+              />
+            </DropdownMenuItem.LeadingIcon>
+          </DropdownMenuItem>
+        ) : null}
+        {entries.map((entry) =>
+          entry.kind === 'submenu' ? (
+            <DropdownMenuItem key={entry.key} onClick={() => setOpenKey(entry.key)}>
+              <DropdownMenuItem.Text>
+                <Text>{entry.label}</Text>
+              </DropdownMenuItem.Text>
+              {leadingSlot ? <Leading icon={entry.icon} tint={textSecondary} /> : null}
+              <DropdownMenuItem.TrailingIcon>
+                <Icon source={icons.chevronRight as ImageSourcePropType} size={24} tint={textSecondary} />
+              </DropdownMenuItem.TrailingIcon>
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              key={entry.key}
+              onClick={() => {
+                close();
+                entry.onPress();
+              }}>
+              <DropdownMenuItem.Text>
+                <Text color={entry.destructive ? (palette.danger as string) : undefined}>{entry.label}</Text>
+              </DropdownMenuItem.Text>
+              {leadingSlot ? (
+                <Leading
+                  icon={entry.selected ? icons.check : entry.icon}
+                  tint={textSecondary}
+                  // The check is the only sign of the choice, so TalkBack reads it.
+                  contentDescription={entry.selected ? '已選取' : undefined}
+                />
+              ) : null}
+            </DropdownMenuItem>
+          ),
+        )}
+      </DropdownMenu.Items>
+    </DropdownMenu>
+  );
+}
+
+/** Whether an entry draws something in the leading slot (an icon, or a check that may appear). */
+function hasLeading(entry: HeaderMenuEntry): boolean {
+  return entry.icon !== undefined || (entry.kind !== 'submenu' && entry.selected !== undefined);
+}
+
+/** A menu item's leading slot: its icon, or an empty 24dp box that keeps the label aligned. */
+function Leading({ icon, tint, contentDescription }: {
+  icon: HeaderMenuAction['icon'];
+  tint: string;
+  contentDescription?: string;
+}) {
+  return (
+    <DropdownMenuItem.LeadingIcon>
+      {icon ? (
+        <Icon source={icon as ImageSourcePropType} size={24} tint={tint} contentDescription={contentDescription} />
+      ) : (
+        <Box modifiers={[size(24, 24)]} />
+      )}
+    </DropdownMenuItem.LeadingIcon>
+  );
+}

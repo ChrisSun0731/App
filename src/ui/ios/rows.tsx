@@ -73,7 +73,7 @@ const CHECK_SLOP = 10;
  * trailing detail, active-toggle symbol and accessory. Tappable rows are
  * default-style List buttons (the whole row highlights while pressed, like
  * Settings); `actions` and `toggle` become swipe actions plus a long-press
- * context menu, none of which a disabled row offers.
+ * context menu, which a disabled row keeps (only its own tap is off).
  */
 export function Row({
   title,
@@ -97,10 +97,10 @@ export function Row({
 }: RowProps) {
   const palette = usePalette();
   const chrome = useRowChrome({ background: rowBackground });
-  // `.disabled` on the row's button does not reach the swipe actions and
-  // context menu attached outside it, so a disabled row simply has none
-  // (Android shows its overflow menu and toggle disabled instead).
-  const hasMenus = !disabled && ((actions?.length ?? 0) > 0 || toggle !== undefined);
+  // `.disabled` goes on the row's button only. The swipe actions and context
+  // menu are attached outside it, so they stay available on a disabled row,
+  // as the contract asks.
+  const hasMenus = (actions?.length ?? 0) > 0 || toggle !== undefined;
 
   const spoken = spokenOverride ?? spokenLabel([title, overline, subtitle, ...footerSpeech(footer), detail, badge]);
   const traits: AccessibilityTrait[] = [];
@@ -176,7 +176,7 @@ export function Row({
 
   if (!hasMenus) return main;
   return (
-    <RowMenus chrome={chrome} actions={actions} toggle={toggle}>
+    <RowMenus chrome={chrome} actions={actions} toggle={toggle} fullSwipe={!disabled}>
       {main}
     </RowMenus>
   );
@@ -255,13 +255,16 @@ export function CheckRow({ title, subtitle, checked, onCheckedChange, onPress, a
   );
 }
 
-/** A labelled switch; secondary actions live in its context menu. */
+/**
+ * A labelled switch; secondary actions live in its context menu, which stays
+ * available while the switch is disabled (e.g. 上移/下移 at the tab limit).
+ */
 export function ToggleRow({ label, subtitle, icon, value, onValueChange, disabled = false, actions }: ToggleRowProps) {
   const chrome = useRowChrome();
   const symbol = sf(icon);
-  // No context menu while disabled, as for Row: `.disabled` on the Toggle
-  // does not reach a menu attached outside it.
-  const hasMenu = !disabled && (actions?.length ?? 0) > 0;
+  const hasMenu = (actions?.length ?? 0) > 0;
+  // `.disabled` on the Toggle only: the context menu is attached outside it,
+  // so it still opens.
   const modifiers = [disabledModifier(disabled), ...(hasMenu ? [] : chrome)];
 
   let control: ReactElement;
@@ -432,12 +435,15 @@ function Accessory({ kind }: { kind: RowAccessory }) {
 /**
  * Wraps a row in its context menu and swipe actions: `actions` swipe in from
  * the trailing edge, the `toggle` from the leading edge (like Mail's
- * read/unread), and both are listed in the long-press menu.
+ * read/unread), and both are listed in the long-press menu. Without
+ * `fullSwipe` (a disabled row) swiping only reveals the buttons; a full swipe
+ * would otherwise fire the edge one, often a destructive action.
  */
-function RowMenus({ chrome, actions = [], toggle, children }: {
+function RowMenus({ chrome, actions = [], toggle, fullSwipe = true, children }: {
   chrome: ModifierConfig[];
   actions?: readonly RowAction[];
   toggle?: RowToggle;
+  fullSwipe?: boolean;
   children: ReactElement;
 }) {
   const palette = usePalette();
@@ -453,7 +459,7 @@ function RowMenus({ chrome, actions = [], toggle, children }: {
         </ContextMenu.Items>
       </ContextMenu>
       {trailing.length > 0 ? (
-        <SwipeActions.Actions edge="trailing">
+        <SwipeActions.Actions edge="trailing" allowsFullSwipe={fullSwipe}>
           {trailing.map((action, index) => (
             <Button
               key={action.key}
@@ -469,7 +475,7 @@ function RowMenus({ chrome, actions = [], toggle, children }: {
         </SwipeActions.Actions>
       ) : null}
       {toggle ? (
-        <SwipeActions.Actions edge="leading">
+        <SwipeActions.Actions edge="leading" allowsFullSwipe={fullSwipe}>
           <Button
             label={toggle.label}
             systemImage={toggleSymbol(toggle)}
@@ -495,6 +501,7 @@ function menuButtons(actions: readonly RowAction[]) {
       systemImage={sf(action.icon)}
       role={action.destructive ? 'destructive' : undefined}
       onPress={action.onPress}
+      modifiers={action.disabled ? [disabledModifier(true)] : undefined}
     />
   ));
 }

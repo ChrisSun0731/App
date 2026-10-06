@@ -115,7 +115,11 @@ export default function TransportScreen() {
           },
         ]}
       />
-      <ListScreen onRefresh={refresh} fab={{ label: '新增站點', icon: icons.add, onPress: openYoubikePicker }}>
+      <ListScreen
+        onRefresh={refresh}
+        // Shows progress for the header button too (a pull shows its own).
+        refreshing={refreshing}
+        fab={{ label: '新增站點', icon: icons.add, onPress: openYoubikePicker }}>
         {followed.length === 0 ? (
           <Section title="YouBike 站點" plain>
             <EmptyState

@@ -25,6 +25,8 @@ export const icons = {
   location: Icon.select({ ios: 'location', android: import('@expo/material-symbols/near_me.xml') }),
   chevronRight: Icon.select({ ios: 'chevron.right', android: import('@expo/material-symbols/chevron_right.xml') }),
   chevronLeft: Icon.select({ ios: 'chevron.left', android: import('@expo/material-symbols/chevron_left.xml') }),
+  // The back item of an Android header submenu (HeaderActions).
+  back: Icon.select({ ios: 'chevron.backward', android: import('@expo/material-symbols/arrow_back.xml') }),
   folder: Icon.select({ ios: 'folder', android: import('@expo/material-symbols/folder.xml') }),
   label: Icon.select({ ios: 'tag', android: import('@expo/material-symbols/label.xml') }),
   markRead: Icon.select({ ios: 'checkmark.circle', android: import('@expo/material-symbols/done_all.xml') }),

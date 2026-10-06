@@ -15,12 +15,9 @@ import {
 
 import { icons } from '@/components/icons';
 
-import type { CalendarCell, MonthCalendarProps } from '../types';
+import { CALENDAR_CELL_INDICATORS, type CalendarCell, type MonthCalendarProps } from '../types';
 import { chunk, withAlpha } from './helpers';
 import { iconSource, roundedShape, TRANSPARENT, useM3 } from './theme';
-
-/** At most this many indicators fit under a day number. */
-const MAX_INDICATORS = 3;
 
 /** Size of the day-number circle. */
 const DAY_SIZE = 32;
@@ -115,7 +112,7 @@ function DayCell({ cell, selected, onSelect }: { cell: CalendarCell; selected: b
         </Text>
       </Surface>
       <Row verticalAlignment="center" horizontalArrangement={{ spacedBy: 2 }} modifiers={[height(6)]}>
-        {cell.indicators.slice(0, MAX_INDICATORS).map((indicator) => (
+        {cell.indicators.slice(0, CALENDAR_CELL_INDICATORS).map((indicator) => (
           <Box
             key={indicator.key}
             modifiers={[

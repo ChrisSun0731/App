@@ -23,17 +23,12 @@ import {
 
 import { usePalette } from '@/theme/palette';
 
-import type { CalendarCell, CalendarIndicator, MonthCalendarProps } from '../types';
+import { CALENDAR_CELL_INDICATORS, type CalendarCell, type CalendarIndicator, type MonthCalendarProps } from '../types';
 import { primaryText, secondaryText, tertiaryText, useRowChrome } from './chrome';
 import { chunk } from './helpers';
 
-/** Indicators drawn under a day number, in rows of INDICATORS_PER_ROW. */
-const MAX_INDICATORS = 6;
-const INDICATORS_PER_ROW = 3;
 const INDICATOR_SIZE = 5;
 const INDICATOR_SPACING = 2;
-// Every cell reserves room for two indicator rows so weeks keep one height.
-const INDICATOR_AREA = INDICATOR_SIZE * 2 + INDICATOR_SPACING;
 
 const RECT = contentShape(shapes.rectangle());
 
@@ -137,8 +132,9 @@ function IconButton({ label, symbol, onPress }: {
 
 /**
  * One day: its number (bold and underlined in the tint for today, white on a
- * tint circle when selected, dimmed outside the month) over up to six event
- * dots and todo squares.
+ * tint circle when selected, dimmed outside the month) over one row of up to
+ * CALENDAR_CELL_INDICATORS event dots and todo squares, the count every
+ * platform draws.
  */
 function DayCell({ cell, selected, onSelect }: {
   cell: CalendarCell;
@@ -151,7 +147,7 @@ function DayCell({ cell, selected, onSelect }: {
   else if (cell.isToday) numberStyle = foregroundStyle(palette.tint);
   else numberStyle = cell.inMonth ? primaryText : tertiaryText;
 
-  const indicatorRows = chunk(cell.indicators.slice(0, MAX_INDICATORS), INDICATORS_PER_ROW);
+  const indicators = cell.indicators.slice(0, CALENDAR_CELL_INDICATORS);
   return (
     <Button
       onPress={() => onSelect(cell.key)}
@@ -175,20 +171,14 @@ function DayCell({ cell, selected, onSelect }: {
           ]}>
           {String(cell.day)}
         </Text>
-        <VStack
+        {/* A fixed height, so days without indicators keep weeks level. */}
+        <HStack
           spacing={INDICATOR_SPACING}
-          modifiers={[
-            frame({ height: INDICATOR_AREA, alignment: 'top' }),
-            ...(cell.inMonth ? [] : [opacity(0.45)]),
-          ]}>
-          {indicatorRows.map((row) => (
-            <HStack key={row[0].key} spacing={INDICATOR_SPACING}>
-              {row.map((indicator) => (
-                <Indicator key={indicator.key} indicator={indicator} />
-              ))}
-            </HStack>
+          modifiers={[frame({ height: INDICATOR_SIZE }), ...(cell.inMonth ? [] : [opacity(0.45)])]}>
+          {indicators.map((indicator) => (
+            <Indicator key={indicator.key} indicator={indicator} />
           ))}
-        </VStack>
+        </HStack>
       </VStack>
     </Button>
   );

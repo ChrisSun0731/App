@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { useState, type ReactElement } from 'react';
 import { Alert } from 'react-native';
 
-import { HeaderActions, type HeaderMenuAction } from '@/components/header-actions';
+import { HeaderActions, type HeaderMenuEntry } from '@/components/header-actions';
 import { icons } from '@/components/icons';
 import { useNow } from '@/features/home/use-now';
 import { useTimetableAutofill } from '@/features/home/use-timetable-autofill';
@@ -54,6 +54,9 @@ export default function ScheduleScreen() {
 
   const refresh = () => timetable.refetch();
 
+  // Shared by the 班級 picker and the header's 選擇班級 submenu. Both show
+  // userClass, so a declined or impossible change leaves the picker snapping
+  // back and the menu's check where it was.
   function changeClass(next: string) {
     if (next === userClass) return;
     const nextRows = classTimetable(data, next);
@@ -77,12 +80,26 @@ export default function ScheduleScreen() {
     ]);
   }
 
-  // The spec's header menu also has a 選擇班級 submenu, but HeaderActions
-  // menus are flat, and 80-odd classes inline would bury 重新匯入課表. Until
-  // they can nest, classes are switched with the 班級 picker below.
-  const menu: HeaderMenuAction[] = original
-    ? [{ key: 'reimport', label: '重新匯入課表', icon: icons.restore, onPress: confirmReimport }]
-    : [];
+  // The 80-odd classes sit in a submenu so they do not bury 重新匯入課表;
+  // both wait for the timetables, as the picker and button below do.
+  const menu: HeaderMenuEntry[] = [];
+  if (data) {
+    menu.push({
+      kind: 'submenu',
+      key: 'class',
+      label: '選擇班級',
+      icon: icons.school,
+      actions: options.map((option) => ({
+        key: option.value,
+        label: option.label,
+        selected: option.value === userClass,
+        onPress: () => changeClass(option.value),
+      })),
+    });
+  }
+  if (original) {
+    menu.push({ key: 'reimport', label: '重新匯入課表', icon: icons.restore, onPress: confirmReimport });
+  }
 
   return (
     <>

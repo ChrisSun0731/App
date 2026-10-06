@@ -29,6 +29,14 @@ export interface ListScreenProps {
    * from it). Omit to disable pull to refresh.
    */
   onRefresh?: () => Promise<unknown> | void;
+  /**
+   * Shows the refresh indicator without a pull, e.g. while a header 重新整理
+   * button's refresh runs; for screens that also pass `onRefresh`. Android
+   * and the fallback show pull to refresh's own indicator. SwiftUI cannot
+   * start `refreshable`'s spinner from code, so iOS shows a spinner row above
+   * the first section instead (not during a pull, which has its own).
+   */
+  refreshing?: boolean;
   /** Android only: an extended FAB for the screen's primary action. iOS puts that action in the navigation bar instead and ignores this. */
   fab?: { label: string; icon: IconValue; onPress: () => void };
 }
@@ -50,6 +58,8 @@ export interface RowAction {
   label: string;
   icon?: IconValue;
   destructive?: boolean;
+  /** Shown but not selectable (greyed in the menus, left out of iOS swipe actions). */
+  disabled?: boolean;
   onPress: () => void;
 }
 
@@ -89,15 +99,26 @@ export interface RowProps {
   onPress?: () => void;
   /**
    * Secondary actions. iOS: trailing swipe actions plus a long-press context
-   * menu. Android: a trailing overflow (more_vert) dropdown menu.
+   * menu. Android: a trailing overflow (more_vert) dropdown menu, named after
+   * the row for TalkBack. They stay available on a disabled row; disable an
+   * action itself with `RowAction.disabled`.
    */
   actions?: readonly RowAction[];
-  /** iOS: leading swipe action, context-menu item and a small trailing symbol when active. Android: a trailing icon button. */
+  /**
+   * iOS: leading swipe action, context-menu item and a small trailing symbol
+   * when active. Android: a trailing icon button. Stays available on a
+   * disabled row, like `actions`.
+   */
   toggle?: RowToggle;
   /** Kit inline elements shown under the subtitle (MetricPills, CrowdBar). */
   footer?: ReactNode;
   /** Overrides the spoken label (defaults to title, overline, subtitle, detail, badge). */
   accessibilityLabel?: string;
+  /**
+   * Dims the row and turns off its own tap (`onPress`) only. `actions` and
+   * `toggle` stay available, but on iOS a full swipe no longer fires the edge
+   * action: a dimmed row should not act on a single gesture.
+   */
   disabled?: boolean;
 }
 
@@ -117,7 +138,9 @@ export interface ToggleRowProps {
   icon?: IconValue;
   value: boolean;
   onValueChange: (value: boolean) => void;
+  /** Turns off the switch only; `actions` stay available (e.g. 上移/下移 at a limit). */
   disabled?: boolean;
+  /** iOS: the long-press context menu. Android: an overflow menu named after the row. */
   actions?: readonly RowAction[];
 }
 
@@ -223,12 +246,20 @@ export interface CalendarIndicator {
   shape: 'dot' | 'square';
 }
 
+/**
+ * How many indicators every platform draws under a day number; later ones
+ * are dropped, so callers choose which CALENDAR_CELL_INDICATORS matter most.
+ * Import it from '@/ui/types': '@/ui' re-exports this file's types only.
+ */
+export const CALENDAR_CELL_INDICATORS = 3;
+
 export interface CalendarCell {
   /** "YYYY-MM-DD" */
   key: string;
   day: number;
   inMonth: boolean;
   isToday: boolean;
+  /** Only the first CALENDAR_CELL_INDICATORS are drawn. */
   indicators: readonly CalendarIndicator[];
   accessibilityLabel: string;
 }

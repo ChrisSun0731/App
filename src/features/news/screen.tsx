@@ -173,6 +173,9 @@ export default function NewsScreen() {
       <HeaderActions right={[{ kind: 'menu', key: 'more', label: '更多', icon: icons.more, actions: menu }]} />
       <ListScreen
         // Pull to refresh draws its own indicator, so it skips `refreshing`.
+        // Nor does the list get the kit's `refreshing`: the status row
+        // already shows 重新整理 / 重試 running, labelled and in place of the
+        // notice whose 重試 started it, and a second spinner would repeat it.
         onRefresh={refetch}>
         {status ? <Section key="status">{status}</Section> : null}
 

@@ -62,11 +62,13 @@ export const MAX_SWIPE_ACTIONS = 3;
 /**
  * Trailing swipe buttons, edge first. SwiftUI puts the first button at the
  * row's edge, where a full swipe triggers it, so destructive actions lead
- * (like Mail's Trash).
+ * (like Mail's Trash). Disabled actions are left out: a greyed swipe button
+ * still looks tappable, and the context menu shows them greyed instead.
  */
 export function trailingSwipeActions(actions: readonly RowAction[]): RowAction[] {
-  const destructive = actions.filter((action) => action.destructive);
-  const others = actions.filter((action) => !action.destructive);
+  const enabled = actions.filter((action) => !action.disabled);
+  const destructive = enabled.filter((action) => action.destructive);
+  const others = enabled.filter((action) => !action.destructive);
   return [...destructive, ...others].slice(0, MAX_SWIPE_ACTIONS);
 }
 

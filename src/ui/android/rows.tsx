@@ -36,6 +36,7 @@ import { useState } from 'react';
 import { icons } from '@/components/icons';
 import { isDateKey } from '@/lib/dates';
 
+import { overflowMenuLabel } from '../labels';
 import type {
   ButtonRowProps,
   CheckRowProps,
@@ -74,7 +75,9 @@ function rowColors(m: MaterialColors, disabled: boolean, background?: string): L
 
 /**
  * The row's own tap target. With `actions`, a long press opens the same
- * overflow menu (the Android counterpart of the iOS context menu).
+ * overflow menu (the Android counterpart of the iOS context menu). A disabled
+ * row passes no `onPress` and keeps only its overflow button, like a row that
+ * opens nothing.
  */
 function pressModifiers(onPress: (() => void) | undefined, onLongPress: (() => void) | undefined): ModifierConfig[] {
   if (!onPress) return [];
@@ -177,22 +180,20 @@ export function Row({
                 </Text>
               ) : null}
               {toggle ? (
-                <IconButton onClick={toggle.onPress} enabled={!disabled}>
+                // Stays available on a disabled row (only its own tap is off),
+                // so it is tinted explicitly instead of taking the faded
+                // trailing colour.
+                <IconButton onClick={toggle.onPress}>
                   <Icon
                     source={iconSource(toggle.active ? toggle.activeIcon : toggle.icon)}
                     size={24}
-                    tint={toggle.active ? fade(m.primary) : undefined}
+                    tint={toggle.active ? m.primary : m.onSurfaceVariant}
                     contentDescription={toggle.label}
                   />
                 </IconButton>
               ) : null}
               {hasActions ? (
-                <OverflowMenu
-                  actions={actions}
-                  expanded={menuOpen}
-                  onExpandedChange={setMenuOpen}
-                  disabled={disabled}
-                />
+                <OverflowMenu actions={actions} rowName={title} expanded={menuOpen} onExpandedChange={setMenuOpen} />
               ) : null}
               <Accessory accessory={accessory} m={m} />
             </ComposeRow>
@@ -244,31 +245,51 @@ function Accessory({ accessory, m }: { accessory: RowAccessory; m: MaterialColor
   }
 }
 
-/** A more_vert icon button opening a dropdown of the row's actions. */
+/**
+ * A more_vert icon button opening a dropdown of the row's actions. It is
+ * always enabled, also on a disabled row; a disabled action is a greyed item.
+ */
 function OverflowMenu({
   actions,
+  rowName,
   expanded,
   onExpandedChange,
-  disabled = false,
 }: {
   actions: readonly RowAction[];
+  /** The row's title, so TalkBack can tell one row's button from the next. */
+  rowName: string;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
-  disabled?: boolean;
 }) {
   const m = useM3();
   return (
     <DropdownMenu expanded={expanded} onDismissRequest={() => onExpandedChange(false)}>
       <DropdownMenu.Trigger>
-        <IconButton onClick={() => onExpandedChange(true)} enabled={!disabled}>
-          <Icon source={iconSource(icons.more)} size={24} contentDescription="更多選項" />
+        <IconButton onClick={() => onExpandedChange(true)}>
+          {/* Tinted explicitly: a disabled row fades its trailing colour, but not this button. */}
+          <Icon
+            source={iconSource(icons.more)}
+            size={24}
+            tint={m.onSurfaceVariant}
+            contentDescription={overflowMenuLabel(rowName)}
+          />
         </IconButton>
       </DropdownMenu.Trigger>
       <DropdownMenu.Items>
         {actions.map((action) => (
           <DropdownMenuItem
             key={action.key}
-            elementColors={action.destructive ? { textColor: m.error, leadingIconColor: m.error } : undefined}
+            enabled={!action.disabled}
+            elementColors={
+              action.destructive
+                ? {
+                    textColor: m.error,
+                    leadingIconColor: m.error,
+                    disabledTextColor: withAlpha(m.error, DISABLED),
+                    disabledLeadingIconColor: withAlpha(m.error, DISABLED),
+                  }
+                : undefined
+            }
             onClick={() => {
               onExpandedChange(false);
               action.onPress();
@@ -328,7 +349,7 @@ export function CheckRow({ title, subtitle, checked, onCheckedChange, onPress, a
         ) : null}
         {hasActions ? (
           <ListItem.TrailingContent>
-            <OverflowMenu actions={actions} expanded={menuOpen} onExpandedChange={setMenuOpen} />
+            <OverflowMenu actions={actions} rowName={title} expanded={menuOpen} onExpandedChange={setMenuOpen} />
           </ListItem.TrailingContent>
         ) : null}
       </ListItem>
@@ -373,8 +394,9 @@ export function ToggleRow({ label, subtitle, icon, value, onValueChange, disable
               onCheckedChange={onValueChange}
               modifiers={[semantics({ contentDescription: label })]}
             />
+            {/* Enabled while the switch is off-limits: 上移/下移 still apply. */}
             {hasActions ? (
-              <OverflowMenu actions={actions} expanded={menuOpen} onExpandedChange={setMenuOpen} disabled={disabled} />
+              <OverflowMenu actions={actions} rowName={label} expanded={menuOpen} onExpandedChange={setMenuOpen} />
             ) : null}
           </ComposeRow>
         </ListItem.TrailingContent>

@@ -29,8 +29,9 @@ const HOME_WIDGETS: readonly { key: keyof HomeWidgets; label: string }[] = [
   { key: 'news', label: '釘選校網內容' },
 ];
 
-// iOS keeps 上移/下移 in each row's long-press menu, which nothing on screen
-// reveals; Android shows an overflow button on every row.
+// iOS keeps 上移/下移 in each row's long-press menu (also on rows greyed out at
+// the limit), which nothing on screen reveals; Android shows an overflow
+// button on every row. See docs/design/native-ui.md, 設定.
 const TOOLBAR_FOOTER = `除了首頁，最多顯示 ${MAX_FEATURE_TABS} 個功能。其他功能可由首頁開啟。${
   process.env.EXPO_OS === 'ios' ? '長按功能可調整順序。' : ''
 }`;
@@ -65,7 +66,7 @@ export default function SettingsScreen() {
   }
 
   // The labels name the feature, as the old buttons did: TalkBack reads only
-  // the item text, and every row's overflow button sounds the same.
+  // the item text once the overflow menu is open.
   function moveActions(index: number): RowAction[] {
     const { tabLabel } = FEATURES[settings.toolbar[index].id];
     const actions: RowAction[] = [];
@@ -127,8 +128,7 @@ export default function SettingsScreen() {
             // Greyed out at the limit rather than refused with an alert: a
             // refused SwiftUI Toggle can stay drawn on (ToggleView only redraws
             // when its private @State changes). The store enforces the limit
-            // too. The kit drops a disabled row's 上移/下移 for now; the order
-            // of hidden features does not change the tab bar.
+            // too. `disabled` turns off the switch only, so 上移/下移 stay.
             disabled={!item.visible && shownTabs >= MAX_FEATURE_TABS}
             onValueChange={(visible) => settings.setToolbarVisible(item.id, visible)}
             actions={moveActions(index)}

@@ -67,21 +67,21 @@ function useKeyboardVisible(): boolean {
 /** Room the extended FAB (56dp + its 16dp margin) takes over the list's end. */
 const FAB_CLEARANCE = 80;
 
-export function ListScreen({ children, onRefresh, fab }: ListScreenProps) {
+export function ListScreen({ children, onRefresh, refreshing = false, fab }: ListScreenProps) {
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
-  const [refreshing, setRefreshing] = useState(false);
+  const [pulling, setPulling] = useState(false);
 
   async function refresh() {
     if (!onRefresh) return;
-    setRefreshing(true);
+    setPulling(true);
     try {
       await onRefresh();
     } catch {
       // Screens show their own error state (a Notice); the indicator only
       // has to stop.
     } finally {
-      setRefreshing(false);
+      setPulling(false);
     }
   }
 
@@ -112,7 +112,13 @@ export function ListScreen({ children, onRefresh, fab }: ListScreenProps) {
     <Host style={{ flex: 1 }} seedColor={BRAND}>
       <Box modifiers={[fillMaxSize()]}>
         {onRefresh ? (
-          <PullToRefreshBox isRefreshing={refreshing} onRefresh={() => void refresh()} modifiers={[fillMaxSize()]}>
+          // One indicator for a pull and for a refresh the screen started
+          // itself (`refreshing`, e.g. a header button): Compose shows the
+          // same spinner while either runs.
+          <PullToRefreshBox
+            isRefreshing={refreshing || pulling}
+            onRefresh={() => void refresh()}
+            modifiers={[fillMaxSize()]}>
             {list}
           </PullToRefreshBox>
         ) : (
