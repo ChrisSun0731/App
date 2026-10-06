@@ -153,3 +153,34 @@ export function classTimetable(timetables: Timetables | undefined, id: string): 
   if (!timetables || !Object.prototype.hasOwnProperty.call(timetables.byClass, id)) return undefined;
   return timetables.byClass[id];
 }
+
+/** What 課表 shows while the class timetables load, fail or reload. */
+export interface ScheduleLoadState {
+  /**
+   * Above the days: 'error' is the 暫時無法更新課表 notice with 重試;
+   * 'retrying' is a loading row in its place while a refetch runs.
+   */
+  banner: 'none' | 'error' | 'retrying';
+  /** The day section: the period rows, a loading row, or the empty state. */
+  day: 'rows' | 'loading' | 'empty';
+}
+
+/**
+ * React Query keeps `isError` (and `isPending` stays false) while a retry
+ * runs, so 重試 and 重新整理 would look like they did nothing for the whole
+ * round trip. Any running fetch therefore replaces those buttons with a
+ * loading row: in the day section when it has no rows (so a second one is not
+ * needed above), otherwise in place of the notice.
+ */
+export function scheduleLoadState({ hasRows, isPending, isFetching, isError }: {
+  hasRows: boolean;
+  isPending: boolean;
+  isFetching: boolean;
+  isError: boolean;
+}): ScheduleLoadState {
+  const day = hasRows ? 'rows' : isPending || isFetching ? 'loading' : 'empty';
+  let banner: ScheduleLoadState['banner'] = 'none';
+  if (isError && !isFetching) banner = 'error';
+  else if (isError && hasRows) banner = 'retrying';
+  return { banner, day };
+}

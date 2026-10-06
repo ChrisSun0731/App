@@ -21,36 +21,35 @@ import {
   defaultDay,
   describeDay,
   formatWeekInfo,
+  scheduleLoadState,
+  type ScheduleLoadState,
 } from './schedule-view';
-import { WEEKDAY_LABELS, type Weekday } from './timetable';
+import { WEEKDAY_LABELS, type Timetables, type Weekday } from './timetable';
 import { useTimetables } from './use-timetables';
 
 /** The 目前 mark is minute-resolution; the clock only ticks while 課表 is focused. */
 const CLOCK_INTERVAL_MS = 30_000;
 
+const LOADING_LABEL = '正在載入課表…';
+
 export default function ScheduleScreen() {
-  const now = useNow(CLOCK_INTERVAL_MS);
-  const { scheme } = usePalette();
   const timetable = useTimetables();
   const data = timetable.data;
   const userClass = useScheduleStore((state) => state.userClass);
-  const rows = useScheduleStore((state) => state.rows);
+  // Only whether there are rows: editing a slot re-renders the day rows, not this.
+  const hasRows = useScheduleStore((state) => state.rows.length > 0);
   const setClass = useScheduleStore((state) => state.setClass);
   const resetRows = useScheduleStore((state) => state.resetRows);
-  const [day, setDay] = useState<Weekday>(() => defaultDay(new Date()));
 
   useTimetableAutofill(data?.byClass);
 
   const original = classTimetable(data, userClass);
   const options = classOptions(data?.classIds ?? [], userClass);
-  const weekInfo = formatWeekInfo(data?.academicYear ?? '', data?.semesterStart ?? null, now);
-  const periodRows = describeDay({
-    rows,
-    day,
-    periods: data?.periods ?? [],
-    semesterStart: data?.semesterStart ?? null,
-    now,
-    scheme,
+  const load = scheduleLoadState({
+    hasRows,
+    isPending: timetable.isPending,
+    isFetching: timetable.isFetching,
+    isError: timetable.isError,
   });
 
   const refresh = () => timetable.refetch();
@@ -78,27 +77,84 @@ export default function ScheduleScreen() {
     ]);
   }
 
-  // The header menu: 重新匯入課表, then every class as a checkable item (the
-  // class picker; HeaderActions menus are flat). Both need the timetables.
-  const menu: HeaderMenuAction[] = [];
-  if (original) {
-    menu.push({ key: 'reimport', label: '重新匯入課表', icon: icons.restore, onPress: confirmReimport });
-  }
-  if (data) {
-    for (const option of options) {
-      menu.push({
-        key: `class-${option.value}`,
-        label: option.label,
-        selected: option.value === userClass,
-        onPress: () => changeClass(option.value),
-      });
-    }
-  }
+  // The spec's header menu also has a 選擇班級 submenu, but HeaderActions
+  // menus are flat, and 80-odd classes inline would bury 重新匯入課表. Until
+  // they can nest, classes are switched with the 班級 picker below.
+  const menu: HeaderMenuAction[] = original
+    ? [{ key: 'reimport', label: '重新匯入課表', icon: icons.restore, onPress: confirmReimport }]
+    : [];
+
+  return (
+    <>
+      {menu.length > 0 ? (
+        <HeaderActions right={[{ kind: 'menu', key: 'schedule', label: '課表選項', icon: icons.more, actions: menu }]} />
+      ) : null}
+      <ListScreen onRefresh={refresh}>
+        {load.banner !== 'none' ? (
+          <Section>
+            {load.banner === 'error' ? (
+              <Notice
+                tone="error"
+                title="暫時無法更新課表"
+                message="可下拉重試。"
+                action={{ label: '重試', onPress: () => void refresh() }}
+              />
+            ) : (
+              <Loading label={LOADING_LABEL} />
+            )}
+          </Section>
+        ) : null}
+
+        <DaySections
+          timetables={data}
+          userClass={userClass}
+          state={load.day}
+          // While the error notice above offers 重試, a second button would repeat it.
+          onReload={load.banner === 'error' ? undefined : () => void refresh()}
+        />
+
+        <Section title="班級">
+          <PickerRow label="班級" value={userClass} options={options} onChange={changeClass} disabled={!data} />
+          <ButtonRow label="重新匯入課表" onPress={confirmReimport} disabled={!original} />
+        </Section>
+      </ListScreen>
+    </>
+  );
+}
+
+/**
+ * The 一–五 picker and the chosen day's periods. The minute clock and the
+ * chosen day live here, so a tick or a day switch re-renders only these rows,
+ * not the 班級 picker's 80-odd options or the header.
+ */
+function DaySections({ timetables, userClass, state, onReload }: {
+  timetables: Timetables | undefined;
+  userClass: string;
+  state: ScheduleLoadState['day'];
+  /** The empty state's 重新整理; left out to hide it. */
+  onReload?: () => void;
+}) {
+  const now = useNow(CLOCK_INTERVAL_MS);
+  const { scheme } = usePalette();
+  const rows = useScheduleStore((store) => store.rows);
+  const [day, setDay] = useState<Weekday>(() => defaultDay(new Date()));
+
+  const weekInfo = formatWeekInfo(timetables?.academicYear ?? '', timetables?.semesterStart ?? null, now);
+  // The class is named next to the rows: the 班級 section is below the fold.
+  const title = `${WEEKDAY_LABELS[day]} · ${userClass} 班`;
 
   let daySection: ReactElement;
-  if (rows.length > 0) {
+  if (state === 'rows') {
+    const periodRows = describeDay({
+      rows,
+      day,
+      periods: timetables?.periods ?? [],
+      semesterStart: timetables?.semesterStart ?? null,
+      now,
+      scheme,
+    });
     daySection = (
-      <Section title={WEEKDAY_LABELS[day]} footer={weekInfo}>
+      <Section title={title} footer={`${weekInfo}\n點選課程可修改科目、單雙週輪替、備註與顏色。`}>
         {periodRows.map((row) => (
           <Row
             key={row.period}
@@ -115,10 +171,10 @@ export default function ScheduleScreen() {
         ))}
       </Section>
     );
-  } else if (timetable.isPending) {
+  } else if (state === 'loading') {
     daySection = (
-      <Section title={WEEKDAY_LABELS[day]} footer={weekInfo}>
-        <Loading label="正在載入課表…" />
+      <Section title={title} footer={weekInfo}>
+        <Loading label={LOADING_LABEL} />
       </Section>
     );
   } else {
@@ -128,8 +184,7 @@ export default function ScheduleScreen() {
           icon={icons.book}
           title="此班級課表尚未載入"
           description="請選擇班級或重新整理。"
-          // While the error notice above offers 重試, a second button would repeat it.
-          action={timetable.isError ? undefined : { label: '重新整理', onPress: () => void refresh() }}
+          action={onReload ? { label: '重新整理', onPress: onReload } : undefined}
         />
       </Section>
     );
@@ -137,32 +192,10 @@ export default function ScheduleScreen() {
 
   return (
     <>
-      {menu.length > 0 ? (
-        <HeaderActions right={[{ kind: 'menu', key: 'schedule', label: '課表選項', icon: icons.more, actions: menu }]} />
-      ) : null}
-      <ListScreen onRefresh={refresh}>
-        {timetable.isError ? (
-          <Section>
-            <Notice
-              tone="error"
-              title="暫時無法更新課表"
-              message="可下拉重試。"
-              action={{ label: '重試', onPress: () => void refresh() }}
-            />
-          </Section>
-        ) : null}
-
-        <Section plain>
-          <PickerRow variant="segmented" label="星期" value={day} options={DAY_OPTIONS} onChange={setDay} />
-        </Section>
-
-        {daySection}
-
-        <Section title="班級" footer="點選課程可修改科目、備註與顏色。">
-          <PickerRow label="班級" value={userClass} options={options} onChange={changeClass} disabled={!data} />
-          <ButtonRow label="重新匯入課表" onPress={confirmReimport} disabled={!original} />
-        </Section>
-      </ListScreen>
+      <Section plain>
+        <PickerRow variant="segmented" label="星期" value={day} options={DAY_OPTIONS} onChange={setDay} />
+      </Section>
+      {daySection}
     </>
   );
 }

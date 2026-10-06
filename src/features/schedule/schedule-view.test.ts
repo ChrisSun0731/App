@@ -10,6 +10,7 @@ import {
   describeDay,
   formatWeekInfo,
   periodOverline,
+  scheduleLoadState,
 } from './schedule-view';
 import { PERIOD_NAMES, type Period, type ScheduleCell, type ScheduleRow, type Timetables } from './timetable';
 
@@ -125,5 +126,35 @@ describe('the week line and pickers', () => {
     expect(classTimetable(timetables, '102')).toBeUndefined();
     expect(classTimetable(timetables, 'constructor')).toBeUndefined();
     expect(classTimetable(undefined, '101')).toBeUndefined();
+  });
+});
+
+describe('load state', () => {
+  const idle = { hasRows: false, isPending: false, isFetching: false, isError: false };
+
+  test('shows a loading row until the first load, then the rows or the empty state', () => {
+    expect(scheduleLoadState({ ...idle, isPending: true, isFetching: true })).toEqual({ banner: 'none', day: 'loading' });
+    // Paused (offline) before anything loaded still reads as loading.
+    expect(scheduleLoadState({ ...idle, isPending: true })).toEqual({ banner: 'none', day: 'loading' });
+    expect(scheduleLoadState({ ...idle, hasRows: true })).toEqual({ banner: 'none', day: 'rows' });
+    expect(scheduleLoadState(idle)).toEqual({ banner: 'none', day: 'empty' });
+  });
+
+  test('a background refresh leaves saved rows alone', () => {
+    expect(scheduleLoadState({ ...idle, hasRows: true, isFetching: true })).toEqual({ banner: 'none', day: 'rows' });
+  });
+
+  test('重新整理 on the empty state shows a loading row while it runs', () => {
+    expect(scheduleLoadState({ ...idle, isFetching: true })).toEqual({ banner: 'none', day: 'loading' });
+  });
+
+  test('a failed load shows the notice, and a retry replaces it with one loading row', () => {
+    expect(scheduleLoadState({ ...idle, isError: true })).toEqual({ banner: 'error', day: 'empty' });
+    expect(scheduleLoadState({ ...idle, hasRows: true, isError: true })).toEqual({ banner: 'error', day: 'rows' });
+    // React Query keeps the error while retrying: no rows, so the day section loads...
+    expect(scheduleLoadState({ ...idle, isError: true, isFetching: true })).toEqual({ banner: 'none', day: 'loading' });
+    // ...with rows, the notice's place does.
+    expect(scheduleLoadState({ ...idle, hasRows: true, isError: true, isFetching: true }))
+      .toEqual({ banner: 'retrying', day: 'rows' });
   });
 });
