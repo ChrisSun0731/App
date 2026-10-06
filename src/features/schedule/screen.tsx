@@ -7,15 +7,13 @@ import { Alert } from 'react-native';
 
 import { HeaderActions, type HeaderMenuEntry } from '@/components/header-actions';
 import { icons } from '@/components/icons';
-import { useNow } from '@/features/home/use-now';
-import { useTimetableAutofill } from '@/features/home/use-timetable-autofill';
-import { confirmPickerChange } from '@/hooks/use-confirmed-picker';
+import { useNow } from '@/hooks/use-now';
+import { PULL_TO_RETRY, RETRY } from '@/lib/copy';
 import { useScheduleStore } from '@/store/schedule';
 import { usePalette } from '@/theme/palette';
 import { ButtonRow, EmptyState, ListScreen, Loading, Notice, PickerRow, Row, Section } from '@/ui';
 
 import {
-  classOptions,
   classTimetable,
   DAY_OPTIONS,
   defaultDay,
@@ -25,26 +23,24 @@ import {
   type ScheduleLoadState,
 } from './schedule-view';
 import { WEEKDAY_LABELS, type Timetables, type Weekday } from './timetable';
+import { useChangeClass } from './use-change-class';
+import { useTimetableAutofill } from './use-timetable-autofill';
 import { useTimetables } from './use-timetables';
-
-/** The 目前 mark is minute-resolution; the clock only ticks while 課表 is focused. */
-const CLOCK_INTERVAL_MS = 30_000;
 
 const LOADING_LABEL = '正在載入課表…';
 
 export default function ScheduleScreen() {
   const timetable = useTimetables();
   const data = timetable.data;
-  const userClass = useScheduleStore((state) => state.userClass);
   // Only whether there are rows: editing a slot re-renders the day rows, not this.
   const hasRows = useScheduleStore((state) => state.rows.length > 0);
-  const setClass = useScheduleStore((state) => state.setClass);
   const resetRows = useScheduleStore((state) => state.resetRows);
+  // Shared by the 班級 picker and the header's 選擇班級 submenu (and 設定).
+  const { userClass, options, changeClass } = useChangeClass(data);
 
   useTimetableAutofill(data?.byClass);
 
   const original = classTimetable(data, userClass);
-  const options = classOptions(data?.classIds ?? [], userClass);
   const load = scheduleLoadState({
     hasRows,
     isPending: timetable.isPending,
@@ -52,25 +48,9 @@ export default function ScheduleScreen() {
     isError: timetable.isError,
   });
 
-  const refresh = () => timetable.refetch();
-
-  // Shared by the 班級 picker and the header's 選擇班級 submenu. Both show
-  // userClass, so a declined or impossible change leaves the picker snapping
-  // back and the menu's check where it was.
-  function changeClass(next: string) {
-    if (next === userClass) return;
-    const nextRows = classTimetable(data, next);
-    // Nothing to switch to. PickerRow always shows `value`, so leaving
-    // userClass alone puts the picker back on it.
-    if (!nextRows) return;
-    confirmPickerChange(
-      '更改班級',
-      `改為 ${next} 班會清除目前課表的修改。`,
-      { text: '更改', style: 'destructive', onPress: () => setClass(next, nextRows) },
-      // Declined: userClass is unchanged and PickerRow snaps back to it.
-      () => {},
-    );
-  }
+  // Joins a fetch already running instead of restarting it, so repeated
+  // 重試 taps on a slow network still finish (scheduleLoadState shows it).
+  const refresh = () => timetable.refetch({ cancelRefetch: false });
 
   function confirmReimport() {
     if (!original) return;
@@ -113,8 +93,8 @@ export default function ScheduleScreen() {
               <Notice
                 tone="error"
                 title="暫時無法更新課表"
-                message="可下拉重試。"
-                action={{ label: '重試', onPress: () => void refresh() }}
+                message={PULL_TO_RETRY}
+                action={{ label: RETRY, onPress: () => void refresh() }}
               />
             ) : (
               <Loading label={LOADING_LABEL} />
@@ -151,7 +131,8 @@ function DaySections({ timetables, userClass, state, onReload }: {
   /** The empty state's 重新整理; left out to hide it. */
   onReload?: () => void;
 }) {
-  const now = useNow(CLOCK_INTERVAL_MS);
+  // The 目前 mark; the clock only ticks while 課表 is focused.
+  const now = useNow();
   const { scheme } = usePalette();
   const rows = useScheduleStore((store) => store.rows);
   const [day, setDay] = useState<Weekday>(() => defaultDay(new Date()));

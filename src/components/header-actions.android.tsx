@@ -14,8 +14,10 @@ import { Stack } from 'expo-router';
 import { useState } from 'react';
 import type { ImageSourcePropType } from 'react-native';
 
+import { BRAND } from '@/theme/brand';
 import { usePalette } from '@/theme/palette';
-import { withAlpha } from '@/ui/android/helpers';
+import { DISABLED_ALPHA } from '@/ui/android/theme';
+import { withAlpha } from '@/ui/helpers';
 
 import type {
   HeaderActionsProps,
@@ -25,9 +27,6 @@ import type {
   HeaderSubmenu,
 } from './header-actions.types';
 import { icons } from './icons';
-
-/** Material's disabled-content opacity. */
-const DISABLED_ALPHA = 0.38;
 
 type MenuItem = Extract<HeaderItem, { kind: 'menu' }>;
 
@@ -48,7 +47,10 @@ export function HeaderActions({ left, right }: HeaderActionsProps) {
 
 function ActionRow({ items }: { items: HeaderItem[] }) {
   return (
-    <Host matchContents>
+    // Seeded like ListScreen's Host, so text buttons (儲存, 本週) and menus
+    // take the CK navy palette rather than the wallpaper's or Material's
+    // baseline purple.
+    <Host matchContents seedColor={BRAND}>
       <Row verticalAlignment="center">
         {items.map((item) => (
           <Action key={item.key} item={item} />
@@ -84,9 +86,11 @@ function Action({ item }: { item: HeaderItem }) {
 }
 
 function HeaderIconButton({ item }: { item: Extract<HeaderItem, { kind: 'icon' }> }) {
-  const tint = useIconTint(item.disabled);
+  // `busy` greys the icon: ListScreen.refreshing shows the progress here.
+  const disabled = item.disabled || item.busy;
+  const tint = useIconTint(disabled);
   return (
-    <IconButton onClick={item.onPress} enabled={!item.disabled}>
+    <IconButton onClick={item.onPress} enabled={!disabled}>
       <Icon source={item.icon as ImageSourcePropType} size={24} tint={tint} contentDescription={item.label} />
     </IconButton>
   );
@@ -156,17 +160,26 @@ function HeaderMenu({ item }: { item: MenuItem }) {
           ) : (
             <DropdownMenuItem
               key={entry.key}
+              enabled={!entry.disabled}
               onClick={() => {
                 close();
                 entry.onPress();
               }}>
               <DropdownMenuItem.Text>
-                <Text color={entry.destructive ? (palette.danger as string) : undefined}>{entry.label}</Text>
+                <Text
+                  color={
+                    entry.destructive
+                      ? withAlpha(palette.danger as string, entry.disabled ? DISABLED_ALPHA : 1)
+                      : undefined
+                  }>
+                  {entry.label}
+                </Text>
               </DropdownMenuItem.Text>
               {leadingSlot ? (
                 <Leading
                   icon={entry.selected ? icons.check : entry.icon}
-                  tint={textSecondary}
+                  // Explicit tints skip the item's own disabled colour, so fade it here.
+                  tint={entry.disabled ? withAlpha(textSecondary, DISABLED_ALPHA) : textSecondary}
                   // The check is the only sign of the choice, so TalkBack reads it.
                   contentDescription={entry.selected ? '已選取' : undefined}
                 />

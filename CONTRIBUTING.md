@@ -19,11 +19,23 @@ yarn android
 
 ## 修改功能
 
-1. 在 `src/features/<feature>/` 維護畫面、hooks 與純邏輯；共用 UI 放在 `src/components/`。
+1. 在 `src/features/<feature>/` 維護畫面、hooks 與純邏輯。畫面以 `src/ui` 的原生 UI 元件庫組成（見下節）；導覽列按鈕與選單使用 `src/components/header-actions`。
 2. 路由放在 `src/app/`。功能入口由 `src/features/registry.ts` 登記，畫面對應由 `src/features/screens.tsx` 管理。
 3. 需要工具列分頁的功能須提供 `src/app/(tabs)/<feature>/` 路由。首頁以外的分頁最多 4 個；未加入的功能仍從 `/feature/[id]` 開啟。
 4. 持久狀態使用 `src/store/` 的 Zustand store 與 `src/lib/storage.ts`。不要在畫面中直接改動陣列；使用 store action。
-5. Android／iOS 互動使用既有 Material 3／SwiftUI 控制項，並維持深色模式、可讀文字與無障礙標籤。
+5. 互動一律使用元件庫的 SwiftUI／Material 3 元件，並維持深色模式、可讀文字與無障礙標籤。
+
+## 用原生 UI 元件庫建立畫面
+
+設計規格在 [docs/design/native-ui.md](docs/design/native-ui.md)，元件介面在 `src/ui/types.ts`。
+
+- 畫面只從 `@/ui` 匯入元件，寫一次即可：`ListScreen` 只放 `Section`，`Section` 只放列（`Row`、`CheckRow`、`ToggleRow`、`PickerRow`、`TextFieldRow`、`DateRow`、`ButtonRow`、`TextBlock`、`EmptyState`、`Notice`、`Loading`、`FilterChips`、`TileGrid`、`MonthCalendar`、`Embedded`）。`MetricPills` 與 `CrowdBar` 只能放在 `Row.footer`。
+- 不要在元件樹中混入 React Native 或 `@expo/ui` 原始 view；地圖、圖片等 React Native 內容只能用 `Embedded` 包起來。缺少的元件要加進 `types.ts`，並在三個實作都完成：`kit.ios.tsx`（`src/ui/ios/`，SwiftUI）、`kit.android.tsx`（`src/ui/android/`，Compose Material 3）與 `kit.tsx`（Jest 與型別檢查用的 React Native 版本）；三者都以 `satisfies Kit` 檢查。
+- 元件庫檔案不放功能邏輯；共用邏輯寫成 `src/features/*` 的純函式並加測試。
+- 導覽列動作用 `HeaderActions`；modal 用 `src/navigation/modal-header.ts` 的 `formHeader`／`doneHeader`；搜尋用 `src/navigation/use-header-search.ts`；重試用 `src/hooks/use-refresh.ts`。
+- iOS 的列動作只在滑動與長按選單中，若畫面依賴它們，要在該 Section 的 footer 加上只在 iOS 顯示的提示。
+- 文案：標題結尾不加「。」，說明文字加；失敗後的動作一律叫「重試」；共用字串放在 `src/lib/copy.ts`。
+- 使用的每個 `@expo/ui` prop 都要能在 `node_modules/@expo/ui/build/**/*.d.ts` 找到。
 
 日期鍵使用當地 `YYYY-MM-DD`，透過 `src/lib/dates.ts` 處理；不要以 `toISOString()` 產生日曆日期或菜單週一。遠端資料應有驗證器、錯誤狀態與快取策略；輪詢須在不需要時暫停。
 
@@ -50,6 +62,8 @@ yarn lint
 ```
 
 與日期、資料解析或狀態規則有關的變更，應以有意義的回歸測試覆蓋。純邏輯測試放在對應功能附近的 `*.test.ts`；使用 `@jest/globals`，目前 Jest 不需要啟動原生 UI。
+
+也請以 `npx expo export --platform ios` 與 `npx expo export --platform android` 確認 Hermes bundle 可建置（輸出資料夾放在 repo 外）。
 
 在 Android 與 iOS 驗證受影響流程，特別是原生輸入、sheet／dialog、工具列、地圖、離線與重啟後持久資料。PR 描述請寫清楚問題、結果、驗證方式及尚未測試的限制。
 

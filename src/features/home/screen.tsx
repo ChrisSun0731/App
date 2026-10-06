@@ -6,9 +6,13 @@ import type { ReactElement } from 'react';
 
 import { HeaderActions } from '@/components/header-actions';
 import { icons } from '@/components/icons';
+import { openNews } from '@/features/news/news-actions';
 import { FEATURES, HOME_GRID_ORDER, type FeatureId } from '@/features/registry';
+import { useTimetableAutofill } from '@/features/schedule/use-timetable-autofill';
 import { useTimetables } from '@/features/schedule/use-timetables';
-import { openWebsite } from '@/lib/open-link';
+import { useNow } from '@/hooks/use-now';
+import { useRefresh } from '@/hooks/use-refresh';
+import { RETRY } from '@/lib/copy';
 import { openFeature } from '@/navigation/feature-link';
 import { useNewsStore } from '@/store/news';
 import { useScheduleStore } from '@/store/schedule';
@@ -35,8 +39,6 @@ import {
   getTodayPeriod,
   todosDueOn,
 } from './today';
-import { useNow } from './use-now';
-import { useTimetableAutofill } from './use-timetable-autofill';
 
 const FEATURE_ICONS: Record<FeatureId, IconValue> = {
   promo: icons.store,
@@ -58,11 +60,9 @@ const FEATURE_TILES = HOME_GRID_ORDER.map((id) => ({
   onPress: () => openFeature(id),
 }));
 
-/** Minute-resolution UI; the clock only ticks while 首頁 is focused. */
-const CLOCK_INTERVAL_MS = 30_000;
-
 export default function HomeScreen() {
-  const now = useNow(CLOCK_INTERVAL_MS);
+  // Minute-resolution UI; the clock only ticks while 首頁 is focused.
+  const now = useNow();
   const widgets = useSettingsStore((state) => state.homeWidgets);
   const timetable = useTimetables();
   const userClass = useScheduleStore((state) => state.userClass);
@@ -70,6 +70,9 @@ export default function HomeScreen() {
   const todos = useTodoStore((state) => state.todos);
   const completeTodo = useTodoStore((state) => state.completeTodo);
   const pinned = useNewsStore((state) => state.pinned);
+
+  // 重試 shows a loading row in the notice's place until it settles.
+  const retry = useRefresh(() => timetable.refetch({ cancelRefetch: false }));
 
   useTimetableAutofill(timetable.data?.byClass);
 
@@ -93,13 +96,13 @@ export default function HomeScreen() {
         onPress={() => openFeature('schedule')}
       />
     );
-  } else if (!timetable.data && timetable.isError) {
+  } else if (!timetable.data && timetable.isError && !retry.refreshing) {
     periodRow = (
       <Notice
         tone="error"
         title="課表目前無法載入"
         message="請連線後重試。"
-        action={{ label: '重試', onPress: () => void timetable.refetch() }}
+        action={{ label: RETRY, onPress: () => void retry.refresh() }}
       />
     );
   } else if (!timetable.data) {
@@ -148,7 +151,7 @@ export default function HomeScreen() {
                 />
               ))
             ) : (
-              <TextBlock text="今天沒有待辦事項" secondary />
+              <TextBlock text="今天沒有待辦事項。" secondary />
             )}
             <ButtonRow label="查看行事曆" icon={icons.calendar} onPress={() => openFeature('todo')} />
           </Section>
@@ -164,11 +167,11 @@ export default function HomeScreen() {
                   titleLines={3}
                   subtitle={formatPinnedDate(item.pubDate)}
                   accessory="external"
-                  onPress={() => void openWebsite(item.link)}
+                  onPress={() => void openNews(item)}
                 />
               ))
             ) : (
-              <TextBlock text="尚無釘選內容" secondary />
+              <TextBlock text="尚無釘選內容。" secondary />
             )}
             <ButtonRow label="查看校網" icon={icons.newspaper} onPress={() => openFeature('news')} />
           </Section>

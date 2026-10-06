@@ -15,7 +15,7 @@ import {
   EVENT_COLORS,
   eventCategoryProblem,
 } from '@/features/todo/categories';
-import { doneHeader } from '@/features/todo/editor-header';
+import { doneHeader } from '@/navigation/modal-header';
 import { useTodoStore } from '@/store/todo';
 import { ButtonRow, ListScreen, PickerRow, Row, Section, TextBlock, TextFieldRow, type RowAction } from '@/ui';
 

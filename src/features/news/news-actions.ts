@@ -1,19 +1,16 @@
 // 校網's side effects: opening and sharing an announcement, and the
 // 已讀所有訊息 confirmation.
-import { Alert, Linking, Share } from 'react-native';
+import { Alert, Share } from 'react-native';
 
+import { openWebsite } from '@/lib/open-link';
 import { useNewsStore } from '@/store/news';
 
 import { shareContent } from './news-view';
 import type { NewsItem } from './rss';
 
-/** Opens the announcement in the browser, as before the redesign. */
-export async function openNews(item: NewsItem) {
-  try {
-    await Linking.openURL(item.link);
-  } catch {
-    Alert.alert('無法開啟公告', '請稍後再試一次。');
-  }
+/** Opens the announcement in the in-app browser, as 首頁's pinned items do. */
+export function openNews(item: NewsItem) {
+  return openWebsite(item.link, '無法開啟公告');
 }
 
 export async function shareNews(item: NewsItem) {

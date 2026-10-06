@@ -5,6 +5,7 @@ import {
   addressText,
   filterRestaurants,
   findRestaurant,
+  mapHeight,
   mapsUrl,
   pickRandomOpen,
   resultsTitle,
@@ -113,5 +114,23 @@ describe('/restaurant detail', () => {
     expect(findRestaurant(all, '建中')).toBeUndefined();
     expect(findRestaurant(undefined, '建中咖啡')).toBeUndefined();
     expect(findRestaurant(all, undefined)).toBeUndefined();
+  });
+});
+
+describe('美食 map height', () => {
+  it('takes about half of the visible list area in portrait', () => {
+    // iPhone 15: 852pt window, ~155pt header with the search field, 83pt tab bar.
+    expect(mapHeight(852 - 155 - 83)).toBe(307);
+  });
+
+  it('leaves the list header and a row in view on short screens', () => {
+    // A phone in landscape: ~260pt between the header and the tab bar.
+    expect(mapHeight(260)).toBe(120);
+    expect(mapHeight(320)).toBe(160);
+    expect(mapHeight(320)).toBeLessThanOrEqual(320 - 150);
+  });
+
+  it('never drops below a usable map', () => {
+    expect(mapHeight(100)).toBe(120);
   });
 });

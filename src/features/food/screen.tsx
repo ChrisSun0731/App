@@ -3,47 +3,47 @@
 // pick, each restaurant opening the /restaurant modal. Layout per
 // docs/design/native-ui.md, "美食 (Food)".
 import { router, Stack, useFocusEffect } from 'expo-router';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useState, type ReactElement } from 'react';
 import { Alert, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeaderActions, type HeaderItem } from '@/components/header-actions';
 import { icons } from '@/components/icons';
-import { useNow } from '@/features/home/use-now';
+import { useNow } from '@/hooks/use-now';
+import { useRefresh } from '@/hooks/use-refresh';
+import { RETRY } from '@/lib/copy';
+import { MAP_AVAILABLE } from '@/lib/map-availability';
+import { useHeaderSearch } from '@/navigation/use-header-search';
 import { useFoodStore } from '@/store/food';
-import { usePalette } from '@/theme/palette';
 import { Embedded, EmptyState, FilterChips, ListScreen, Loading, Notice, Row, Section } from '@/ui';
 
 import {
   activeFilterLabels,
   FILTER_LABELS,
   filterRestaurants,
+  mapHeight,
   pickRandomOpen,
   resultsTitle,
   STATUS_LEGEND,
   summarize,
 } from './food-view';
-import { MAP_AVAILABLE } from './map-availability';
 import type { Restaurant } from './opening-hours';
 import RestaurantMap from './restaurant-map';
 import { useRestaurants } from './use-restaurants';
 
 const ANDROID = process.env.EXPO_OS === 'android';
 
-/** Statuses are minute-resolution; the clock only ticks while 美食 is focused. */
-const CLOCK_INTERVAL_MS = 30_000;
-
-/** The map takes about 60% of the screen height, leaving the list's first rows in view. */
-const MAP_HEIGHT_RATIO = 0.6;
-const MIN_MAP_HEIGHT = 240;
-
 export default function FoodScreen() {
-  const now = useNow(CLOCK_INTERVAL_MS);
-  const palette = usePalette();
+  // Statuses are minute-resolution; the clock only ticks while 美食 is focused.
+  const now = useNow();
   const { height: windowHeight } = useWindowDimensions();
+  const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
   const restaurants = useRestaurants();
   const favorites = useFoodStore((state) => state.favorites);
   const toggleFavorite = useFoodStore((state) => state.toggleFavorite);
-  const [query, setQuery] = useState('');
+  const { query, searchBarProps } = useHeaderSearch();
   const [openOnly, setOpenOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [view, setView] = useState<'map' | 'list'>(MAP_AVAILABLE ? 'map' : 'list');
@@ -59,6 +59,12 @@ export default function FoodScreen() {
   const filtered = filterRestaurants(data ?? [], { query, openOnly, favoritesOnly }, favorites, now);
   const filtering = openOnly || favoritesOnly;
   const refresh = () => restaurants.refetch();
+  // 重試: a loading row replaces the notice or empty state until it settles.
+  const retry = useRefresh(() => restaurants.refetch({ cancelRefetch: false }));
+  // The list's visible height: below the header (with its search field),
+  // above the tab bar or home indicator (a tab's own bottom inset on iOS; on
+  // Android a tab already ends at the bar, so this slightly overestimates).
+  const mapSize = mapHeight(windowHeight - headerHeight - insets.bottom);
 
   function openDetail(restaurant: Restaurant) {
     setSelected(restaurant);
@@ -163,7 +169,7 @@ export default function FoodScreen() {
       <Section plain>
         <EmptyState
           icon={icons.forkKnife}
-          title="沒有符合條件的餐廳。"
+          title="沒有符合條件的餐廳"
           description="試試其他關鍵字，或關閉篩選條件。"
           // The search text lives in the native search bar; the filters are
           // the part that is easy to forget when they sit in a menu.
@@ -171,14 +177,14 @@ export default function FoodScreen() {
         />
       </Section>
     );
-  } else if (restaurants.isError) {
+  } else if (restaurants.isError && !retry.refreshing) {
     listSection = (
       <Section plain>
         <EmptyState
           icon={icons.offline}
           title="無法讀取餐廳資料"
           description="請檢查網路後再試一次。"
-          action={{ label: '重新讀取', onPress: () => void refresh() }}
+          action={{ label: RETRY, onPress: () => void retry.refresh() }}
         />
       </Section>
     );
@@ -192,35 +198,22 @@ export default function FoodScreen() {
 
   return (
     <>
-      <Stack.SearchBar
-        placeholder="搜尋餐廳"
-        // The SwiftUI list inside the Host does not drive UIKit's
-        // hide-on-scroll, which could leave the bar unreachable.
-        hideWhenScrolling={false}
-        // Results filter as you type, so keep them visible and tappable.
-        obscureBackground={false}
-        onChangeText={(event) => setQuery(event.nativeEvent.text)}
-        // iOS clears the field on 取消 without a change event; Android
-        // clears it when the search view collapses.
-        onCancelButtonPress={() => setQuery('')}
-        onClose={() => setQuery('')}
-        // Android's search view takes the top app bar's colours, like the
-        // HeaderActions icons beside it (iOS draws system colours itself).
-        {...(ANDROID
-          ? { textColor: palette.text, hintTextColor: palette.textSecondary, headerIconColor: palette.textSecondary }
-          : null)}
-      />
+      <Stack.SearchBar placeholder="搜尋餐廳" {...searchBarProps} />
       <HeaderActions right={header} />
       <ListScreen onRefresh={refresh}>
         {/* Cached restaurants stay on screen when a refresh fails. */}
-        {data && restaurants.isError ? (
+        {data && (restaurants.isError || retry.refreshing) ? (
           <Section>
-            <Notice
-              tone="error"
-              title="無法更新餐廳資料"
-              message="先顯示上次儲存的內容。"
-              action={{ label: '重新讀取', onPress: () => void refresh() }}
-            />
+            {retry.refreshing ? (
+              <Loading label="正在更新餐廳資料…" />
+            ) : (
+              <Notice
+                tone="error"
+                title="無法更新餐廳資料"
+                message="先顯示上次儲存的內容。"
+                action={{ label: RETRY, onPress: () => void retry.refresh() }}
+              />
+            )}
           </Section>
         ) : null}
 
@@ -238,7 +231,7 @@ export default function FoodScreen() {
 
         {view === 'map' ? (
           <Section footer={STATUS_LEGEND}>
-            <Embedded height={Math.max(MIN_MAP_HEIGHT, Math.round(windowHeight * MAP_HEIGHT_RATIO))}>
+            <Embedded height={mapSize}>
               <RestaurantMap restaurants={filtered} selected={selected} now={now} onSelect={openDetail} />
             </Embedded>
           </Section>

@@ -107,7 +107,7 @@ export function followedStationView(
 ): FollowedStationView {
   let status: string | null = null;
   if (feed.isPending) status = '正在載入即時資訊…';
-  else if (feed.isError) status = station ? '更新失敗，顯示上次取得的資訊。' : '更新失敗，請下拉重試。';
+  else if (feed.isError) status = station ? '更新失敗，顯示上次取得的資訊。' : '更新失敗，下拉可重試。';
   else if (!station) status = '此站點目前沒有回報資料。';
 
   const lines = [`${follow.city} · ${stationDisplayName(follow.sna)}`];

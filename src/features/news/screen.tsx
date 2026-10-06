@@ -2,12 +2,13 @@
 // 全部 filters, header search, pins and paging. Layout per
 // docs/design/native-ui.md, "校網 (News)". The cached list shows offline.
 import { Stack } from 'expo-router';
-import { useCallback, useMemo, useState, type ComponentProps, type ReactElement } from 'react';
+import { useCallback, useMemo, useState, type ReactElement } from 'react';
 
-import { HeaderActions, type HeaderMenuAction } from '@/components/header-actions';
+import { HeaderActions } from '@/components/header-actions';
 import { icons } from '@/components/icons';
+import { RETRY } from '@/lib/copy';
+import { useHeaderSearch } from '@/navigation/use-header-search';
 import { useNewsStore } from '@/store/news';
-import { usePalette } from '@/theme/palette';
 import { ButtonRow, ListScreen, Loading, Notice, PickerRow, Row, Section, TextBlock } from '@/ui';
 
 import { confirmMarkAllRead, openNews, shareNews, togglePin } from './news-actions';
@@ -29,7 +30,10 @@ import { useSchoolNews } from './use-school-news';
 
 const ANDROID = process.env.EXPO_OS === 'android';
 
-type SearchTextHandler = NonNullable<ComponentProps<typeof Stack.SearchBar>['onChangeText']>;
+// iOS keeps 釘選 in the leading swipe and the long-press menu, and 分享 in the
+// trailing swipe and that menu, none of which shows on screen (an unpinned
+// row draws no pin); Android shows a pin button and an overflow button.
+const NEWS_HINT = ANDROID ? '' : '右滑或長按消息即可釘選，長按可分享。';
 
 // Android's row ends in two 48dp icon buttons (pin, overflow), leaving the
 // title about 11 CJK characters per line on a 360dp phone, so it gets more
@@ -37,7 +41,6 @@ type SearchTextHandler = NonNullable<ComponentProps<typeof Stack.SearchBar>['onC
 const TITLE_LINES = ANDROID ? 5 : 3;
 
 export default function NewsScreen() {
-  const palette = usePalette();
   const { query, partialFailure, refetch, refresh, refreshing } = useSchoolNews();
   const pinned = useNewsStore((state) => state.pinned);
   const cached = useNewsStore((state) => state.cached);
@@ -45,39 +48,40 @@ export default function NewsScreen() {
   const lastFetchTime = useNewsStore((state) => state.lastFetchTime);
   const restoreAll = useNewsStore((state) => state.restoreAll);
   // Neither is persisted, as before: the screen opens on 未讀 without a search.
-  const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<NewsFilter>('unread');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // A new search pages back to the start. Stable, as useHeaderSearch asks.
+  const resetPaging = useCallback(() => setVisibleCount(PAGE_SIZE), []);
+  const { query: search, searchBarProps } = useHeaderSearch(resetPaging);
 
   const fetched = query.data ?? cached;
   const groups = useMemo(() => groupNews(fetched, pinned, lastClearedTime), [fetched, pinned, lastClearedTime]);
   const shown = searchNews(groups[filter], search);
   const pinnedTitles = new Set(pinned.map((item) => item.title));
 
-  // Stable handlers: Stack.SearchBar registers its header options again
-  // whenever one changes, which would happen on every keystroke and poll.
-  const changeSearch = useCallback((text: string) => {
-    setSearch(text);
-    setVisibleCount(PAGE_SIZE);
-  }, []);
-  const onSearchText = useCallback<SearchTextHandler>((event) => changeSearch(event.nativeEvent.text), [changeSearch]);
-  const clearSearch = useCallback(() => changeSearch(''), [changeSearch]);
-
   function changeFilter(value: NewsFilter) {
     setFilter(value);
     setVisibleCount(PAGE_SIZE);
   }
 
-  // Header menu items cannot be disabled, so ones with nothing to do are left
-  // out (they were disabled buttons before).
-  const menu: HeaderMenuAction[] = [];
-  if (groups.unread.length > 0) {
-    menu.push({ key: 'read', label: '已讀所有訊息', icon: icons.markRead, onPress: confirmMarkAllRead });
-  }
-  if (lastClearedTime !== null) {
-    menu.push({ key: 'restore', label: '恢復已讀訊息', icon: icons.restore, onPress: restoreAll });
-  }
-  menu.push({ key: 'refresh', label: '重新整理', icon: icons.refresh, onPress: () => void refresh() });
+  // Items with nothing to do are greyed, as the buttons they replace were.
+  const menu = [
+    {
+      key: 'read',
+      label: '已讀所有訊息',
+      icon: icons.markRead,
+      disabled: groups.unread.length === 0,
+      onPress: confirmMarkAllRead,
+    },
+    {
+      key: 'restore',
+      label: '恢復已讀訊息',
+      icon: icons.restore,
+      disabled: lastClearedTime === null,
+      onPress: restoreAll,
+    },
+    { key: 'refresh', label: '重新整理', icon: icons.refresh, onPress: () => void refresh() },
+  ];
 
   function renderRow(item: NewsItem): ReactElement {
     const isPinned = pinnedTitles.has(item.title);
@@ -124,14 +128,14 @@ export default function NewsScreen() {
         tone="error"
         title="校網目前無法更新"
         message="先顯示上次儲存的消息。"
-        action={{ label: '重試', onPress: () => void refresh() }}
+        action={{ label: RETRY, onPress: () => void refresh() }}
       />
     ) : (
       <Notice
         tone="error"
         title="無法讀取校網消息"
         message="請檢查網路後重試。"
-        action={{ label: '重試', onPress: () => void refresh() }}
+        action={{ label: RETRY, onPress: () => void refresh() }}
       />
     );
   } else if (partialFailure) {
@@ -140,7 +144,7 @@ export default function NewsScreen() {
         tone="error"
         title={partialFailureTitle(partialFailure.feeds)}
         message={partialFailureMessage(partialFailure.showingCached)}
-        action={{ label: '重試', onPress: () => void refresh() }}
+        action={{ label: RETRY, onPress: () => void refresh() }}
       />
     );
   }
@@ -152,24 +156,7 @@ export default function NewsScreen() {
 
   return (
     <>
-      <Stack.SearchBar
-        placeholder="搜尋消息"
-        // The SwiftUI list inside the Host does not drive UIKit's
-        // hide-on-scroll, which could leave the bar unreachable.
-        hideWhenScrolling={false}
-        // Results filter as you type, so keep them visible and tappable.
-        obscureBackground={false}
-        onChangeText={onSearchText}
-        // iOS clears the field on 取消 without a change event; Android
-        // clears it when the search view collapses.
-        onCancelButtonPress={clearSearch}
-        onClose={clearSearch}
-        // Android's search view takes the top app bar's colours, like the
-        // HeaderActions icons beside it (iOS draws system colours itself).
-        {...(ANDROID
-          ? { textColor: palette.text, hintTextColor: palette.textSecondary, headerIconColor: palette.textSecondary }
-          : null)}
-      />
+      <Stack.SearchBar placeholder="搜尋消息" {...searchBarProps} />
       <HeaderActions right={[{ kind: 'menu', key: 'more', label: '更多', icon: icons.more, actions: menu }]} />
       <ListScreen
         // Pull to refresh draws its own indicator, so it skips `refreshing`.
@@ -196,7 +183,10 @@ export default function NewsScreen() {
         ) : null}
 
         {showList ? (
-          <Section key="list" title={`${shown.length} 則消息`} footer={lastUpdatedFooter(lastFetchTime)}>
+          <Section
+            key="list"
+            title={`${shown.length} 則消息`}
+            footer={[lastUpdatedFooter(lastFetchTime), NEWS_HINT].filter(Boolean).join('\n') || undefined}>
             {shown.length === 0 ? <TextBlock text={emptyMessage(filter, search)} secondary /> : null}
             {shown.slice(0, visibleCount).map(renderRow)}
             {shown.length > visibleCount ? (

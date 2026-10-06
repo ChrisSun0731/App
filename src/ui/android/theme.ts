@@ -17,6 +17,9 @@ export function useM3(): MaterialColors {
 
 export const TRANSPARENT = '#00000000';
 
+/** Material's disabled-content opacity (e.g. onSurface at 38%). */
+export const DISABLED_ALPHA = 0.38;
+
 /** ListScreen's side gutter, added to the side system insets (landscape navigation bar, cutouts). */
 export const GUTTER = 16;
 

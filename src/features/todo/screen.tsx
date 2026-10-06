@@ -6,12 +6,17 @@ import { useState } from 'react';
 
 import { HeaderActions } from '@/components/header-actions';
 import { icons } from '@/components/icons';
+import { useNow } from '@/hooks/use-now';
+import { useRefresh } from '@/hooks/use-refresh';
+import { PULL_TO_RETRY, RETRY } from '@/lib/copy';
 import { fromDateKey, toDateKey, WEEKDAY_ZH } from '@/lib/dates';
 import { useTodoStore } from '@/store/todo';
-import { BRAND, usePalette } from '@/theme/palette';
+import { BRAND, BRAND_DARK } from '@/theme/brand';
+import { usePalette } from '@/theme/palette';
 import {
   ButtonRow,
   CheckRow,
+  EmptyState,
   ListScreen,
   Loading,
   MonthCalendar,
@@ -60,7 +65,7 @@ const VIEW_OPTIONS: readonly ChoiceOption<TodoView>[] = [
 function useTodoColor(): string {
   const palette = usePalette();
   if (typeof palette.tint === 'string') return palette.tint;
-  return palette.scheme === 'dark' ? '#8EAEFF' : BRAND;
+  return palette.scheme === 'dark' ? BRAND_DARK : BRAND;
 }
 
 function editTodo(todo: Todo) {
@@ -94,7 +99,12 @@ export default function TodoScreen() {
   const view = useTodoStore((state) => state.view);
   const setView = useTodoStore((state) => state.setView);
   const school = useSchoolEvents();
+  // 重試 shows a loading row in the notice's place until it settles.
+  const retrySchool = useRefresh(() => school.refetch({ cancelRefetch: false }));
   const todoColor = useTodoColor();
+  // Ticks while 行事曆 is focused (and catches up on return), so the 今天
+  // marks, the day title and the 已過期 groups move on after midnight.
+  const now = useNow();
 
   const [month, setMonth] = useState(() => {
     const today = new Date();
@@ -104,12 +114,8 @@ export default function TodoScreen() {
   // Not persisted, as before: the list opens on every todo.
   const [filter, setFilter] = useState(ALL_TODOS);
 
-  const today = new Date();
-  const todayKey = toDateKey(today);
-  // The React Compiler memoizes these on their inputs (todayKey included, so
-  // the today marker moves after midnight).
   const allEvents = [...events, ...school.events];
-  const cells = calendarCells(month.year, month.month, allEvents, todos, todoColor, fromDateKey(todayKey));
+  const cells = calendarCells(month.year, month.month, allEvents, todos, todoColor, fromDateKey(toDateKey(now)));
 
   function showMonth(offset: number) {
     const first = new Date(month.year, month.month + offset, 1);
@@ -119,9 +125,9 @@ export default function TodoScreen() {
   }
 
   function showToday() {
-    const now = new Date();
-    setMonth({ year: now.getFullYear(), month: now.getMonth() });
-    setSelectedDate(toDateKey(now));
+    const date = new Date();
+    setMonth({ year: date.getFullYear(), month: date.getMonth() });
+    setSelectedDate(toDateKey(date));
   }
 
   // New items default to the selected day, as before (in both views).
@@ -149,20 +155,20 @@ export default function TodoScreen() {
             onNext={() => showMonth(1)}
             onToday={showToday}
           />
-          {school.isPending ? <Loading label="正在載入學校行事曆…" /> : null}
-          {school.error ? (
+          {school.isPending || retrySchool.refreshing ? <Loading label="正在載入學校行事曆…" /> : null}
+          {school.error && !retrySchool.refreshing ? (
             <Notice
               tone="error"
-              title="學校行事曆暫時無法更新。"
-              message="下拉可重試。"
-              action={{ label: '重試', onPress: () => void school.refetch() }}
+              title="學校行事曆暫時無法更新"
+              message={PULL_TO_RETRY}
+              action={{ label: RETRY, onPress: () => void retrySchool.refresh() }}
             />
           ) : null}
         </Section>
 
         <Section
           key="day"
-          title={formatDayTitle(selectedDate, today)}
+          title={formatDayTitle(selectedDate, now)}
           footer={hasSchoolEvents ? '學校活動僅供查看，無法修改。' : undefined}>
           {items.length === 0 ? <TextBlock text="這一天沒有活動或待辦。" secondary /> : null}
           {items.map((item) => {
@@ -201,7 +207,7 @@ export default function TodoScreen() {
 
   function renderTodoList() {
     const activeFilter = effectiveFilter(filter, todos, todoCategories);
-    const sections = todoSections(filterTodos(todos, activeFilter), today);
+    const sections = todoSections(filterTodos(todos, activeFilter), now);
     return (
       <>
         <Section key="filter" footer="勾選待辦即完成並移除。">
@@ -220,8 +226,9 @@ export default function TodoScreen() {
         </Section>
 
         {sections.length === 0 ? (
-          <Section key="empty">
-            <TextBlock text="目前沒有待辦事項。" secondary />
+          <Section key="empty" plain>
+            {/* No add action: the header's + (and Android's FAB) is right there. */}
+            <EmptyState icon={icons.todo} title="目前沒有待辦事項" />
           </Section>
         ) : null}
         {sections.map((section) => (

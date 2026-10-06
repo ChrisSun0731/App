@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import type { SFSymbol } from 'expo-symbols';
+import { ActivityIndicator } from 'react-native';
 
 import type { HeaderActionsProps, HeaderItem, HeaderMenuAction, HeaderMenuEntry } from './header-actions.types';
 
@@ -16,6 +17,15 @@ export function HeaderActions({ left, right }: HeaderActionsProps) {
 function renderItem(item: HeaderItem) {
   switch (item.kind) {
     case 'icon':
+      if (item.busy) {
+        // A UIActivityIndicatorView in the button's place while its action
+        // runs: progress where the user tapped, without touching the List.
+        return (
+          <Stack.Toolbar.View key={item.key}>
+            <ActivityIndicator accessibilityLabel={item.label} accessibilityState={{ busy: true }} />
+          </Stack.Toolbar.View>
+        );
+      }
       return (
         <Stack.Toolbar.Button
           key={item.key}
@@ -71,6 +81,7 @@ function renderAction(action: HeaderMenuAction) {
       icon={action.icon as SFSymbol | undefined}
       destructive={action.destructive}
       isOn={action.selected}
+      disabled={action.disabled}
       onPress={action.onPress}>
       {action.label}
     </Stack.Toolbar.MenuAction>

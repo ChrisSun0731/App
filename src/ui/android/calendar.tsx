@@ -15,8 +15,8 @@ import {
 
 import { icons } from '@/components/icons';
 
+import { chunk, withAlpha } from '../helpers';
 import { CALENDAR_CELL_INDICATORS, type CalendarCell, type MonthCalendarProps } from '../types';
-import { chunk, withAlpha } from './helpers';
 import { iconSource, roundedShape, TRANSPARENT, useM3 } from './theme';
 
 /** Size of the day-number circle. */

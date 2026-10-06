@@ -10,9 +10,9 @@ import {
   Text,
 } from '@expo/ui/jetpack-compose';
 import { align, clip, fillMaxSize, fillMaxWidth, imePadding, padding, Shapes } from '@expo/ui/jetpack-compose/modifiers';
-import { useEffect, useState, type ReactElement } from 'react';
-import { Keyboard } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { Keyboard, View } from 'react-native';
+import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BRAND } from '@/theme/brand';
 
@@ -50,27 +50,60 @@ function slotKind(element: ReactElement): SlotKind {
   return CONTENT.has(element.type) ? 'content' : 'unknown';
 }
 
-/** Whether the soft keyboard is up (Android reports only the Did events). */
-function useKeyboardVisible(): boolean {
-  const [visible, setVisible] = useState(() => Keyboard.isVisible());
+/**
+ * The soft keyboard's height above the navigation bar (React Native reports
+ * the IME inset less the system bar inset), 0 while it is hidden. Android
+ * reports only the Did events.
+ */
+function useKeyboardHeight(): number {
+  const [height, setHeight] = useState(() => (Keyboard.isVisible() ? (Keyboard.metrics()?.height ?? 0) : 0));
   useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => setVisible(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setVisible(false));
+    const show = Keyboard.addListener('keyboardDidShow', (event) => setHeight(event.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setHeight(0));
     return () => {
       show.remove();
       hide.remove();
     };
   }, []);
-  return visible;
+  return height;
 }
+
 
 /** Room the extended FAB (56dp + its 16dp margin) takes over the list's end. */
 const FAB_CLEARANCE = 80;
 
 export function ListScreen({ children, onRefresh, refreshing = false, fab }: ListScreenProps) {
   const insets = useSafeAreaInsets();
-  const keyboardVisible = useKeyboardVisible();
+  const frame = useSafeAreaFrame();
+  const keyboard = useKeyboardHeight();
   const [pulling, setPulling] = useState(false);
+
+  // How far this screen's bottom edge sits above the window's: 0 on pushed
+  // screens and modals, which reach it. A tab's content already ends at the
+  // bottom navigation bar (expo-router wraps each Android tab in
+  // react-native-screens' bottom-edge SafeAreaView), so there it is the
+  // bar's height, while the root safe area still reports the whole
+  // navigation-bar inset and Compose's IME inset still counts from the
+  // window's bottom. Measured in window coordinates against the safe-area
+  // frame, the space both insets are relative to.
+  const container = useRef<View>(null);
+  const [containerBottom, setContainerBottom] = useState<number | null>(null);
+  const bottomGap = containerBottom === null ? 0 : Math.max(0, Math.round(frame.y + frame.height - containerBottom));
+  function measureBottom() {
+    container.current?.measureInWindow((_x, y, _width, height) => setContainerBottom(y + height));
+  }
+
+  // The parts of the navigation bar and of the keyboard that cover this
+  // screen: all of them on a pushed screen; above a tab bar, none of the
+  // navigation bar and only the keyboard's overlap (it covers the tab bar).
+  const navigationBar = Math.max(0, insets.bottom - bottomGap);
+  const keyboardOverlap = keyboard > 0 ? Math.max(0, keyboard + insets.bottom - bottomGap) : 0;
+  // Reaching the window's bottom, imePadding keeps a focused field in a modal
+  // editor above the keyboard, animating with it (the window is edge-to-edge,
+  // so it no longer resizes). Above a tab bar it would pad by the bar's
+  // height too much, and Compose cannot subtract it, so the measured overlap
+  // pads instead.
+  const keyboardPadding = bottomGap > 0 ? padding(0, 0, 0, keyboardOverlap) : imePadding();
 
   async function refresh() {
     if (!onRefresh) return;
@@ -91,17 +124,15 @@ export function ListScreen({ children, onRefresh, refreshing = false, fab }: Lis
   // insets matter in landscape (3-button navigation bar, cutouts).
   const list = (
     <LazyColumn
-      // imePadding keeps a focused text field in modal editors above the
-      // keyboard: the window is edge-to-edge, so it no longer resizes.
-      modifiers={[fillMaxSize(), imePadding()]}
+      modifiers={[fillMaxSize(), keyboardPadding]}
       contentPadding={{
         start: GUTTER + insets.left,
         top: 8,
         end: GUTTER + insets.right,
-        // The IME inset already includes the navigation bar, and the FAB
+        // The keyboard padding already covers the navigation bar, and the FAB
         // stays behind the keyboard, so neither is cleared while it is up
         // (@expo/ui has no consumeWindowInsets to do this natively).
-        bottom: keyboardVisible ? 16 : insets.bottom + 16 + (fab ? FAB_CLEARANCE : 0),
+        bottom: keyboard > 0 ? 16 : navigationBar + 16 + (fab ? FAB_CLEARANCE : 0),
       }}
       verticalArrangement={{ spacedBy: 16 }}>
       {children}
@@ -109,35 +140,38 @@ export function ListScreen({ children, onRefresh, refreshing = false, fab }: Lis
   );
 
   return (
-    <Host style={{ flex: 1 }} seedColor={BRAND}>
-      <Box modifiers={[fillMaxSize()]}>
-        {onRefresh ? (
-          // One indicator for a pull and for a refresh the screen started
-          // itself (`refreshing`, e.g. a header button): Compose shows the
-          // same spinner while either runs.
-          <PullToRefreshBox
-            isRefreshing={refreshing || pulling}
-            onRefresh={() => void refresh()}
-            modifiers={[fillMaxSize()]}>
-            {list}
-          </PullToRefreshBox>
-        ) : (
-          list
-        )}
-        {fab ? (
-          <ExtendedFloatingActionButton
-            onClick={fab.onPress}
-            modifiers={[align('bottomEnd'), padding(0, 0, 16 + insets.right, insets.bottom + 16)]}>
-            <ExtendedFloatingActionButton.Icon>
-              <Icon source={iconSource(fab.icon)} size={24} />
-            </ExtendedFloatingActionButton.Icon>
-            <ExtendedFloatingActionButton.Text>
-              <Text style={{ typography: 'labelLarge' }}>{fab.label}</Text>
-            </ExtendedFloatingActionButton.Text>
-          </ExtendedFloatingActionButton>
-        ) : null}
-      </Box>
-    </Host>
+    // The plain View only measures where the screen ends (bottomGap above).
+    <View ref={container} onLayout={measureBottom} collapsable={false} style={{ flex: 1 }}>
+      <Host style={{ flex: 1 }} seedColor={BRAND}>
+        <Box modifiers={[fillMaxSize()]}>
+          {onRefresh ? (
+            // One indicator for a pull and for a refresh the screen started
+            // itself (`refreshing`, e.g. a header button): Compose shows the
+            // same spinner while either runs.
+            <PullToRefreshBox
+              isRefreshing={refreshing || pulling}
+              onRefresh={() => void refresh()}
+              modifiers={[fillMaxSize()]}>
+              {list}
+            </PullToRefreshBox>
+          ) : (
+            list
+          )}
+          {fab ? (
+            <ExtendedFloatingActionButton
+              onClick={fab.onPress}
+              modifiers={[align('bottomEnd'), padding(0, 0, 16 + insets.right, navigationBar + 16)]}>
+              <ExtendedFloatingActionButton.Icon>
+                <Icon source={iconSource(fab.icon)} size={24} />
+              </ExtendedFloatingActionButton.Icon>
+              <ExtendedFloatingActionButton.Text>
+                <Text style={{ typography: 'labelLarge' }}>{fab.label}</Text>
+              </ExtendedFloatingActionButton.Text>
+            </ExtendedFloatingActionButton>
+          ) : null}
+        </Box>
+      </Host>
+    </View>
   );
 }
 

@@ -4,9 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { create } from 'zustand';
 
+import { useRefresh } from '@/hooks/use-refresh';
 import { useNewsStore } from '@/store/news';
 
-import { createPendingTracker } from './pending-tracker';
 import { feedLabels, fetchSchoolNews, type NewsFeed, type NewsItem } from './rss';
 
 const FETCH_INTERVAL = 2 * 60 * 1000;
@@ -91,9 +91,7 @@ export function useSchoolNews(): SchoolNews {
 
   const { refetch: refetchQuery } = query;
   const refetch = useCallback(() => refetchQuery({ cancelRefetch: false }), [refetchQuery]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [track] = useState(() => createPendingTracker(setRefreshing));
-  const refresh = useCallback(() => track(refetch), [track, refetch]);
+  const { refresh, refreshing } = useRefresh(refetch);
 
   const failed = useLastRound((state) => state.failed);
   const carriedOver = useLastRound((state) => state.carriedOver);

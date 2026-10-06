@@ -32,9 +32,10 @@ export interface ListScreenProps {
   /**
    * Shows the refresh indicator without a pull, e.g. while a header 重新整理
    * button's refresh runs; for screens that also pass `onRefresh`. Android
-   * and the fallback show pull to refresh's own indicator. SwiftUI cannot
-   * start `refreshable`'s spinner from code, so iOS shows a spinner row above
-   * the first section instead (not during a pull, which has its own).
+   * and the fallback show pull to refresh's own indicator. iOS draws nothing:
+   * SwiftUI cannot start `refreshable`'s spinner from code, and a row
+   * inserted above the list would make it jump. Give the header button
+   * `busy` as well, which iOS draws as a spinner in the button's place.
    */
   refreshing?: boolean;
   /** Android only: an extended FAB for the screen's primary action. iOS puts that action in the navigation bar instead and ignores this. */
@@ -58,7 +59,11 @@ export interface RowAction {
   label: string;
   icon?: IconValue;
   destructive?: boolean;
-  /** Shown but not selectable (greyed in the menus, left out of iOS swipe actions). */
+  /**
+   * Shown but not selectable (greyed in the menus, left out of iOS swipe
+   * actions). No screen needs it yet; the kits support it so a row can keep
+   * an action visible while it does not apply.
+   */
   disabled?: boolean;
   onPress: () => void;
 }
@@ -99,9 +104,11 @@ export interface RowProps {
   onPress?: () => void;
   /**
    * Secondary actions. iOS: trailing swipe actions plus a long-press context
-   * menu. Android: a trailing overflow (more_vert) dropdown menu, named after
-   * the row for TalkBack. They stay available on a disabled row; disable an
-   * action itself with `RowAction.disabled`.
+   * menu, which nothing on screen reveals, so a screen whose rows rely on
+   * them adds an iOS-only footer hint (e.g. 左滑或長按站點即可…). Android: a
+   * trailing overflow (more_vert) dropdown menu, named after the row for
+   * TalkBack. They stay available on a disabled row; disable an action itself
+   * with `RowAction.disabled`.
    */
   actions?: readonly RowAction[];
   /**
@@ -115,9 +122,11 @@ export interface RowProps {
   /** Overrides the spoken label (defaults to title, overline, subtitle, detail, badge). */
   accessibilityLabel?: string;
   /**
-   * Dims the row and turns off its own tap (`onPress`) only. `actions` and
-   * `toggle` stay available, but on iOS a full swipe no longer fires the edge
-   * action: a dimmed row should not act on a single gesture.
+   * Dims the row and turns off its own tap (`onPress`) only; it is spoken as
+   * turned off (Android adds 已停用 to the label). `actions` and `toggle`
+   * stay available, but on iOS a full swipe no longer fires the edge action:
+   * a dimmed row should not act on a single gesture. No screen disables a
+   * Row yet (設定 disables ToggleRows).
    */
   disabled?: boolean;
 }

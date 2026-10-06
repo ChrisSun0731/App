@@ -69,6 +69,25 @@ export function resultsTitle(count: number, filterLabels: readonly string[] = []
   return filterLabels.length ? `${count} 間餐廳 · 篩選：${filterLabels.join('、')}` : `${count} 間餐廳`;
 }
 
+/** Share of the list's visible height the map takes in map mode. */
+const MAP_SHARE = 0.5;
+/** Room kept under the map: its legend footer, the 「n 間餐廳」 header and about one row. */
+const LIST_PEEK = 150;
+/** Smaller than this, a map is not worth showing (the header toggles to list mode). */
+const MIN_MAP_HEIGHT = 120;
+
+/**
+ * The 美食 map's height for a list area `visibleHeight` tall (the window less
+ * the header with its search field, and the tab bar or home indicator):
+ * about half of it, always leaving the legend, the list's header and its
+ * first row in view. A drag on the map pans the map rather than scrolling
+ * the list, so the list must be reachable without one, in landscape too.
+ */
+export function mapHeight(visibleHeight: number): number {
+  const target = Math.round(visibleHeight * MAP_SHARE);
+  return Math.max(MIN_MAP_HEIGHT, Math.min(target, Math.round(visibleHeight - LIST_PEEK)));
+}
+
 export interface RestaurantSummary {
   status: OpenStatus;
   statusLabel: string;

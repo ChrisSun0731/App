@@ -1,8 +1,6 @@
-import { Host, HStack, List, ProgressView, Section as SwiftUISection, Spacer, Text } from '@expo/ui/swift-ui';
+import { Host, List, Section as SwiftUISection, Text } from '@expo/ui/swift-ui';
 import {
   environment,
-  listRowBackground,
-  listRowSeparator,
   listStyle,
   refreshable,
   scrollDismissesKeyboard,
@@ -39,17 +37,18 @@ const LOCALE = environment('locale', 'zh_Hant_TW');
  * error) a pull just ends at once. Screens that refresh should pass
  * `onRefresh` from their first render, so the List is never rebuilt.
  *
- * `refreshing` (a refresh the screen started, e.g. from a header button):
- * SwiftUI only starts `refreshable`'s spinner for a pull, so a spinner row
- * sits above the first section instead, except during a pull, which already
- * shows one.
+ * `refreshing` (a refresh the screen started, e.g. from a header button) is
+ * not drawn here. SwiftUI only starts `refreshable`'s spinner for a pull, and
+ * a spinner row inserted above the first section would push every visible
+ * row down and back up again, as List keeps its offset when a section is
+ * added above it. The header item's `busy` spinner shows that progress on
+ * iOS instead.
  */
-export function ListScreen({ children, onRefresh, refreshing = false }: ListScreenProps) {
+export function ListScreen({ children, onRefresh }: ListScreenProps) {
   const palette = usePalette();
   const [refreshes, setRefreshes] = useState(onRefresh !== undefined);
   // Adjusting state while rendering (see above): latched on first sight.
   if (onRefresh && !refreshes) setRefreshes(true);
-  const [pulling, setPulling] = useState(false);
 
   const listModifiers: ModifierConfig[] = [
     listStyle('insetGrouped'),
@@ -60,41 +59,18 @@ export function ListScreen({ children, onRefresh, refreshing = false }: ListScre
       refreshable(async () => {
         // SwiftUI keeps the spinner until this resolves; a failed refresh is
         // shown by the screen itself, so it must not reject here.
-        setPulling(true);
         try {
           await onRefresh?.();
         } catch {
           // Swallowed on purpose (see above).
-        } finally {
-          setPulling(false);
         }
       }),
     );
   }
   return (
     <Host style={{ flex: 1 }} seedColor={palette.tint} modifiers={[LOCALE]}>
-      <List modifiers={listModifiers}>
-        {refreshing && !pulling ? <RefreshingRow /> : null}
-        {children}
-      </List>
+      <List modifiers={listModifiers}>{children}</List>
     </Host>
-  );
-}
-
-/**
- * A spinner on the grouped background where `refreshable`'s own would be,
- * in a section of its own (a ListScreen holds only sections). VoiceOver reads
- * the indeterminate ProgressView as in progress.
- */
-function RefreshingRow() {
-  return (
-    <SwiftUISection>
-      <HStack modifiers={[listRowBackground('clear'), listRowSeparator('hidden')]}>
-        <Spacer />
-        <ProgressView />
-        <Spacer />
-      </HStack>
-    </SwiftUISection>
   );
 }
 

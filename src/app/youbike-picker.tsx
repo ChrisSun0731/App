@@ -7,12 +7,10 @@ import { router, Stack } from 'expo-router';
 import { useMemo, useState } from 'react';
 
 import { HeaderActions } from '@/components/header-actions';
-import { doneHeader } from '@/features/todo/editor-header';
 import { availabilityPills } from '@/features/transport/availability-pills';
 import StationMap, { STATION_MAP_HINT, stationMapAvailable } from '@/features/transport/map-picker';
 import type { MapPoint } from '@/features/transport/map-picker.types';
 import { nearbySubtitle, SEARCH_LIMIT, searchStations, stationKey } from '@/features/transport/transport-view';
-import { usePickerSearch } from '@/features/transport/use-picker-search';
 import { refetchYoubike, useYoubikeFeeds } from '@/features/transport/use-transport-queries';
 import {
   CITIES,
@@ -22,6 +20,10 @@ import {
   type City,
   type YoubikeStation,
 } from '@/features/transport/youbike';
+import { useRefresh } from '@/hooks/use-refresh';
+import { PULL_TO_RETRY, RETRY } from '@/lib/copy';
+import { doneHeader } from '@/navigation/modal-header';
+import { useHeaderSearch } from '@/navigation/use-header-search';
 import { useTransportStore } from '@/store/transport';
 import {
   Embedded,
@@ -57,7 +59,7 @@ export default function YoubikePicker() {
   const followYoubike = useTransportStore((state) => state.followYoubike);
   const [mode, setMode] = useState<Mode>('search');
   const [city, setCity] = useState<City>('臺北市');
-  const { query, clear: clearSearch, searchBarProps } = usePickerSearch();
+  const { query, clear: clearSearch, searchBarProps } = useHeaderSearch();
   const [point, setPoint] = useState<MapPoint>(CK_COORDINATE);
 
   // Searching needs the chosen city only; the nearest stations may be in either.
@@ -70,6 +72,8 @@ export default function YoubikePicker() {
     [taipeiData, newTaipeiData, point],
   );
   const followedKeys = useMemo(() => new Set(followed.map(stationKey)), [followed]);
+  // 重試 swaps its notice for a loading row until the fetch settles.
+  const retry = useRefresh(() => refetchYoubike(feeds, cities));
 
   function changeMode(next: Mode) {
     // The header search field is removed in 附近九站 and comes back empty.
@@ -125,15 +129,15 @@ export default function YoubikePicker() {
             footer={
               search.total > SEARCH_LIMIT ? `${ADD_HINT}\n顯示前 30 個結果，請輸入站名或行政區縮小範圍。` : ADD_HINT
             }>
-            {feed.isError ? (
+            {feed.isError && !retry.refreshing ? (
               <Notice
                 tone="error"
                 title={`無法更新 ${city} 站點`}
-                message="請下拉重試。"
-                action={{ label: '重試', onPress: () => void feed.refetch() }}
+                message={PULL_TO_RETRY}
+                action={{ label: RETRY, onPress: () => void retry.refresh() }}
               />
             ) : null}
-            {feed.isPending ? <Loading label="正在載入站點…" /> : null}
+            {feed.isPending || retry.refreshing ? <Loading label="正在載入站點…" /> : null}
             {feed.data && search.results.length === 0 ? <TextBlock text="找不到符合的站點。" secondary /> : null}
             {search.results.map((station) => stationRow(station, stationDisplayName(station.sna), station.area))}
           </Section>
@@ -153,15 +157,15 @@ export default function YoubikePicker() {
               )}
             </Section>
             <Section title="附近九站" footer={ADD_HINT}>
-              {nearbyError ? (
+              {nearbyError && !retry.refreshing ? (
                 <Notice
                   tone="error"
                   title="部分縣市資料無法更新"
-                  message="結果可能不完整。請下拉重試。"
-                  action={{ label: '重試', onPress: () => void refetchYoubike(feeds, CITIES) }}
+                  message={`結果可能不完整。${PULL_TO_RETRY}`}
+                  action={{ label: RETRY, onPress: () => void retry.refresh() }}
                 />
               ) : null}
-              {nearbyPending ? <Loading label="正在搜尋附近站點…" /> : null}
+              {nearbyPending || retry.refreshing ? <Loading label="正在搜尋附近站點…" /> : null}
               {nearby.map((station, index) =>
                 stationRow(station, `${index + 1}. ${stationDisplayName(station.sna)}`, nearbySubtitle(station)),
               )}

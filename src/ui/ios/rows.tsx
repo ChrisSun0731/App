@@ -39,6 +39,7 @@ import { Children, type ReactElement, type ReactNode } from 'react';
 
 import { usePalette } from '@/theme/palette';
 
+import { spokenLabel } from '../labels';
 import type {
   ButtonRowProps,
   CheckRowProps,
@@ -62,7 +63,7 @@ import {
   useIsPlainSection,
   useRowChrome,
 } from './chrome';
-import { footerSpeech, sf, spokenLabel, trailingSwipeActions } from './helpers';
+import { footerSpeech, sf, trailingSwipeActions } from './helpers';
 
 const FULL_ROW = contentShape(shapes.rectangle());
 /** Extra tappable margin around CheckRow's circle (see CheckRow). */

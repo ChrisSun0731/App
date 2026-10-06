@@ -6,7 +6,8 @@ import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 
 import { HeaderActions } from '@/components/header-actions';
-import { doneHeader } from '@/features/todo/editor-header';
+import { doneHeader } from '@/navigation/modal-header';
+import { useHeaderSearch } from '@/navigation/use-header-search';
 import {
   METRO_LINE_COLORS,
   METRO_LINE_NAMES,
@@ -15,7 +16,6 @@ import {
   type MetroLine,
 } from '@/features/transport/metro-lines';
 import { searchMetroStations } from '@/features/transport/transport-view';
-import { usePickerSearch } from '@/features/transport/use-picker-search';
 import { useTransportStore } from '@/store/transport';
 import { ListScreen, PickerRow, Row, Section, TextBlock, type ChoiceOption } from '@/ui';
 
@@ -33,7 +33,7 @@ export default function MetroPicker() {
   const addMetro = useTransportStore((state) => state.addMetro);
   const [line, setLine] = useState<MetroLine>(METRO_LINES[0]);
   // The query is kept across lines: a station name can be searched line by line.
-  const { query, searchBarProps } = usePickerSearch();
+  const { query, searchBarProps } = useHeaderSearch();
 
   const stations = searchMetroStations(stationsOnLine(line), query);
 

@@ -19,11 +19,23 @@ After changing native dependencies or configuration, regenerate with `npx expo p
 
 ## Feature changes
 
-1. Keep screens, hooks, and pure behavior in `src/features/<feature>/`; shared UI belongs in `src/components/`.
+1. Keep screens, hooks, and pure behavior in `src/features/<feature>/`. Build screens from the native UI kit in `src/ui` (see below); header buttons and menus use `src/components/header-actions`.
 2. Put routes in `src/app/`. Register destinations in `src/features/registry.ts` and screen mappings in `src/features/screens.tsx`.
 3. Toolbar features need `src/app/(tabs)/<feature>/` routes. At most four features accompany Home. Unselected features open through `/feature/[id]`.
 4. Use Zustand actions in `src/store/` with `src/lib/storage.ts` for persistence. Do not directly mutate arrays in screens.
-5. Reuse the existing Material 3 / SwiftUI controls, supporting dark mode, readable text, and accessibility labels.
+5. Use the kit's SwiftUI / Material 3 components for all interaction, supporting dark mode, readable text, and accessibility labels.
+
+## Building screens with the native UI kit
+
+The design spec is [docs/design/native-ui.md](docs/design/native-ui.md); the kit's contract is `src/ui/types.ts`.
+
+- Screens import components from `@/ui` only and are written once: a `ListScreen` contains only `Section`s, and a `Section` contains rows (`Row`, `CheckRow`, `ToggleRow`, `PickerRow`, `TextFieldRow`, `DateRow`, `ButtonRow`, `TextBlock`, `EmptyState`, `Notice`, `Loading`, `FilterChips`, `TileGrid`, `MonthCalendar`, `Embedded`). `MetricPills` and `CrowdBar` only go in `Row.footer`.
+- Never mix raw React Native or `@expo/ui` views into a kit tree; React Native content such as maps and images goes inside `Embedded`. Add a missing component to `types.ts` and implement it in all three kits: `kit.ios.tsx` (`src/ui/ios/`, SwiftUI), `kit.android.tsx` (`src/ui/android/`, Compose Material 3) and `kit.tsx` (the React Native version Jest and TypeScript use); each is checked with `satisfies Kit`.
+- Kit files hold no feature logic; shared logic goes in pure, tested modules under `src/features/*`.
+- Header actions use `HeaderActions`; modals use `formHeader` / `doneHeader` from `src/navigation/modal-header.ts`; search uses `src/navigation/use-header-search.ts`; retries use `src/hooks/use-refresh.ts`.
+- iOS keeps row actions in swipe actions and the long-press menu only, so a screen that relies on them adds an iOS-only hint to that Section's footer.
+- Copy: titles end without 。, messages with it; the action after a failure is 重試; shared phrases live in `src/lib/copy.ts`.
+- Every `@expo/ui` prop used must exist in `node_modules/@expo/ui/build/**/*.d.ts`.
 
 Calendar keys are local `YYYY-MM-DD`, handled through `src/lib/dates.ts`. Do not generate calendar dates or menu Mondays with `toISOString()`. Remote data needs validation, failure states, and a cache policy. Pause polling when it is unnecessary.
 
@@ -50,6 +62,8 @@ yarn lint
 ```
 
 Cover changes to dates, parsing, or state rules with meaningful regression tests. Place pure tests near their feature as `*.test.ts` and import `@jest/globals`. The current Jest suite does not require native UI startup.
+
+Also check that the Hermes bundles build with `npx expo export --platform ios` and `npx expo export --platform android` (with the output folder outside the repo).
 
 Verify affected flows on Android and iOS, including native inputs, sheets/dialogs, toolbar navigation, maps, offline behavior, and persistence after restart. Describe the problem, resulting behavior, validation, and untested limitations in the PR.
 

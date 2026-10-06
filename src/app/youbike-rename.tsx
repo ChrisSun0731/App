@@ -7,8 +7,8 @@ import { useState } from 'react';
 
 import { HeaderActions } from '@/components/header-actions';
 import { icons } from '@/components/icons';
-import { formHeader } from '@/features/todo/editor-header';
 import { CITIES, stationDisplayName } from '@/features/transport/youbike';
+import { doneHeader, formHeader } from '@/navigation/modal-header';
 import { useTransportStore } from '@/store/transport';
 import { EmptyState, ListScreen, Section, TextFieldRow } from '@/ui';
 
@@ -32,7 +32,8 @@ export default function YoubikeRename() {
 
   return (
     <>
-      <HeaderActions {...formHeader(close, save, follow !== undefined)} />
+      {/* Nothing to save once the station is gone, so no form chrome. */}
+      <HeaderActions {...(follow ? formHeader(close, save, true) : doneHeader(close))} />
       <ListScreen>
         {follow ? (
           <Section footer={`${follow.city} · ${stationDisplayName(follow.sna)}`}>

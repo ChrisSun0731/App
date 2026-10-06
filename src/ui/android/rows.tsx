@@ -36,7 +36,8 @@ import { useState } from 'react';
 import { icons } from '@/components/icons';
 import { isDateKey } from '@/lib/dates';
 
-import { overflowMenuLabel } from '../labels';
+import { withAlpha } from '../helpers';
+import { disabledLabel, overflowMenuLabel, spokenLabel } from '../labels';
 import type {
   ButtonRowProps,
   CheckRowProps,
@@ -51,18 +52,13 @@ import {
   dialogDateFromKey,
   dialogMinimumFromKey,
   formatDateLabel,
-  joinLabel,
   keyFromDialogDate,
-  withAlpha,
 } from './helpers';
-import { iconSource, TRANSPARENT, useInCard, useM3 } from './theme';
-
-/** Material's disabled-content opacity. */
-const DISABLED = 0.38;
+import { DISABLED_ALPHA, iconSource, TRANSPARENT, useInCard, useM3 } from './theme';
 
 /** ListItem colours for a row inside a card: no container of its own unless `background` is set. */
 function rowColors(m: MaterialColors, disabled: boolean, background?: string): ListItemColors {
-  const fade = (color: string) => (disabled ? withAlpha(color, DISABLED) : color);
+  const fade = (color: string) => (disabled ? withAlpha(color, DISABLED_ALPHA) : color);
   return {
     containerColor: background ?? TRANSPARENT,
     contentColor: fade(m.onSurface),
@@ -107,15 +103,17 @@ export function Row({
   const m = useM3();
   const [menuOpen, setMenuOpen] = useState(false);
   const hasActions = !!actions?.length;
-  const fade = (color: string) => (disabled ? withAlpha(color, DISABLED) : color);
+  const fade = (color: string) => (disabled ? withAlpha(color, DISABLED_ALPHA) : color);
   const titleColor = emphasized ? fade(m.primary) : undefined;
 
   // ListItem merges its descendants into one accessibility node. An explicit
   // description wins over the merged texts, so it lists everything the row
   // shows; inline footer elements add their own descriptions to it.
-  const label = accessibilityLabel ?? joinLabel([title, overline, subtitle, detail, badge]);
+  const label = accessibilityLabel ?? spokenLabel([title, overline, subtitle, detail, badge]);
   const modifiers = [
-    semantics({ contentDescription: label }),
+    // A disabled row only drops its click action, which TalkBack cannot tell
+    // from plain text, so the description says it is turned off.
+    semantics({ contentDescription: disabled && onPress ? disabledLabel(label) : label }),
     ...pressModifiers(disabled ? undefined : onPress, hasActions ? () => setMenuOpen(true) : undefined),
   ];
 
@@ -285,8 +283,8 @@ function OverflowMenu({
                 ? {
                     textColor: m.error,
                     leadingIconColor: m.error,
-                    disabledTextColor: withAlpha(m.error, DISABLED),
-                    disabledLeadingIconColor: withAlpha(m.error, DISABLED),
+                    disabledTextColor: withAlpha(m.error, DISABLED_ALPHA),
+                    disabledLeadingIconColor: withAlpha(m.error, DISABLED_ALPHA),
                   }
                 : undefined
             }
@@ -371,7 +369,7 @@ export function ToggleRow({ label, subtitle, icon, value, onValueChange, disable
         modifiers={disabled ? [] : [toggleable(value, () => onValueChange(!value), { role: 'switch' })]}>
         {icon ? (
           <ListItem.LeadingContent>
-            <Icon source={iconSource(icon)} size={24} tint={disabled ? withAlpha(m.primary, DISABLED) : m.primary} />
+            <Icon source={iconSource(icon)} size={24} tint={disabled ? withAlpha(m.primary, DISABLED_ALPHA) : m.primary} />
           </ListItem.LeadingContent>
         ) : null}
         <ListItem.HeadlineContent>
@@ -429,11 +427,15 @@ export function ButtonRow({ label, icon, role = 'default', prominent = false, di
 
   // A text-button-like row: the label and icon in the primary (or error)
   // colour, the whole row as the tap target.
-  const tint = disabled ? withAlpha(destructive ? m.error : m.primary, DISABLED) : destructive ? m.error : m.primary;
+  const tint = disabled ? withAlpha(destructive ? m.error : m.primary, DISABLED_ALPHA) : destructive ? m.error : m.primary;
   return (
     <>
       <RowDivider />
-      <ListItem colors={rowColors(m, disabled)} modifiers={disabled ? [] : [clickable(onPress)]}>
+      <ListItem
+        colors={rowColors(m, disabled)}
+        // Disabled, the row has no click action at all, so its description
+        // says why a double tap does nothing (iOS reads "dimmed" itself).
+        modifiers={disabled ? [semantics({ contentDescription: disabledLabel(label) })] : [clickable(onPress)]}>
         {icon ? (
           <ListItem.LeadingContent>
             <Icon source={iconSource(icon)} size={24} tint={tint} />

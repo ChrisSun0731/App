@@ -11,7 +11,7 @@ export default function NotFoundScreen() {
         <Section plain>
           <EmptyState
             icon={icons.help}
-            title="找不到這個頁面。"
+            title="找不到這個頁面"
             action={{ label: '回到首頁', onPress: () => router.replace('/') }}
           />
         </Section>

@@ -4,9 +4,8 @@
 // docs/design/native-ui.md, "美食 (Food)".
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ReactElement } from 'react';
-import { Alert, Linking } from 'react-native';
 
-import { HeaderActions, type HeaderActionsProps } from '@/components/header-actions';
+import { HeaderActions } from '@/components/header-actions';
 import { icons } from '@/components/icons';
 import {
   addressText,
@@ -17,35 +16,35 @@ import {
   weeklyHours,
 } from '@/features/food/food-view';
 import { useRestaurants } from '@/features/food/use-restaurants';
-import { useNow } from '@/features/home/use-now';
+import { useNow } from '@/hooks/use-now';
+import { useRefresh } from '@/hooks/use-refresh';
+import { RETRY } from '@/lib/copy';
+import { openExternal, openWebsite } from '@/lib/open-link';
+import { doneHeader } from '@/navigation/modal-header';
 import { useFoodStore } from '@/store/food';
 import { ButtonRow, EmptyState, ListScreen, Loading, Row, Section, TextBlock } from '@/ui';
 
 const ANDROID = process.env.EXPO_OS === 'android';
 
-/** The open status and today's mark tick while the modal is focused. */
-const CLOCK_INTERVAL_MS = 30_000;
-
 export default function RestaurantScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ name?: string }>();
-  const now = useNow(CLOCK_INTERVAL_MS);
+  // The open status and today's mark tick while the modal is focused.
+  const now = useNow();
   // The same query as 美食, so this is normally served from its cache.
   const restaurants = useRestaurants();
+  const retry = useRefresh(() => restaurants.refetch({ cancelRefetch: false }));
   const favorites = useFoodStore((state) => state.favorites);
   const toggleFavorite = useFoodStore((state) => state.toggleFavorite);
   const restaurant = findRestaurant(restaurants.data, typeof params.name === 'string' ? params.name : undefined);
 
   const close = () => router.back();
-  // Nothing to save (favourites apply at once): iOS has 完成 on the right of
-  // the page sheet, Android a close icon on the left of the full-screen modal.
-  const header: HeaderActionsProps = ANDROID
-    ? { left: [{ kind: 'icon', key: 'close', label: '關閉', icon: icons.close, onPress: close }] }
-    : { right: [{ kind: 'text', key: 'done', label: '完成', prominent: true, onPress: close }] };
+  // Nothing to save: favourites apply at once.
+  const header = doneHeader(close);
 
   if (!restaurant) {
     let placeholder: ReactElement;
-    if (restaurants.isPending) {
+    if (restaurants.isPending || retry.refreshing) {
       placeholder = (
         <Section>
           <Loading label="正在讀取餐廳資料…" />
@@ -58,7 +57,7 @@ export default function RestaurantScreen() {
             icon={icons.offline}
             title="無法讀取餐廳資料"
             description="請檢查網路後再試一次。"
-            action={{ label: '重新讀取', onPress: () => void restaurants.refetch() }}
+            action={{ label: RETRY, onPress: () => void retry.refresh() }}
           />
         </Section>
       );
@@ -103,8 +102,12 @@ export default function RestaurantScreen() {
             icon={favorite ? icons.favoriteFilled : icons.favorite}
             onPress={() => toggleFavorite(restaurant.name)}
           />
-          <ButtonRow label="在地圖開啟位置" icon={icons.map} onPress={() => void openLink(mapsUrl(restaurant.position))} />
-          {website ? <ButtonRow label="餐廳網站" icon={icons.web} onPress={() => void openLink(website)} /> : null}
+          <ButtonRow
+            label="在地圖開啟位置"
+            icon={icons.map}
+            onPress={() => void openExternal(mapsUrl(restaurant.position))}
+          />
+          {website ? <ButtonRow label="餐廳網站" icon={icons.web} onPress={() => void openWebsite(website)} /> : null}
         </Section>
 
         <Section title="營業時間">
@@ -125,12 +128,4 @@ export default function RestaurantScreen() {
       </ListScreen>
     </>
   );
-}
-
-async function openLink(url: string) {
-  try {
-    await Linking.openURL(url);
-  } catch {
-    Alert.alert('無法開啟連結', '請稍後再試一次。');
-  }
 }

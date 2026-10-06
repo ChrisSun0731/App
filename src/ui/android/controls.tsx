@@ -30,7 +30,7 @@ import { iconSource, useContentWidth, useInCard, useM3 } from './theme';
 // the menu's read-only text field is written from `value` only. So when the
 // parent does not adopt a choice (e.g. a declined confirmation alert), nothing
 // re-renders and the control keeps showing `value` — the contract that iOS
-// needs useConfirmedPicker's remount for holds here without one.
+// needs useSnapBack (ui/ios/use-snap-back.ts) for holds here without one.
 
 export function PickerRow<T extends string>(props: PickerRowProps<T>): ReactNode {
   return props.variant === 'segmented' ? <SegmentedPicker {...props} /> : <MenuPicker {...props} />;

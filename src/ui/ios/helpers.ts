@@ -18,13 +18,6 @@ export function sf(icon: IconValue | undefined): SFSymbol | undefined {
   return typeof icon === 'string' && icon.length > 0 ? icon : undefined;
 }
 
-/** One VoiceOver phrase from visible texts in reading order; blanks are skipped. */
-export function spokenLabel(parts: readonly (string | false | null | undefined)[]): string {
-  return parts
-    .filter((part): part is string => typeof part === 'string' && part.trim() !== '')
-    .join('，');
-}
-
 /**
  * What VoiceOver should read for kit inline elements in `Row.footer`: a
  * CrowdBar's own label, a MetricPills' metric labels, or plain text. The row
@@ -72,16 +65,6 @@ export function trailingSwipeActions(actions: readonly RowAction[]): RowAction[]
   return [...destructive, ...others].slice(0, MAX_SWIPE_ACTIONS);
 }
 
-/** Splits `items` into rows of `size` (the last row may be shorter). */
-export function chunk<T>(items: readonly T[], size: number): T[][] {
-  const width = Math.max(1, Math.floor(size));
-  const rows: T[][] = [];
-  for (let index = 0; index < items.length; index += width) {
-    rows.push(items.slice(index, index + width));
-  }
-  return rows;
-}
-
 /** The major iOS version from `Platform.Version` ("17.4" -> 17). */
 export function iosMajorVersion(version: string | number): number {
   const major = Number.parseInt(String(version), 10);
@@ -123,15 +106,4 @@ const ACCESSIBILITY_FONT_SCALE = 1.75;
  */
 export function isAccessibilityTextSize(fontScale: number): boolean {
   return fontScale >= ACCESSIBILITY_FONT_SCALE;
-}
-
-/**
- * A "#RRGGBB" colour at `alpha` (0–1) as "#RRGGBBAA", which @expo/ui's colour
- * parser reads CSS-style. Anything else (a named or platform colour) is
- * returned unchanged.
- */
-export function withAlpha(color: string, alpha: number): string {
-  if (!/^#[0-9a-f]{6}$/i.test(color)) return color;
-  const value = Math.round(Math.min(1, Math.max(0, alpha)) * 255);
-  return `${color}${value.toString(16).padStart(2, '0')}`.toUpperCase();
 }

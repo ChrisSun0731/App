@@ -1,7 +1,8 @@
-// Header buttons of the 行事曆 modal routes (docs/design/native-ui.md,
-// "Navigation chrome"): an iOS page sheet has 取消 on the left and a bold
-// 儲存/完成 on the right; an Android full-screen modal has a close icon on
-// the left and a 儲存 text button on the right.
+// Header buttons of every modal route (the editors, pickers, /categories and
+// /restaurant; docs/design/native-ui.md, "Navigation chrome"): an iOS page
+// sheet has 取消 on the left and a bold 儲存/完成 on the right; an Android
+// full-screen modal has a close icon on the left and a 儲存 text button on the
+// right.
 import type { HeaderActionsProps } from '@/components/header-actions';
 import { icons } from '@/components/icons';
 
@@ -20,8 +21,9 @@ export function formHeader(onCancel: () => void, onSave: () => void, canSave: bo
 }
 
 /**
- * A modal with nothing to save (changes apply at once, or it is read-only):
- * iOS 完成 on the right, Android the close icon.
+ * A modal with nothing to save (changes apply at once, it is read-only, or
+ * what it would edit is missing): iOS 完成 on the right, Android the close
+ * icon.
  */
 export function doneHeader(onDone: () => void): HeaderActionsProps {
   return ANDROID

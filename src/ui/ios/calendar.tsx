@@ -23,9 +23,9 @@ import {
 
 import { usePalette } from '@/theme/palette';
 
+import { chunk } from '../helpers';
 import { CALENDAR_CELL_INDICATORS, type CalendarCell, type CalendarIndicator, type MonthCalendarProps } from '../types';
 import { primaryText, secondaryText, tertiaryText, useRowChrome } from './chrome';
-import { chunk } from './helpers';
 
 const INDICATOR_SIZE = 5;
 const INDICATOR_SPACING = 2;

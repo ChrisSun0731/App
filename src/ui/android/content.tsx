@@ -33,6 +33,8 @@ import { Platform, ToastAndroid, useWindowDimensions, View } from 'react-native'
 
 import { icons } from '@/components/icons';
 
+import { chunk, withAlpha } from '../helpers';
+import { spokenLabel } from '../labels';
 import type {
   CrowdBarProps,
   EmbeddedProps,
@@ -43,7 +45,7 @@ import type {
   TextBlockProps,
   TileGridProps,
 } from '../types';
-import { chunk, joinLabel, labelWidth, withAlpha } from './helpers';
+import { labelWidth } from './helpers';
 import { CARD_RADIUS, iconSource, roundedShape, useContentWidth, useInCard, useM3 } from './theme';
 
 /** Copies `text`, confirming with a toast where the system does not (before Android 13). */
@@ -258,7 +260,7 @@ export function MetricPills({ metrics }: MetricPillsProps) {
       verticalArrangement={{ spacedBy: 6 }}
       // The row reads as one element with an explicit description, which
       // replaces merged texts, so the pills describe themselves too.
-      modifiers={[semantics({ contentDescription: joinLabel(metrics.map((metric) => metric.label)) })]}>
+      modifiers={[semantics({ contentDescription: spokenLabel(metrics.map((metric) => metric.label)) })]}>
       {metrics.map((metric) => (
         <Row
           key={metric.key}

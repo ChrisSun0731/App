@@ -83,7 +83,7 @@ describe('YouBike rows', () => {
     expect(followedStationView(follow, station(), { isPending: false, isError: true }).subtitle)
       .toBe('臺北市 · 植物園\n更新失敗，顯示上次取得的資訊。\n站點更新 09:39:03');
     expect(followedStationView(follow, undefined, { isPending: false, isError: true }).subtitle)
-      .toBe('臺北市 · 植物園\n更新失敗，請下拉重試。');
+      .toBe('臺北市 · 植物園\n更新失敗，下拉可重試。');
     expect(followedStationView(follow, undefined, LOADED)).toEqual({
       subtitle: '臺北市 · 植物園\n此站點目前沒有回報資料。',
       showCounts: true,

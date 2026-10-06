@@ -2,7 +2,7 @@
 // This fallback only exists so TypeScript and Jest can resolve the module.
 import { useColorScheme } from 'react-native';
 
-import { BRAND } from './brand';
+import { BRAND, BRAND_DARK } from './brand';
 import type { Palette } from './palette';
 
 export function usePalette(): Palette {
@@ -15,7 +15,7 @@ export function usePalette(): Palette {
     textSecondary: dark ? '#EBEBF599' : '#3C3C4399',
     textTertiary: dark ? '#EBEBF54D' : '#3C3C434D',
     separator: dark ? '#54545899' : '#3C3C434A',
-    tint: dark ? '#8EAEFF' : BRAND,
+    tint: dark ? BRAND_DARK : BRAND,
     onTint: dark ? '#001A4D' : '#FFFFFF',
     tintContainer: dark ? '#1B2A4A' : '#E6ECFA',
     onTintContainer: dark ? '#D7E2FF' : '#0B2A6B',

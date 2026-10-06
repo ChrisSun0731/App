@@ -2,33 +2,17 @@ import { describe, expect, test } from '@jest/globals';
 import { createElement, Fragment, type ReactElement } from 'react';
 
 import {
-  chunk,
   dialogDateFromKey,
   dialogMinimumFromKey,
   flattenChildren,
   formatDateLabel,
-  joinLabel,
   keyFromDialogDate,
   labelWidth,
   segmentsFit,
   slotDividers,
-  withAlpha,
 } from './helpers';
 
 describe('Compose kit helpers', () => {
-  test('applies alpha to #RRGGBB and multiplies an existing alpha', () => {
-    expect(withAlpha('#03328d', 1)).toBe('#03328DFF');
-    expect(withAlpha('#03328D', 0.5)).toBe('#03328D80');
-    expect(withAlpha('#1B1B21FF', 0.38)).toBe('#1B1B2161');
-    expect(withAlpha('#00000080', 0.5)).toBe('#00000040');
-    expect(withAlpha('red', 0.5)).toBe('red');
-  });
-
-  test('joins the non-empty parts of a spoken row label', () => {
-    expect(joinLabel(['國文', undefined, '第一節 · 08:10', '', false, '目前'])).toBe('國文，第一節 · 08:10，目前');
-    expect(joinLabel([])).toBe('');
-  });
-
   test('formats a local date key with its weekday', () => {
     expect(formatDateLabel('2026-10-04')).toBe('2026年10月4日 星期日');
     expect(formatDateLabel('2027-01-01')).toBe('2027年1月1日 星期五');
@@ -90,12 +74,6 @@ describe('Compose kit helpers', () => {
       { rowsDraw: true, maskFirst: false },
     ]);
     expect(slotDividers([])).toEqual([]);
-  });
-
-  test('chunks items into rows', () => {
-    expect(chunk([1, 2, 3, 4, 5, 6, 7], 3)).toEqual([[1, 2, 3], [4, 5, 6], [7]]);
-    expect(chunk([], 3)).toEqual([]);
-    expect(chunk([1, 2], 0)).toEqual([[1], [2]]);
   });
 
   test('flattens fragments into uniquely keyed rows and drops non-elements', () => {

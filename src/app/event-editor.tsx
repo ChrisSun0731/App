@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 
 import { HeaderActions } from '@/components/header-actions';
 import { icons } from '@/components/icons';
-import { doneHeader, formHeader } from '@/features/todo/editor-header';
+import { doneHeader, formHeader } from '@/navigation/modal-header';
 import { useEventEditor } from '@/features/todo/use-event-editor';
 import { formatFullDate, fromDateKey, isDateKey } from '@/lib/dates';
 import {
@@ -37,7 +37,12 @@ export default function EventEditor() {
         <HeaderActions {...doneHeader(editor.close)} />
         <ListScreen>
           <Section plain>
-            <EmptyState icon={icons.help} title="找不到此活動" description="請返回行事曆。" />
+            <EmptyState
+              icon={icons.help}
+              title="找不到此活動"
+              description="請返回行事曆。"
+              action={{ label: '返回行事曆', onPress: editor.close }}
+            />
           </Section>
         </ListScreen>
       </>
@@ -85,7 +90,7 @@ export default function EventEditor() {
           />
           {/* Only an imported event can end before it starts: moving the
               start moves the end along, and the end picker stops at the start. */}
-          {editor.validDates ? null : <Notice tone="error" title="結束日期不能早於起始日期。" />}
+          {editor.validDates ? null : <Notice tone="error" title="結束日期不能早於起始日期" />}
         </Section>
 
         <Section>

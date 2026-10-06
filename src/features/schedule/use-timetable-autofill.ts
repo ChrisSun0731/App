@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 
-import type { Timetables } from '@/features/schedule/timetable';
+import { timetableToAutofill } from '@/features/home/today';
 import { useScheduleStore } from '@/store/schedule';
 
-import { timetableToAutofill } from './today';
+import type { Timetables } from './timetable';
 
 /**
  * Fills an empty timetable with the user's class timetable once the class

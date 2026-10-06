@@ -4,7 +4,7 @@
 
 CK APP was created in 2024 by CK students Kimi and Diego to help students manage schedules and tasks, check transport, and find nearby food.
 
-The app now uses **React Native, TypeScript, and Expo SDK 57**. Android interactive controls use Material 3 / Jetpack Compose; iOS uses SwiftUI controls and native navigation. Screen logic and layout are shared through React Native. The current package version is **4.0.0**; `app.config.ts` resolves the app version and build number.
+The app now uses **React Native, TypeScript, and Expo SDK 57**. Every screen is built from native UI components: SwiftUI on iOS (inset-grouped lists, swipe actions, context menus, navigation-bar buttons) and Material 3 / Jetpack Compose on Android (section cards, list items, overflow menus, FABs). Each screen is written once against the kit in `src/ui`, which renders it natively on each platform; data, state and screen logic are shared TypeScript. The current package version is **4.0.0**; `app.config.ts` resolves the app version and build number.
 
 ## Features
 
@@ -27,14 +27,16 @@ The app now uses **React Native, TypeScript, and Expo SDK 57**. Android interact
 | `src/app/`                      | Expo Router routes, native stacks, and feature tabs                  |
 | `src/features/`                 | Feature screens, data transforms, and hooks                          |
 | `src/features/registry.ts`      | Home destinations and available toolbar features                     |
-| `src/components/ui/`            | Shared Material 3 / SwiftUI interactive controls                     |
-| `src/theme/`, `src/navigation/` | Platform colors, dark mode, and native navigation                    |
+| `src/ui/`                       | Native UI kit: the `types.ts` contract, implemented with SwiftUI on iOS and Compose Material 3 on Android (spec: [docs/design/native-ui.md](docs/design/native-ui.md)) |
+| `src/components/`               | Header buttons and menus (`header-actions`) and the icon table       |
+| `src/theme/`, `src/navigation/` | Platform colors, dark mode, native navigation, modal headers, and header search |
+| `src/hooks/`                    | Shared hooks: the minute clock and retry progress                    |
 | `src/store/`                    | Zustand state persisted through Expo SQLite                          |
-| `src/lib/`                      | HTTP timeouts, validated remote data/cache, date and storage helpers |
+| `src/lib/`                      | HTTP timeouts, validated remote data/cache, dates, storage, link opening, and shared copy |
 | `assets/`                       | App icons, splash images, and other static assets                    |
 | `app.config.ts`                 | App identity, versions, native configuration, and environment inputs |
 | `.github/workflows/`            | Native builds, signing, and testing-track uploads                    |
-| `tools/`, `docs/`               | Data utilities and historical decision records                       |
+| `tools/`, `docs/`               | Data utilities, the design spec (`docs/design/`), progress, and historical decision records |
 
 Timetables, restaurants, the school calendar, and cafeteria menus come from the [Data repository](https://github.com/CKApp-Dev/Data). JSON is validated before caching; failed refreshes keep the last saved content. Menu filenames use the local Monday and weekday, such as `menus/2026-10-05_4.png`.
 
@@ -84,7 +86,7 @@ yarn test --runInBand
 yarn lint
 ```
 
-Jest covers pure date, timetable, calendar, restaurant-hours, RSS, and transport behavior. Also verify input, tab navigation, sheets, maps, offline caching, and persistence after restarting on both platforms.
+Jest covers pure date, timetable, calendar, restaurant-hours, RSS, and transport behavior, and the UI kit's pure helpers. Before a release, also check that the Hermes bundles build with `npx expo export --platform ios` and `--platform android`. Tests do not replace native checks: verify input, tab navigation, sheets, maps, offline caching, and persistence after restarting on both platforms; the native UI redesign's outstanding on-device checks are listed in [docs/native-rewrite-progress.md](docs/native-rewrite-progress.md).
 
 ## Releases and signing
 

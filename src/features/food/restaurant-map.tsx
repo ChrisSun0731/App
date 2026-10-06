@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 
+import { MAP_AVAILABLE } from '@/lib/map-availability';
+
 import { STATUS_COLORS } from './food-view';
-import { MAP_AVAILABLE } from './map-availability';
 import { getOpenStatus, STATUS_LABELS } from './opening-hours';
 import type { RestaurantMapProps } from './restaurant-map.types';
 

@@ -23,7 +23,7 @@ import {
   type ScheduleCell,
 } from '@/features/schedule/timetable';
 import { useTimetables } from '@/features/schedule/use-timetables';
-import { doneHeader, formHeader } from '@/features/todo/editor-header';
+import { doneHeader, formHeader } from '@/navigation/modal-header';
 import { useScheduleStore } from '@/store/schedule';
 import { usePalette } from '@/theme/palette';
 import { EmptyState, ListScreen, PickerRow, Row, Section, TextFieldRow, ToggleRow } from '@/ui';

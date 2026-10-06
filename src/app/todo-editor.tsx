@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 
 import { HeaderActions } from '@/components/header-actions';
 import { icons } from '@/components/icons';
-import { doneHeader, formHeader } from '@/features/todo/editor-header';
+import { doneHeader, formHeader } from '@/navigation/modal-header';
 import { useTodoEditor } from '@/features/todo/use-todo-editor';
 import {
   ButtonRow,
@@ -28,7 +28,13 @@ export default function TodoEditor() {
         <HeaderActions {...doneHeader(editor.close)} />
         <ListScreen>
           <Section plain>
-            <EmptyState icon={icons.help} title="找不到此待辦" description="請返回列表。" />
+            {/* Opened from 行事曆 or 首頁, so the action names neither. */}
+            <EmptyState
+              icon={icons.help}
+              title="找不到此待辦"
+              description="請返回列表。"
+              action={{ label: '返回', onPress: editor.close }}
+            />
           </Section>
         </ListScreen>
       </>

@@ -1,6 +1,9 @@
 # Native UI redesign: SwiftUI on iOS, Material 3 on Android
 
-Status: design spec for the 2026-10 redesign of CK APP's React Native screens.
+Status: design spec for the 2026-10 redesign of CK APP's React Native screens,
+built on every screen. Where the build deliberately differs from the first
+draft, the section says so ("as built"). Progress and the outstanding
+on-device checks are in `docs/native-rewrite-progress.md`.
 
 ## Why
 
@@ -26,12 +29,21 @@ all copy but renders each screen with the platform's own components:
 src/ui/
   types.ts                 the kit contract (shared by both platforms)
   index.ts                 re-exports `./kit` (platform-resolved) and types
-  kit.ios.tsx              SwiftUI implementation
-  kit.android.tsx          Compose Material 3 implementation
+  kit.ios.tsx              SwiftUI kit: assembles the components in ios/
+  ios/*.tsx                list, rows, inputs, blocks, inline, calendar;
+                           chrome.ts (row colours), helpers.ts (pure, tested),
+                           use-snap-back.ts (pickers always show `value`)
+  kit.android.tsx          Compose Material 3 kit: assembles android/
+  android/*.tsx            screen (ListScreen, Section), rows, controls,
+                           content, calendar, divider; theme.ts, helpers.ts
   kit.tsx                  fallback (web/tests) — plain React Native views
-  labels.ts                shared spoken labels (e.g. 「<row>」的更多選項)
+  helpers.ts               platform-neutral pure helpers (withAlpha, chunk)
+  labels.ts                shared spoken labels (row phrase, 已停用,
+                           「<row>」的更多選項)
   use-synced-text.ts       shared helper: native text state <-> React state
-  ios/use-snap-back.ts     SwiftUI pickers always show `value`
+src/components/header-actions.{ios,android,web}.tsx   header buttons/menus
+src/navigation/modal-header.ts      formHeader / doneHeader for modal routes
+src/navigation/use-header-search.ts the header search field's props and query
 ```
 
 Screens are written **once** against the kit (`import { ListScreen, Section,
@@ -52,11 +64,19 @@ Row states the kits share:
 - Android's overflow button is spoken as `「<title>」的更多選項`, so TalkBack can
   tell rows apart (the fallback kit does the same). iOS has no visible
   trigger: the actions live in the swipe actions and long-press menu of a row
-  that VoiceOver reads by its title.
+  that VoiceOver reads by its title. So a screen whose rows rely on them adds
+  an iOS-only footer hint (交通 左滑或長按站點即可…, 校網 右滑或長按消息即可釘選，
+  長按可分享。, 類別管理, 設定); a row whose actions are also reachable another
+  way (行事曆's items open an editor with 刪除) needs none.
+- A disabled row or `ButtonRow` is spoken as turned off: iOS says "dimmed"
+  through `.disabled`; Android, whose row only drops its click action,
+  appends 已停用 to the description (`disabledLabel`).
 - `ListScreen.refreshing` shows refresh progress the screen started itself
   (a header 重新整理 button). Android and the fallback show pull to refresh's
-  own indicator; SwiftUI cannot start `refreshable`'s spinner from code, so
-  iOS shows a spinner row above the first section while no pull is running.
+  own indicator. SwiftUI cannot start `refreshable`'s spinner from code, and
+  a spinner row inserted above the first section made the list jump (List
+  keeps its offset when a section appears above the visible rows), so iOS
+  draws nothing for it: the header button gets `busy` and becomes a spinner.
 - `MonthCalendar` draws at most `CALENDAR_CELL_INDICATORS` (3, from
   `@/ui/types`) indicators per day on every platform; callers pick which ones
   (行事曆 keeps a slot for the todo square).
@@ -88,18 +108,64 @@ unit-tested). Platform kit files must not contain feature logic.
   for the submenu's, under a back item. Selected actions get a checkmark
   (`isOn` on iOS, a leading check on Android, where every item of a menu keeps
   the leading slot once one has an icon or check, so labels line up).
-- Disabled header icons and menu triggers are greyed on both platforms (iOS
-  by UIKit; Android in Material's disabled colour, onSurface at 38%).
+- Disabled header icons, menu triggers and menu actions (`disabled`, e.g.
+  校網's 已讀所有訊息 with nothing unread) are greyed on both platforms (iOS by
+  UIKit; Android in Material's disabled colour, onSurface at 38%). An icon
+  item with `busy` (交通's refresh while it runs) is disabled and, on iOS,
+  drawn as a spinner in its place.
+- Android's header Host is seeded with `BRAND` like ListScreen's, so text
+  buttons (儲存, 本週) and dropdown menus use the CK navy palette.
+- Web (not a shipped platform; `app.config.ts` builds iOS and Android) keeps
+  thin `.web.tsx` stand-ins so the bundle stays valid: header menus become
+  plain buttons, submenus are left out (the screen's own picker covers them)
+  and selected actions get a ✓.
 - Search uses the native header search bar (`Stack.SearchBar`), not an
-  in-content text field.
+  in-content text field, set up by `useHeaderSearch` (src/navigation) on
+  美食, 校網 and both station pickers: always visible, no dimming, cleared by
+  取消 / collapse, Android colours from the palette.
 - Editors (`/todo-editor`, `/event-editor`, `/schedule-editor`, new
   `/categories`, `/youbike-picker`, `/metro-picker`, `/youbike-rename`,
   `/restaurant`) are modal routes: iOS page sheet with 取消 (left) and a
   prominent 儲存/完成 (right) in the navigation bar; Android full-screen modal
   with a close icon (left) and a 儲存 text button (right). Destructive actions
-  are a `ButtonRow role="destructive"` in the last section.
+  are a `ButtonRow role="destructive"` in the last section. As built, every
+  modal takes its header from `src/navigation/modal-header.ts`: `formHeader`
+  for a form, `doneHeader` when there is nothing to save, including a
+  not-found state, whose `EmptyState` also offers a 返回… action.
 - Confirmations keep `Alert.alert` (native UIAlertController / Material
   dialog).
+- Links (`src/lib/open-link.ts`): a page to read (announcements on 校網 and
+  首頁, 餐廳網站, 特約, 關於) opens in the in-app browser (`openWebsite`); 在瀏覽器開啟
+  buttons (熱食部, 紀念品), maps and mail leave the app (`openExternal`,
+  `openEmail`). Failures share one alert message, 請稍後再試一次。
+
+### Loading, errors and retry
+
+- A failed load is a `Notice` (data still shown) or an `EmptyState` in a
+  plain Section (nothing to show), with a 重試 action.
+- 重試 joins a fetch already running (`refetch({ cancelRefetch: false })`)
+  and, through `useRefresh` (src/hooks), swaps the notice or empty state for
+  a `Loading` row until it settles, as React Query keeps the error until a
+  fetch succeeds. 課表 derives the same from `isFetching`
+  (`scheduleLoadState`); 校網 uses it for 重新整理 too; 交通's Metro notice
+  calls the screen's own refresh, so its header progress shows.
+
+### Copy
+
+All copy stays as before the redesign, except where a section notes it and
+these conventions, applied across screens (`src/lib/copy.ts` holds the shared
+phrases):
+
+- The action after a failure is 重試 (it was 重新讀取 / 重新載入 on some
+  screens). 熱食部's 重新讀取菜單 and 課表's empty-state 重新整理 stay: neither is
+  only a retry.
+- A notice that can also be cleared by pulling says 下拉可重試。 (it was
+  可下拉重試。 / 請下拉重試。 on some screens).
+- Notice and EmptyState titles end without 。; messages, descriptions and
+  helper text (`TextBlock`) end with it.
+- Changing class asks the same question everywhere (設定 and 課表's picker and
+  menu): title 更改班級, message `改為 {class} 班會清除目前課表的修改。`, a
+  destructive 更改.
 
 ### Theme
 
@@ -123,7 +189,7 @@ only signal (status text accompanies dots; crowding has a text summary).
 
 | Component | iOS (SwiftUI) | Android (Compose M3) |
 |---|---|---|
-| `ListScreen` | `Host{flex:1}` › `List` + `listStyle('insetGrouped')` + `refreshable` | `Host{flex:1}` › `PullToRefreshBox` › `LazyColumn` (16dp gutters, 16dp spacing, safe-area bottom padding) + optional `ExtendedFloatingActionButton` overlay |
+| `ListScreen` | `Host{flex:1}` › `List` + `listStyle('insetGrouped')` + `refreshable` | `Host{flex:1}` › `PullToRefreshBox` › `LazyColumn` (16dp gutters, 16dp spacing) + optional `ExtendedFloatingActionButton` overlay; bottom padding, FAB and keyboard padding count only the part of the navigation bar and keyboard that covers the screen (a tab already ends at the bottom navigation bar, measured against the safe-area frame) |
 | `Section` | `Section title footer`; `plain` → clear row backgrounds | header `Text` (titleSmall, primary) + `Card` (surfaceContainerLow) of rows with dividers + footer `Text` (bodySmall); `plain` → rows without the card |
 | `Row` | `Button` (plain) / static `HStack`: leading SF Symbol or dot, title/subtitle `VStack`, trailing detail/badge/accessory; `SwipeActions` + `ContextMenu` for `actions`; leading swipe for `toggle`; `listRowBackground` for `background` | `ListItem` with Headline/Supporting/Overline/Leading/Trailing slots, `clickable`, `containerColor` for `background`; trailing `IconButton` for `toggle`, overflow `DropdownMenu` for `actions` |
 | `CheckRow` | Reminders-style circle / `checkmark.circle.fill` button + title; tap row body to edit | `ListItem` with leading `Checkbox` |
@@ -134,11 +200,11 @@ only signal (status text accompanies dots; crowding has a text summary).
 | `DateRow` | `DatePicker displayedComponents={['date']}` (compact) | `ListItem` showing the date › `DatePickerDialog` |
 | `ButtonRow` | `Button` (role, systemImage); `prominent` → `borderedProminent` | `ListItem` clickable in primary/error colour; `prominent` → filled `Button` |
 | `TextBlock` | `Text` | `Text` bodyMedium |
-| `EmptyState` | `ContentUnavailableView` on iOS 17+, `VStack` fallback on 16.x | centred `Column`: 48dp icon, titleMedium, bodyMedium, `TextButton` |
-| `Notice` | `Label` with warning/info symbol + text, optional button | tonal `Card` (errorContainer / secondaryContainer) |
-| `Loading` | `ProgressView` + label | `LinearProgressIndicator`/`CircularProgressIndicator` + label |
+| `EmptyState` | `ContentUnavailableView` on iOS 17+, `VStack` fallback on 16.x | centred `Column`: 48dp icon, titleMedium, bodyMedium, `OutlinedButton` (+ `TextButton` for the secondary action) |
+| `Notice` | `Label` with warning/info symbol + text, optional button | tonal `Surface` (errorContainer / secondaryContainer) with a `TextButton` |
+| `Loading` | `ProgressView` + label | Material 3 Expressive `LoadingIndicator` + label |
 | `FilterChips` | horizontal `ScrollView` of capsule `Button`s (bordered / borderedProminent) | `FlowRow` of `FilterChip`s |
-| `TileGrid` | `Grid` of tiles (`Image` + `Text`) | rows of clickable `Card` tiles (`Icon` + `Text`) |
+| `TileGrid` | `Grid` of tiles (`Image` + `Text`) | rows of clickable `Surface` tiles (`Icon` + `Text`) |
 | `MonthCalendar` | `Grid` 7×6 day cells with dots, weekday header | `Column` of `Row`s, `Box` cells (`weight(1f)`), dots |
 | `MetricPills` | `HStack` of `Label`s with coloured symbols | `Row` of `AssistChip`-like pills |
 | `CrowdBar` | `HStack` of `Capsule`s | `Row` of rounded `Box`es |
@@ -158,9 +224,10 @@ remote data.
 - Section "功能" — `TileGrid` of all nine features (SF Symbol / Material
   Symbol + title).
 - Section "今日待辦事項" (widget toggle) — `CheckRow`s, empty →
-  `TextBlock secondary` 今天沒有待辦事項; `ButtonRow` 查看行事曆.
+  `TextBlock secondary` 今天沒有待辦事項。; `ButtonRow` 查看行事曆.
 - Section "釘選校網內容" (widget toggle) — `Row` per pin (title, date
-  subtitle, external accessory) opening the link; `ButtonRow` 查看校網.
+  subtitle, external accessory) opening the link in the in-app browser, as
+  校網 does; empty → 尚無釘選內容。; `ButtonRow` 查看校網.
 
 ### 課表 (Schedule)
 - Header: menu with a 選擇班級 submenu (every class, the current one checked;
@@ -168,14 +235,17 @@ remote data.
   leaves the check unchanged when declined) and 重新匯入課表, once the
   timetables have loaded.
 - Section (no title) — segmented `PickerRow` 一 二 三 四 五 (defaults to today).
-- Section titled `星期X` with footer `{academicYear} · 第N週 · 單/雙週`
-  — one `Row` per period: overline `第一節 · 08:10`, title = subject or 空堂,
+- Section titled `星期X · {class} 班` (as built: the 班級 section is below
+  the fold) with footer `{academicYear} · 第N週 · 單/雙週` and, on a second
+  line, the hint — one `Row` per period: overline `第一節 · 08:10`, title = subject or 空堂,
   subtitle = `單週：A　雙週：B` and/or note, `background` = cell colour,
   `emphasized` + badge 目前 for the period in session, chevron → editor.
 - Section "班級" — menu `PickerRow` (keeps the confirm-on-change Alert and
   the phase-1 revert behaviour) + `ButtonRow` 重新匯入課表.
-- Footer hint 點選課程可修改科目、備註與顏色。
-- Loading/error: `Loading` / `Notice` blocks.
+- Footer hint 點選課程可修改科目、單雙週輪替、備註與顏色。 (as built: the
+  wording before the redesign, which names 單雙週輪替).
+- Loading/error: `Loading` / `Notice` blocks; 重試 and 重新整理 show the
+  `Loading` row while any fetch runs (`scheduleLoadState`).
 
 ### 編輯課程 (/schedule-editor, modal)
 - Header 取消 / 儲存.
@@ -199,7 +269,12 @@ remote data.
   `ButtonRow` 管理待辦類別 (→ `/categories?kind=todo`); then one Section per
   date group (title = date + weekday; overdue groups get footer 已過期);
   `CheckRow` per todo (subtitle category; tap edits; actions 刪除). Footer
-  勾選待辦即完成並移除。
+  勾選待辦即完成並移除。 No todos → `EmptyState` 目前沒有待辦事項 in a plain
+  Section (as built; the header + and Android's FAB add one).
+- The 今天 marks, the day title and the 已過期 groups follow the screen's
+  clock (`useNow`), so they move on at midnight while the screen is open.
+- School 行事曆 failure → `Notice` 學校行事曆暫時無法更新 / 下拉可重試。 with
+  重試.
 
 ### 待辦 / 活動 editors (modal)
 - Header 取消 / 儲存 (disabled until valid).
@@ -220,8 +295,9 @@ remote data.
   existing hints.
 
 ### 交通 (Transport)
-- Header: refresh icon (greyed while a refresh runs, with progress shown via
-  `ListScreen.refreshing`); `+` menu (YouBike 站點 / 捷運車站); Android FAB
+- Header: refresh icon (`busy` while a refresh runs: a spinner in its place
+  on iOS, greyed on Android, where `ListScreen.refreshing` shows the pull
+  indicator); `+` menu (YouBike 站點 / 捷運車站); Android FAB
   新增站點 opens the same choice (menu on the header is enough; FAB → YouBike
   picker).
 - Section "YouBike 站點" (footer: 約每 10 秒更新 · 站點更新 HH:MM:SS): one
@@ -245,29 +321,40 @@ remote data.
 - `/youbike-rename?city&sna` (modal): `TextFieldRow` 暱稱, Header 取消/儲存.
 
 ### 美食 (Food)
-- Header: map/list toggle icon, 隨機選擇 (shuffle) icon, filter menu with
-  toggles 正在營業 / 我的最愛 (iOS menu with checkmarks; Android same menu
-  with checks). `Stack.SearchBar` 搜尋餐廳.
-- Android also shows `FilterChips` (正在營業, 我的最愛) at the top; iOS shows
-  them in the header menu only.
-- Map mode: Section with `Embedded` `RestaurantMap` (≈ 60% screen height),
-  footer legend; then the list section below.
+- Header: map/list toggle icon, 隨機選擇 (shuffle) icon, and on iOS a filter
+  menu with toggles 正在營業 / 我的最愛 (checkmarks). `Stack.SearchBar` 搜尋餐廳.
+- As built, each platform has one filter control: Android shows
+  `FilterChips` (正在營業, 我的最愛) at the top of the list and no header menu
+  (a copy in the top app bar would only repeat them). iOS hides the
+  navigation bar while searching, so its list title names the filters in use
+  (`3 間餐廳 · 篩選：正在營業`).
+- Map mode: Section with `Embedded` `RestaurantMap`, footer legend; then the
+  list section below. As built, the map takes about half of the list's
+  visible height (the window less the header with its search field and the
+  bottom inset), always leaving the legend, the list header and a row in view
+  (`mapHeight`): a drag on the map pans it, so the list must stay reachable.
 - List: Section `{n} 間餐廳`: `Row` per restaurant — leading status dot,
   title name, subtitle `正在營業 · 今日 06:00-14:00、16:30-19:30`, `toggle`
   favourite (heart / heart.fill), chevron → `/restaurant?name=`.
 - `/restaurant?name=` (modal): Section header block (name, status), Section
   actions (加入/移除最愛, 在地圖開啟位置, 餐廳網站), Section "營業時間": `Row`
   per day (title 星期一, detail hours; today emphasized with badge 今天).
-  Random choice opens this route for the chosen restaurant.
+  Random choice opens this route for the chosen restaurant. 在地圖開啟位置
+  leaves for the maps app; 餐廳網站 opens in the in-app browser.
 
 ### 校網 (News)
-- Header: menu 已讀所有訊息 / 恢復已讀訊息 / 重新整理. `Stack.SearchBar`
-  搜尋消息.
+- Header: menu 已讀所有訊息 / 恢復已讀訊息 / 重新整理; the first two are greyed
+  when there is nothing to mark or restore. `Stack.SearchBar` 搜尋消息.
 - Section (no title): segmented 未讀 / 已釘選 / 已讀 / 全部.
-- Section `{n} 則消息` (footer 最後更新：…): `Row` per item: title (3 lines),
-  subtitle timestamp, overline 已釘選 when pinned, `toggle` pin, tap opens the
-  article (external accessory), actions 開啟公告 / 分享 (iOS `ShareLink` not
-  needed — use `Share.share`) / 釘選.
+- Section `{n} 則消息` (footer 最後更新：…, plus on iOS 右滑或長按消息即可釘選，
+  長按可分享。): `Row` per item: title, subtitle timestamp, overline 已釘選
+  when pinned, `toggle` 釘選 / 取消釘選, tap opens the article in the in-app
+  browser, actions 開啟公告 / 分享 (`Share.share`). As built, 釘選 is the row
+  `toggle` rather than an action (iOS: leading swipe, context-menu item and
+  a pin symbol once pinned; Android: an icon button). iOS has 3 title lines
+  and the external accessory; Android has 5 lines and no accessory, as the
+  pin and overflow buttons already narrow the title (its overflow menu has
+  開啟公告).
 - "顯示更多" `ButtonRow`. Errors → `Notice` with 重試.
 - 重新整理 / 重試 progress is a labelled `Loading` row in the status section
   (in place of the notice), not `ListScreen.refreshing`, so there is one
@@ -289,7 +376,9 @@ remote data.
 - About: Section app identity (`Row` CK APP / 你的校園助理, detail 版本 x.y.z);
   Section "關於這個 APP" `TextBlock`s; Section "聯絡我們" link rows (mail,
   Instagram, web symbols, external accessory).
-- Settings: Section "我的班級" menu `PickerRow` (confirm Alert + revert);
+- Settings: Section "我的班級" menu `PickerRow` (confirm Alert + revert; the
+  same classes, in feed order, and the same Alert as 課表, from
+  `useChangeClass`);
   Section "首頁顯示項目" three `ToggleRow`s; Section "自訂工具列" footer 最多
   顯示 4 個… — `ToggleRow` per feature with `actions` 上移/下移 (iOS: in edit
   mode via `List.ForEach onMove` is preferred if feasible inside the kit as
@@ -303,7 +392,8 @@ remote data.
 
 ### 紀念品 (Souvenir)
 - Keeps the WebView (it is a website). Failure → kit `EmptyState` 目前無法載入
-  紀念品商店。 with 重試 and 在瀏覽器開啟 actions; header button 在瀏覽器開啟.
+  紀念品商店 with 重試 and 在瀏覽器開啟 actions; header button 在瀏覽器開啟, which
+  opens the page on screen in the browser (`openExternal`).
 
 ## Verification
 
@@ -311,5 +401,6 @@ No simulator is available in CI-less development here, so every change must
 pass `yarn typecheck`, `yarn lint`, `yarn test --runInBand`, and
 `npx expo export --platform ios` / `--platform android` (Hermes bundles), and
 every `@expo/ui` prop used must exist in `node_modules/@expo/ui/build/**.d.ts`.
-On-device checks for both platforms remain required before release
-(`docs/native-rewrite-progress.md`).
+On-device checks for both platforms remain required before release; the
+list of what still needs checking on iOS and Android is in
+`docs/native-rewrite-progress.md`, "Native UI redesign".

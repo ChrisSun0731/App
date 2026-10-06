@@ -5,16 +5,13 @@ import { toDateKey } from '@/lib/dates';
 
 import type { RowAction } from '../types';
 import {
-  chunk,
   footerSpeech,
   iosMajorVersion,
   isAccessibilityTextSize,
   pickerDate,
   pickerMinimum,
   sf,
-  spokenLabel,
   trailingSwipeActions,
-  withAlpha,
 } from './helpers';
 
 const noop = () => {};
@@ -28,10 +25,6 @@ describe('SwiftUI kit helpers', () => {
     expect(sf('heart.fill')).toBe('heart.fill');
     expect(sf(undefined)).toBeUndefined();
     expect(sf({ uri: 'file:///favorite.xml' })).toBeUndefined();
-  });
-
-  test('joins visible texts into one spoken phrase and skips blanks', () => {
-    expect(spokenLabel(['國文', '第一節 · 08:10', undefined, '', '  ', '目前'])).toBe('國文，第一節 · 08:10，目前');
   });
 
   test('speaks crowd bars by their label, metric pills by their metrics, and nested fragments', () => {
@@ -55,12 +48,6 @@ describe('SwiftUI kit helpers', () => {
       action('pin'),
     ]);
     expect(ordered.map((item) => item.key)).toEqual(['rename', 'pin']);
-  });
-
-  test('splits tiles and calendar cells into rows', () => {
-    expect(chunk([1, 2, 3, 4, 5, 6, 7], 3)).toEqual([[1, 2, 3], [4, 5, 6], [7]]);
-    expect(chunk(Array.from({ length: 42 }, (_, index) => index), 7)).toHaveLength(6);
-    expect(chunk([1, 2], 0)).toEqual([[1], [2]]);
   });
 
   test('parses the iOS major version from Platform.Version', () => {
@@ -91,13 +78,5 @@ describe('SwiftUI kit helpers', () => {
     expect(isAccessibilityTextSize(1.353)).toBe(false);
     expect(isAccessibilityTextSize(1.786)).toBe(true);
     expect(isAccessibilityTextSize(3.571)).toBe(true);
-  });
-
-  test('adds an alpha channel to hex colours only', () => {
-    expect(withAlpha('#03328d', 0.15)).toBe('#03328D26');
-    expect(withAlpha('#FFFFFF', 2)).toBe('#FFFFFFFF');
-    expect(withAlpha('#FFFFFF', -1)).toBe('#FFFFFF00');
-    expect(withAlpha('systemRed', 0.5)).toBe('systemRed');
-    expect(withAlpha('#FFF', 0.5)).toBe('#FFF');
   });
 });

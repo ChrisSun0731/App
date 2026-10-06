@@ -3,8 +3,10 @@ import { Alert } from 'react-native';
 
 import { icons } from '@/components/icons';
 import { FEATURES, MAX_FEATURE_TABS } from '@/features/registry';
+import { useChangeClass } from '@/features/schedule/use-change-class';
 import { useTimetables } from '@/features/schedule/use-timetables';
-import { confirmPickerChange } from '@/hooks/use-confirmed-picker';
+import { useRefresh } from '@/hooks/use-refresh';
+import { RETRY } from '@/lib/copy';
 import { queryClient } from '@/lib/query-client';
 import { useFoodStore } from '@/store/food';
 import { useNewsStore } from '@/store/news';
@@ -39,31 +41,11 @@ const TOOLBAR_FOOTER = `除了首頁，最多顯示 ${MAX_FEATURE_TABS} 個功�
 export default function SettingsScreen() {
   const settings = useSettingsStore();
   const timetable = useTimetables();
-  const userClass = useScheduleStore((state) => state.userClass);
   const shownTabs = visibleTabs(settings.toolbar).length;
-
-  const classOptions = timetable.data
-    ? Array.from(new Set([userClass, ...timetable.data.classIds])).sort().map((id) => ({ label: `${id} 班`, value: id }))
-    : null;
-
-  function changeClass(id: string) {
-    if (id === userClass) return;
-    const rows = timetable.data?.byClass[id];
-    // Nothing to switch to. PickerRow always shows `value`, so leaving
-    // userClass alone puts the picker back on it.
-    if (!rows) return;
-    confirmPickerChange(
-      `更改為 ${id} 班？`,
-      '更改班級會取代自訂科目、備註及顏色。',
-      { text: '更改', onPress: () => useScheduleStore.getState().setClass(id, rows) },
-      // Declined: userClass is unchanged and PickerRow snaps back to it.
-      () => {},
-    );
-  }
-
-  function reloadClasses() {
-    void timetable.refetch();
-  }
+  // The same classes and confirmation as 課表's picker and menu.
+  const { userClass, options: classOptions, changeClass } = useChangeClass(timetable.data);
+  // 重新載入 shows a loading row in place of the error notice until it settles.
+  const reload = useRefresh(() => timetable.refetch({ cancelRefetch: false }));
 
   // The labels name the feature, as the old buttons did: TalkBack reads only
   // the item text once the overflow menu is open.
@@ -95,15 +77,15 @@ export default function SettingsScreen() {
   return (
     <ListScreen onRefresh={() => timetable.refetch()}>
       <Section title="我的班級" footer="班級用於匯入課表。">
-        {classOptions ? (
+        {timetable.data ? (
           <PickerRow label="班級" value={userClass} options={classOptions} onChange={changeClass} />
-        ) : timetable.isError ? (
-          <Notice tone="error" title="無法載入班級列表。" action={{ label: '重新載入', onPress: reloadClasses }} />
+        ) : timetable.isError && !reload.refreshing ? (
+          <Notice tone="error" title="無法載入班級列表" action={{ label: RETRY, onPress: () => void reload.refresh() }} />
         ) : (
           <>
             <Loading label="正在載入班級…" />
             {/* A paused (offline) load would otherwise spin with no way to retry. */}
-            <ButtonRow label="重新載入" onPress={reloadClasses} />
+            {reload.refreshing ? null : <ButtonRow label={RETRY} onPress={() => void reload.refresh()} />}
           </>
         )}
       </Section>

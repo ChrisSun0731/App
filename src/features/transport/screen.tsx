@@ -7,6 +7,7 @@ import { Fragment, useMemo, useRef, useState } from 'react';
 
 import { HeaderActions } from '@/components/header-actions';
 import { icons } from '@/components/icons';
+import { PULL_TO_RETRY, RETRY } from '@/lib/copy';
 import { useTransportStore, type FollowedYoubike } from '@/store/transport';
 import { CrowdBar, EmptyState, ListScreen, MetricPills, Notice, Row, Section } from '@/ui';
 
@@ -100,7 +101,9 @@ export default function TransportScreen() {
             key: 'refresh',
             label: '更新交通資訊',
             icon: icons.refresh,
-            disabled: refreshing,
+            // Greyed while running; iOS draws a spinner in its place, as its
+            // list cannot show `refreshing` (see ListScreen below).
+            busy: refreshing,
             onPress: () => void refresh(),
           },
           {
@@ -117,7 +120,8 @@ export default function TransportScreen() {
       />
       <ListScreen
         onRefresh={refresh}
-        // Shows progress for the header button too (a pull shows its own).
+        // Shows progress for the header button too on Android (a pull shows
+        // its own); iOS shows the header button's spinner instead.
         refreshing={refreshing}
         fab={{ label: '新增站點', icon: icons.add, onPress: openYoubikePicker }}>
         {followed.length === 0 ? (
@@ -178,8 +182,9 @@ export default function TransportScreen() {
             <Notice
               tone="error"
               title="捷運更新失敗"
-              message={metro.tracks.data ? '顯示上次取得的到站資訊。' : '請下拉重試。'}
-              action={{ label: '重試', onPress: () => void metro.refetch() }}
+              message={metro.tracks.data ? '顯示上次取得的到站資訊。' : PULL_TO_RETRY}
+              // The screen's refresh, so its progress shows like the header button's.
+              action={{ label: RETRY, onPress: () => void refresh() }}
             />
           ) : null}
           {notices.crowdingFailed ? (

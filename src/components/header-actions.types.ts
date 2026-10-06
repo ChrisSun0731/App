@@ -11,6 +11,8 @@ export interface HeaderMenuAction {
   destructive?: boolean;
   /** Shows a checkmark next to the action. */
   selected?: boolean;
+  /** Greyed and not selectable, for an action with nothing to do right now. */
+  disabled?: boolean;
 }
 
 /**
@@ -37,6 +39,14 @@ export type HeaderItem =
       icon: IconValue;
       onPress: () => void;
       disabled?: boolean;
+      /**
+       * The action it starts is running (e.g. 重新整理): disabled, and on iOS
+       * drawn as a spinner in its place. SwiftUI's List cannot show refresh
+       * progress started from code without moving its rows, so this is iOS's
+       * counterpart of ListScreen.refreshing; Android greys the icon, as the
+       * list's pull indicator already shows the progress.
+       */
+      busy?: boolean;
     }
   | {
       kind: 'text';

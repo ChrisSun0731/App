@@ -37,9 +37,13 @@ export function useYoubikeFeeds(cities: readonly City[]): YoubikeFeeds {
   return { 臺北市: taipei, 新北市: newTaipei };
 }
 
-/** Fetches `cities` again now; settles once every request has, failed or not. */
+/**
+ * Fetches `cities` again now; settles once every request has, failed or not.
+ * A request already running (a 10 s poll, an earlier tap) is joined rather
+ * than cancelled and restarted.
+ */
 export function refetchYoubike(feeds: YoubikeFeeds, cities: readonly City[]): Promise<unknown> {
-  return Promise.allSettled(cities.map((city) => feeds[city].refetch()));
+  return Promise.allSettled(cities.map((city) => feeds[city].refetch({ cancelRefetch: false })));
 }
 
 export interface MetroLive {
@@ -47,7 +51,7 @@ export interface MetroLive {
   configured: boolean;
   tracks: UseQueryResult<TrackInfo[]>;
   weights: UseQueryResult<CarWeight[]>;
-  /** Fetches arrivals and crowding again now, when there is anything to fetch. */
+  /** Fetches arrivals and crowding again now (joining requests already running), when there is anything to fetch. */
   refetch: () => Promise<unknown>;
 }
 
@@ -72,6 +76,9 @@ export function useMetroLive(needed: boolean): MetroLive {
   });
   // refetch() ignores `enabled`, so it is guarded here: no credentials or no
   // stations means no request.
-  const refetch = () => (enabled ? Promise.allSettled([tracks.refetch(), weights.refetch()]) : Promise.resolve());
+  const refetch = () =>
+    enabled
+      ? Promise.allSettled([tracks.refetch({ cancelRefetch: false }), weights.refetch({ cancelRefetch: false })])
+      : Promise.resolve();
   return { configured, tracks, weights, refetch };
 }

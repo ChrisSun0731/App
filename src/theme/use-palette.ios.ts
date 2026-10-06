@@ -1,11 +1,10 @@
 import { DynamicColorIOS, PlatformColor, useColorScheme } from 'react-native';
 
-import { BRAND } from './brand';
+import { BRAND, BRAND_DARK } from './brand';
 import type { Palette } from './palette';
 
-// The navy is too dark to read on a dark background; the dark-mode variant is
-// the same hue lifted to keep 4.5:1 against systemBackground.
-const tint = DynamicColorIOS({ light: BRAND, dark: '#8EAEFF' });
+// The navy is too dark to read on a dark background (see BRAND_DARK).
+const tint = DynamicColorIOS({ light: BRAND, dark: BRAND_DARK });
 
 const STATIC: Omit<Palette, 'scheme'> = {
   background: PlatformColor('systemGroupedBackground'),

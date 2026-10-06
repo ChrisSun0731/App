@@ -1,18 +1,13 @@
-import Constants from 'expo-constants';
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import MapView, { Circle, Marker } from 'react-native-maps';
+
+import { MAP_AVAILABLE } from '@/lib/map-availability';
 
 import type { StationMapProps } from './map-picker.types';
 import { stationDisplayName } from './youbike';
 
-/**
- * Android draws Google Maps, which needs an API key built into the app. Expo
- * removes android.config from the public manifest, so app.config.ts keeps a
- * boolean in extra; without a key the picker shows a notice instead of
- * mounting the map.
- */
-export const stationMapAvailable =
-  Platform.OS !== 'android' || Constants.expoConfig?.extra?.googleMapsConfigured === true;
+/** Without a Google Maps key (Android), the picker shows a notice instead of mounting the map. */
+export const stationMapAvailable = MAP_AVAILABLE;
 
 /** The map section's footer. */
 export const STATION_MAP_HINT = '點選地圖選擇搜尋位置。初始位置為建中，搜尋涵蓋臺北市與新北市。';

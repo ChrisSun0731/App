@@ -19,9 +19,11 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import { useWindowDimensions } from 'react-native';
 
+import { withAlpha } from '../helpers';
+import { spokenLabel } from '../labels';
 import type { CrowdBarProps, MetricPillsProps } from '../types';
 import { labelText } from './chrome';
-import { isAccessibilityTextSize, sf, spokenLabel, withAlpha } from './helpers';
+import { isAccessibilityTextSize, sf } from './helpers';
 
 /**
  * Small capsules (e.g. 可借 3 / 可還 7): the metric's symbol, or a dot, in

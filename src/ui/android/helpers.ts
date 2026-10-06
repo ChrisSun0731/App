@@ -4,23 +4,6 @@ import { Children, cloneElement, Fragment, isValidElement, type ReactElement, ty
 
 import { fromDateKey, isDateKey, WEEKDAY_ZH } from '@/lib/dates';
 
-/**
- * Applies `alpha` (0–1) to a "#RRGGBB" or "#RRGGBBAA" colour, multiplying any
- * alpha it already has. Other colour strings are returned unchanged.
- */
-export function withAlpha(color: string, alpha: number): string {
-  const match = /^#([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(color);
-  if (!match) return color;
-  const base = match[2] ? parseInt(match[2], 16) / 255 : 1;
-  const value = Math.round(Math.min(1, Math.max(0, base * alpha)) * 255);
-  return `#${match[1]}${value.toString(16).padStart(2, '0')}`.toUpperCase();
-}
-
-/** The spoken label of a row: its non-empty parts joined with a pause. */
-export function joinLabel(parts: readonly (string | undefined | false)[]): string {
-  return parts.filter((part): part is string => !!part && part.trim().length > 0).join('，');
-}
-
 /** e.g. "2026年10月4日 星期日" for a local "YYYY-MM-DD" key. */
 export function formatDateLabel(key: string): string {
   const date = fromDateKey(key);
@@ -69,14 +52,6 @@ export function segmentsFit(labels: readonly string[], available: number, fontSc
   if (labels.length > 5) return false;
   const widest = Math.max(...labels.map((label) => labelWidth(label, fontScale)));
   return available / labels.length >= 12 + 18 + 8 + widest + 12;
-}
-
-/** Splits `items` into rows of `size`. */
-export function chunk<T>(items: readonly T[], size: number): T[][] {
-  const step = Math.max(1, Math.floor(size));
-  const rows: T[][] = [];
-  for (let index = 0; index < items.length; index += step) rows.push(items.slice(index, index + step));
-  return rows;
 }
 
 /**

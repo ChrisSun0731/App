@@ -13,7 +13,7 @@ export default function FeatureScreen() {
         <Stack.Screen options={{ title: '找不到頁面' }} />
         <ListScreen>
           <Section plain>
-            <EmptyState icon={icons.help} title="這個功能不存在。" />
+            <EmptyState icon={icons.help} title="這個功能不存在" />
           </Section>
         </ListScreen>
       </>

@@ -4,7 +4,7 @@
 
 CK APP 是建中第 77 屆學生彭可翰和楊晨諺於 2024 年開發的校園應用程式，協助學生查看課表、安排待辦、查詢交通與探索附近美食。
 
-目前程式已改為 **React Native + TypeScript + Expo SDK 57**。Android 互動控制項使用 Material 3 / Jetpack Compose，iOS 使用 SwiftUI 控制項與原生導覽；跨平台畫面邏輯仍共用 React Native。`package.json` 的版本目前是 **4.0.0**，正式版本與建置編號由 `app.config.ts` 決定。
+目前程式已改為 **React Native + TypeScript + Expo SDK 57**。每個畫面以原生 UI 元件組成：iOS 使用 SwiftUI（inset-grouped 列表、滑動動作、長按選單、導覽列按鈕），Android 使用 Material 3 / Jetpack Compose（區塊卡片、ListItem、溢位選單、FAB）。畫面只寫一次，透過 `src/ui` 的元件庫在兩個平台各自呈現；資料、狀態與畫面邏輯共用 TypeScript。`package.json` 的版本目前是 **4.0.0**，正式版本與建置編號由 `app.config.ts` 決定。
 
 ## 功能
 
@@ -27,14 +27,16 @@ CK APP 是建中第 77 屆學生彭可翰和楊晨諺於 2024 年開發的校園
 | `src/app/`                      | Expo Router 路由、原生 Stack 與功能分頁          |
 | `src/features/`                 | 每項功能的畫面、資料轉換與 hooks                 |
 | `src/features/registry.ts`      | 首頁入口與可加入工具列的功能                     |
-| `src/components/ui/`            | Material 3／SwiftUI 共用互動控制項               |
-| `src/theme/`、`src/navigation/` | 平台色彩、原生導覽與深色模式                     |
+| `src/ui/`                       | 原生 UI 元件庫：`types.ts` 為介面，iOS 以 SwiftUI、Android 以 Compose Material 3 實作（規格見 [docs/design/native-ui.md](docs/design/native-ui.md)） |
+| `src/components/`               | 導覽列按鈕與選單（`header-actions`）、圖示對照表 |
+| `src/theme/`、`src/navigation/` | 平台色彩、深色模式、原生導覽、modal 標題列與搜尋欄 |
+| `src/hooks/`                    | 共用 hooks：分鐘時鐘、重試進度                   |
 | `src/store/`                    | Zustand 狀態，透過 Expo SQLite 儲存              |
-| `src/lib/`                      | HTTP timeout、遠端資料驗證／快取、日期與儲存工具 |
+| `src/lib/`                      | HTTP timeout、遠端資料驗證／快取、日期、儲存、連結開啟與共用文案 |
 | `assets/`                       | App 圖示、啟動畫面與其他靜態圖檔                 |
 | `app.config.ts`                 | App 身分、版本、原生設定與環境變數               |
 | `.github/workflows/`            | Android／iOS 建置、簽署與測試通路上傳            |
-| `tools/`、`docs/`               | 資料處理工具與歷史決策紀錄                       |
+| `tools/`、`docs/`               | 資料處理工具、設計規格（`docs/design/`）、進度與歷史決策紀錄 |
 
 課表、餐廳、校方行事曆與菜單來自 [Data repo](https://github.com/CKApp-Dev/Data)。JSON 資料經過格式驗證後儲存快取，更新失敗時可先顯示上次內容。菜單圖片檔名使用當地日期的週一加上星期序號，例如 `menus/2026-10-05_4.png`。
 
@@ -84,7 +86,7 @@ yarn test --runInBand
 yarn lint
 ```
 
-Jest 檢查日期、課表、行事曆、營業時間、RSS 與交通資料等純邏輯。測試不取代原生操作驗證：請確認雙平台的輸入、分頁、sheet、地圖、離線快取與 App 重啟後的資料保存。
+Jest 檢查日期、課表、行事曆、營業時間、RSS 與交通資料等純邏輯，以及 UI 元件庫的純函式。發布前也要以 `npx expo export --platform ios` 與 `--platform android` 確認 Hermes bundle 可建置。測試不取代原生操作驗證：請確認雙平台的輸入、分頁、sheet、地圖、離線快取與 App 重啟後的資料保存；原生 UI 改版尚待實機確認的項目列在 [docs/native-rewrite-progress.md](docs/native-rewrite-progress.md)。
 
 ## 發版與簽署
 

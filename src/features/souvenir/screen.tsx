@@ -8,7 +8,7 @@ import { WebView } from 'react-native-webview';
 
 import { HeaderActions } from '@/components/header-actions';
 import { icons } from '@/components/icons';
-import { openWebsite } from '@/lib/open-link';
+import { openExternal } from '@/lib/open-link';
 import { usePalette } from '@/theme/palette';
 import { EmptyState, ListScreen, Section } from '@/ui';
 
@@ -25,8 +25,9 @@ export default function SouvenirScreen() {
   // where the user is rather than at the shop's front page.
   const [pageUrl, setPageUrl] = useState(STORE_URL);
 
+  // The browser itself, as the label says (and as 熱食部's button does).
   function openInBrowser() {
-    void openWebsite(pageUrl);
+    void openExternal(pageUrl);
   }
 
   function retry() {
@@ -47,7 +48,7 @@ export default function SouvenirScreen() {
           <Section plain>
             <EmptyState
               icon={icons.error}
-              title="目前無法載入紀念品商店。"
+              title="目前無法載入紀念品商店"
               action={{ label: '重試', onPress: retry }}
               secondaryAction={{ label: '在瀏覽器開啟', onPress: openInBrowser }}
             />

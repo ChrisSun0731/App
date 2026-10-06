@@ -36,6 +36,7 @@ import { Platform, View } from 'react-native';
 
 import { usePalette } from '@/theme/palette';
 
+import { chunk } from '../helpers';
 import type {
   EmbeddedProps,
   EmptyStateProps,
@@ -46,7 +47,7 @@ import type {
   TileGridProps,
 } from '../types';
 import { NO_INSETS, primaryText, QUIET_FILL, secondaryText, useRowChrome } from './chrome';
-import { chunk, iosMajorVersion, sf } from './helpers';
+import { iosMajorVersion, sf } from './helpers';
 
 /** Body text, or a large bold line (e.g. the help screen's pick). */
 export function TextBlock({ text, secondary = false, size = 'body', selectable = false }: TextBlockProps) {

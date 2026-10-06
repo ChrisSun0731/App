@@ -4,10 +4,11 @@
 // "熱食部 (Menu)".
 import { Image } from 'expo-image';
 import { useState, type ReactElement } from 'react';
-import { Alert, Linking, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { HeaderActions, type HeaderItem } from '@/components/header-actions';
 import { icons } from '@/components/icons';
+import { openExternal } from '@/lib/open-link';
 import { ButtonRow, Embedded, EmptyState, ListScreen, Loading, PickerRow, Section } from '@/ui';
 
 import {
@@ -35,7 +36,7 @@ export default function MenuScreen() {
   }
 
   function openInBrowser() {
-    void Linking.openURL(menu.url).catch(() => Alert.alert('無法開啟菜單', '請稍後再試一次。'));
+    void openExternal(menu.url, '無法開啟菜單');
   }
 
   const header: HeaderItem[] = [
@@ -61,7 +62,7 @@ export default function MenuScreen() {
     content = (
       <EmptyState
         icon={icons.forkKnife}
-        title="這一天的菜單尚未公布，或目前無法讀取。"
+        title="這一天的菜單尚未公布，或目前無法讀取"
         description="可以切換其他日期，或重新整理再試一次。"
         action={{ label: '重新讀取菜單', onPress: () => void menu.refresh() }}
       />
