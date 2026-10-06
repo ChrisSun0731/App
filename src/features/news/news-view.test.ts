@@ -5,6 +5,7 @@ import {
   formatNewsTime,
   groupNews,
   lastUpdatedFooter,
+  partialFailureMessage,
   partialFailureTitle,
   searchNews,
   shareContent,
@@ -65,6 +66,9 @@ describe('news texts', () => {
   it('labels paging and partial refresh failures', () => {
     expect(showMoreLabel(7)).toBe('顯示更多（還有 7 則）');
     expect(partialFailureTitle(['重要公告'])).toBe('重要公告暫時無法更新');
+    expect(partialFailureMessage(true)).toBe('先顯示上次儲存的內容。');
+    // Nothing was saved for the failed feed, so there is no saved content to mention.
+    expect(partialFailureMessage(false)).toBe('其他消息已更新，稍後會再試一次。');
   });
 
   it('shares the link as a URL on iOS and inside the message on Android', () => {

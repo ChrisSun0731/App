@@ -2,7 +2,7 @@
 // 全部 filters, header search, pins and paging. Layout per
 // docs/design/native-ui.md, "校網 (News)". The cached list shows offline.
 import { Stack } from 'expo-router';
-import { useState, type ReactElement } from 'react';
+import { useCallback, useMemo, useState, type ComponentProps, type ReactElement } from 'react';
 
 import { HeaderActions, type HeaderMenuAction } from '@/components/header-actions';
 import { icons } from '@/components/icons';
@@ -18,6 +18,7 @@ import {
   lastUpdatedFooter,
   NEWS_FILTERS,
   PAGE_SIZE,
+  partialFailureMessage,
   partialFailureTitle,
   searchNews,
   showMoreLabel,
@@ -28,9 +29,16 @@ import { useSchoolNews } from './use-school-news';
 
 const ANDROID = process.env.EXPO_OS === 'android';
 
+type SearchTextHandler = NonNullable<ComponentProps<typeof Stack.SearchBar>['onChangeText']>;
+
+// Android's row ends in two 48dp icon buttons (pin, overflow), leaving the
+// title about 11 CJK characters per line on a 360dp phone, so it gets more
+// lines to fit a typical 35-45 character title. iOS fits ~45 in three.
+const TITLE_LINES = ANDROID ? 5 : 3;
+
 export default function NewsScreen() {
   const palette = usePalette();
-  const { query, failedFeeds } = useSchoolNews();
+  const { query, partialFailure, refetch, refresh, refreshing } = useSchoolNews();
   const pinned = useNewsStore((state) => state.pinned);
   const cached = useNewsStore((state) => state.cached);
   const lastClearedTime = useNewsStore((state) => state.lastClearedTime);
@@ -42,16 +50,18 @@ export default function NewsScreen() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const fetched = query.data ?? cached;
-  const groups = groupNews(fetched, pinned, lastClearedTime);
+  const groups = useMemo(() => groupNews(fetched, pinned, lastClearedTime), [fetched, pinned, lastClearedTime]);
   const shown = searchNews(groups[filter], search);
   const pinnedTitles = new Set(pinned.map((item) => item.title));
-  // Joins a refresh already under way (a poll, a pull) instead of restarting it.
-  const refresh = () => query.refetch({ cancelRefetch: false });
 
-  function changeSearch(text: string) {
+  // Stable handlers: Stack.SearchBar registers its header options again
+  // whenever one changes, which would happen on every keystroke and poll.
+  const changeSearch = useCallback((text: string) => {
     setSearch(text);
     setVisibleCount(PAGE_SIZE);
-  }
+  }, []);
+  const onSearchText = useCallback<SearchTextHandler>((event) => changeSearch(event.nativeEvent.text), [changeSearch]);
+  const clearSearch = useCallback(() => changeSearch(''), [changeSearch]);
 
   function changeFilter(value: NewsFilter) {
     setFilter(value);
@@ -75,10 +85,12 @@ export default function NewsScreen() {
       <Row
         key={item.title}
         title={item.title}
-        titleLines={3}
+        titleLines={TITLE_LINES}
         subtitle={formatNewsTime(item.pubDate)}
         overline={isPinned ? '已釘選' : undefined}
-        accessory="external"
+        // Android's overflow already offers 開啟公告; a third trailing icon
+        // would squeeze the title further.
+        accessory={ANDROID ? 'none' : 'external'}
         onPress={() => void openNews(item)}
         // The toggle is the row's 釘選 / 取消釘選 action: iOS lists it in the
         // context menu and as a leading swipe, Android shows it as an icon button.
@@ -97,9 +109,16 @@ export default function NewsScreen() {
     );
   }
 
+  // The first load, with nothing cached to show meanwhile.
+  const loading = query.isPending && query.isFetching;
+
   // Status above the list: a failed refresh keeps showing what was saved.
   let status: ReactElement | null = null;
-  if (query.isError) {
+  if (refreshing && !loading) {
+    // 重新整理 or 重試 is running. Replaces a notice that would otherwise sit
+    // unchanged for the whole fetch, as if the tap had done nothing.
+    status = <Loading label={fetched.length > 0 ? '正在重新整理…' : '正在讀取校網消息…'} />;
+  } else if (query.isError) {
     status = fetched.length > 0 ? (
       <Notice
         tone="error"
@@ -115,19 +134,17 @@ export default function NewsScreen() {
         action={{ label: '重試', onPress: () => void refresh() }}
       />
     );
-  } else if (failedFeeds.length > 0) {
+  } else if (partialFailure) {
     status = (
       <Notice
         tone="error"
-        title={partialFailureTitle(failedFeeds)}
-        message="先顯示上次儲存的內容。"
+        title={partialFailureTitle(partialFailure.feeds)}
+        message={partialFailureMessage(partialFailure.showingCached)}
         action={{ label: '重試', onPress: () => void refresh() }}
       />
     );
   }
 
-  // The first load, with nothing cached to show meanwhile.
-  const loading = query.isPending && query.isFetching;
   // Until something has loaded, an empty filter is not news: the loading
   // indicator or the error notice says what is going on instead. (Pinned
   // items are saved, so 已釘選 can still list them.)
@@ -142,11 +159,11 @@ export default function NewsScreen() {
         hideWhenScrolling={false}
         // Results filter as you type, so keep them visible and tappable.
         obscureBackground={false}
-        onChangeText={(event) => changeSearch(event.nativeEvent.text)}
+        onChangeText={onSearchText}
         // iOS clears the field on 取消 without a change event; Android
         // clears it when the search view collapses.
-        onCancelButtonPress={() => changeSearch('')}
-        onClose={() => changeSearch('')}
+        onCancelButtonPress={clearSearch}
+        onClose={clearSearch}
         // Android's search view takes the top app bar's colours, like the
         // HeaderActions icons beside it (iOS draws system colours itself).
         {...(ANDROID
@@ -154,7 +171,9 @@ export default function NewsScreen() {
           : null)}
       />
       <HeaderActions right={[{ kind: 'menu', key: 'more', label: '更多', icon: icons.more, actions: menu }]} />
-      <ListScreen onRefresh={refresh}>
+      <ListScreen
+        // Pull to refresh draws its own indicator, so it skips `refreshing`.
+        onRefresh={refetch}>
         {status ? <Section key="status">{status}</Section> : null}
 
         <Section key="filter" plain>

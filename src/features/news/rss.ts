@@ -103,6 +103,22 @@ function dedupeNewest(items: NewsItem[]): NewsItem[] {
   return [...unique.values()];
 }
 
+/** One refresh round: what to show and cache, and which feeds did not answer. */
+export interface SchoolNewsRound {
+  items: NewsItem[];
+  /**
+   * Feeds that failed this round while another loaded. Their part of `items`
+   * is carried over from the cached list, so it may be out of date.
+   */
+  failed: NewsFeed[];
+  /**
+   * The failed feeds that still have cached items in `items`. A feed missing
+   * here had nothing saved (a first launch, or after a reset), so none of its
+   * items are shown at all.
+   */
+  carriedOver: NewsFeed[];
+}
+
 /**
  * One refresh round as the list to show and cache, de-duplicated and newest
  * first. `loaded` holds the items of every feed that answered. A feed that
@@ -112,28 +128,23 @@ function dedupeNewest(items: NewsItem[]): NewsItem[] {
 export function mergeSchoolNews(
   loaded: Partial<Record<NewsFeed, NewsItem[]>>,
   previous: readonly NewsItem[] = [],
-): NewsItem[] {
-  const failed = new Set(SCHOOL_NEWS_FEEDS.map(({ id }) => id).filter((id) => !loaded[id]));
+): SchoolNewsRound {
+  const failed = SCHOOL_NEWS_FEEDS.map(({ id }) => id).filter((id) => !loaded[id]);
   const fresh = SCHOOL_NEWS_FEEDS.flatMap(({ id }) =>
     (loaded[id] ?? []).map((item) => ({ ...item, feeds: [id] })),
   );
-  const retained = !failed.size ? [] : previous.flatMap((item): NewsItem[] => {
+  const retained = !failed.length ? [] : previous.flatMap((item): NewsItem[] => {
     // Cached before items were tagged, so it may belong to the failed feed.
     if (!item.feeds) return [item];
-    const feeds = item.feeds.filter((feed) => failed.has(feed));
+    const feeds = item.feeds.filter((feed) => failed.includes(feed));
     return feeds.length ? [{ ...item, feeds }] : [];
   });
-  return dedupeNewest([...fresh, ...retained]);
-}
-
-/** One refresh round: what to show and cache, and which feeds did not answer. */
-export interface SchoolNewsRound {
-  items: NewsItem[];
-  /**
-   * Feeds that failed this round while another loaded. Their part of `items`
-   * is carried over from the cached list, so it may be out of date.
-   */
-  failed: NewsFeed[];
+  return {
+    items: dedupeNewest([...fresh, ...retained]),
+    failed,
+    // An untagged item counts for every failed feed, since it may be theirs.
+    carriedOver: failed.filter((feed) => retained.some((item) => !item.feeds || item.feeds.includes(feed))),
+  };
 }
 
 /**
@@ -154,10 +165,7 @@ export async function fetchSchoolNews(
   const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
   // A cancelled query rejects too, rather than caching a half-finished round.
   if (failure && (!Object.keys(loaded).length || signal?.aborted)) throw failure.reason;
-  return {
-    items: mergeSchoolNews(loaded, previous),
-    failed: SCHOOL_NEWS_FEEDS.map(({ id }) => id).filter((id) => !loaded[id]),
-  };
+  return mergeSchoolNews(loaded, previous);
 }
 
 /** The feeds' display names (重要公告, 最新消息), in feed order. */

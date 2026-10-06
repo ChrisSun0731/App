@@ -73,6 +73,7 @@ describe('school news refresh', () => {
         news('停課通知', '2026-10-03T01:00:00.000Z', ['important']),
       ],
       failed: [],
+      carriedOver: [],
     });
   });
 
@@ -94,6 +95,7 @@ describe('school news refresh', () => {
         news('兩邊都有', '2026-10-01T01:00:00.000Z', ['important']),
       ],
       failed: ['important'],
+      carriedOver: ['important'],
     });
   });
 
@@ -102,10 +104,25 @@ describe('school news refresh', () => {
       [IMPORTANT_URL]: rss(['段考公告', 'Mon, 05 Oct 2026 09:00:00 +0800']),
       [LATEST_URL]: '<html><body>系統維護中</body></html>',
     });
+    // Nothing was saved for 最新消息, so none of its items are carried over.
     await expect(fetchSchoolNews()).resolves.toEqual({
       items: [news('段考公告', '2026-10-05T01:00:00.000Z', ['important'])],
       failed: ['latest'],
+      carriedOver: [],
     });
+  });
+
+  it('does not count a failed feed as carried over when only the other feed was cached', async () => {
+    mockFeeds({
+      [IMPORTANT_URL]: new Error('timeout'),
+      [LATEST_URL]: rss(['新消息', 'Sat, 03 Oct 2026 09:00:00 +0800']),
+    });
+    await expect(fetchSchoolNews(undefined, [news('舊消息', '2026-10-01T01:00:00.000Z', ['latest'])]))
+      .resolves.toEqual({
+        items: [news('新消息', '2026-10-03T01:00:00.000Z', ['latest'])],
+        failed: ['important'],
+        carriedOver: [],
+      });
   });
 
   it('does not report an empty feed as failed', async () => {
@@ -114,7 +131,7 @@ describe('school news refresh', () => {
       [LATEST_URL]: rss(['新消息', 'Sat, 03 Oct 2026 09:00:00 +0800']),
     });
     await expect(fetchSchoolNews(undefined, [news('舊重要公告', '2026-10-02T01:00:00.000Z', ['important'])]))
-      .resolves.toEqual({ items: [news('新消息', '2026-10-03T01:00:00.000Z', ['latest'])], failed: [] });
+      .resolves.toEqual({ items: [news('新消息', '2026-10-03T01:00:00.000Z', ['latest'])], failed: [], carriedOver: [] });
   });
 
   it('rejects only when every feed fails', async () => {
@@ -139,12 +156,18 @@ describe('school news refresh', () => {
   it('keeps untagged items cached by earlier versions on a partial failure', () => {
     const legacy = news('舊版快取', '2026-10-01T01:00:00.000Z');
     const fresh = news('新消息', '2026-10-03T01:00:00.000Z');
-    expect(mergeSchoolNews({ latest: [fresh, legacy] }, [legacy])).toEqual([
-      { ...fresh, feeds: ['latest'] },
-      legacy,
-    ]);
+    // It may belong to the failed feed, so that feed counts as carried over.
+    expect(mergeSchoolNews({ latest: [fresh, legacy] }, [legacy])).toEqual({
+      items: [{ ...fresh, feeds: ['latest'] }, legacy],
+      failed: ['important'],
+      carriedOver: ['important'],
+    });
     // A full refresh replaces the cache, tagging everything.
-    expect(mergeSchoolNews({ important: [], latest: [fresh] }, [legacy])).toEqual([{ ...fresh, feeds: ['latest'] }]);
+    expect(mergeSchoolNews({ important: [], latest: [fresh] }, [legacy])).toEqual({
+      items: [{ ...fresh, feeds: ['latest'] }],
+      failed: [],
+      carriedOver: [],
+    });
   });
 
   it('names failed feeds in feed order', () => {

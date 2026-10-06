@@ -82,6 +82,14 @@ export function partialFailureTitle(failedFeedLabels: readonly string[]): string
 }
 
 /**
+ * The notice text under partialFailureTitle. It only mentions saved content
+ * when some is shown: on a first launch the failed feed had nothing saved.
+ */
+export function partialFailureMessage(showingCached: boolean): string {
+  return showingCached ? '先顯示上次儲存的內容。' : '其他消息已更新，稍後會再試一次。';
+}
+
+/**
  * What the share sheet gets. iOS shares the link as a URL next to the title;
  * Android's share intent only carries `message`, so the link goes into it.
  */
