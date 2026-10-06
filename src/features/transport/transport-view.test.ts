@@ -11,6 +11,7 @@ import {
   followedStationView,
   lineMetrics,
   metroFooter,
+  metroNotices,
   metroStationStatus,
   nearbySubtitle,
   SEARCH_LIMIT,
@@ -183,5 +184,25 @@ describe('Metro', () => {
     expect(metroFooter(false, Date.now())).toBeUndefined();
     expect(metroFooter(true, 0)).toBe(CROWD_LEGEND);
     expect(metroFooter(true, Date.UTC(2026, 9, 4, 1, 39, 3))).toBe(`${CROWD_LEGEND}\n到站資訊更新 09:39:03`);
+  });
+
+  test('notices report failures only while stations are followed, and crowding only beside arrivals', () => {
+    const base = { configured: true, stationCount: 2, arrivals: { isError: false, hasData: true }, crowdingError: false };
+    const quiet = { notConfigured: false, arrivalsFailed: false, crowdingFailed: false };
+    expect(metroNotices(base)).toEqual(quiet);
+    expect(metroNotices({ ...base, arrivals: { isError: true, hasData: false } })).toEqual({ ...quiet, arrivalsFailed: true });
+    expect(metroNotices({ ...base, crowdingError: true })).toEqual({ ...quiet, crowdingFailed: true });
+    expect(metroNotices({ ...base, crowdingError: true, arrivals: { isError: true, hasData: false } })).toEqual({
+      ...quiet,
+      arrivalsFailed: true,
+    });
+    // After the last station is removed the queries stop, but their errors stay.
+    expect(metroNotices({ ...base, stationCount: 0, arrivals: { isError: true, hasData: true }, crowdingError: true })).toEqual(
+      quiet,
+    );
+    expect(metroNotices({ ...base, configured: false, arrivals: { isError: true, hasData: false } })).toEqual({
+      ...quiet,
+      notConfigured: true,
+    });
   });
 });

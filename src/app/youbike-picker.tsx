@@ -4,7 +4,7 @@
 // so the header only has 完成. Layout per docs/design/native-ui.md,
 // "交通 (Transport)".
 import { router, Stack } from 'expo-router';
-import { useCallback, useMemo, useState, type ComponentProps } from 'react';
+import { useMemo, useState } from 'react';
 
 import { HeaderActions } from '@/components/header-actions';
 import { doneHeader } from '@/features/todo/editor-header';
@@ -12,6 +12,7 @@ import { availabilityPills } from '@/features/transport/availability-pills';
 import StationMap, { STATION_MAP_HINT, stationMapAvailable } from '@/features/transport/map-picker';
 import type { MapPoint } from '@/features/transport/map-picker.types';
 import { nearbySubtitle, SEARCH_LIMIT, searchStations, stationKey } from '@/features/transport/transport-view';
+import { usePickerSearch } from '@/features/transport/use-picker-search';
 import { refetchYoubike, useYoubikeFeeds } from '@/features/transport/use-transport-queries';
 import {
   CITIES,
@@ -36,7 +37,6 @@ import {
 } from '@/ui';
 
 type Mode = 'search' | 'nearby';
-type SearchTextHandler = NonNullable<ComponentProps<typeof Stack.SearchBar>['onChangeText']>;
 
 const MODE_OPTIONS: readonly ChoiceOption<Mode>[] = [
   { label: '搜尋站點', value: 'search' },
@@ -45,6 +45,8 @@ const MODE_OPTIONS: readonly ChoiceOption<Mode>[] = [
 const CITY_OPTIONS: readonly ChoiceOption<City>[] = CITIES.map((city) => ({ label: city, value: city }));
 const EMPTY: YoubikeStation[] = [];
 const MAP_HEIGHT = 290;
+// Rows carry no add button; only a checkmark once added. Say what a tap does.
+const ADD_HINT = '點選站點即可加入。';
 
 function close() {
   router.back();
@@ -55,7 +57,7 @@ export default function YoubikePicker() {
   const followYoubike = useTransportStore((state) => state.followYoubike);
   const [mode, setMode] = useState<Mode>('search');
   const [city, setCity] = useState<City>('臺北市');
-  const [query, setQuery] = useState('');
+  const { query, clear: clearSearch, searchBarProps } = usePickerSearch();
   const [point, setPoint] = useState<MapPoint>(CK_COORDINATE);
 
   // Searching needs the chosen city only; the nearest stations may be in either.
@@ -69,14 +71,16 @@ export default function YoubikePicker() {
   );
   const followedKeys = useMemo(() => new Set(followed.map(stationKey)), [followed]);
 
-  // Stable, so the header search options are not registered again on every render.
-  const onSearchText = useCallback<SearchTextHandler>((event) => setQuery(event.nativeEvent.text), []);
-  const clearSearch = useCallback(() => setQuery(''), []);
-
   function changeMode(next: Mode) {
     // The header search field is removed in 附近九站 and comes back empty.
-    if (next !== 'search') setQuery('');
+    if (next !== 'search') clearSearch();
     setMode(next);
+  }
+
+  function changeCity(next: City) {
+    // A district typed for one city rarely matches the other, so start over.
+    clearSearch();
+    setCity(next);
   }
 
   /** A result row: tap follows the station; followed ones are checked. */
@@ -105,29 +109,22 @@ export default function YoubikePicker() {
     <>
       <HeaderActions {...doneHeader(close)} />
       {mode === 'search' ? (
-        <Stack.SearchBar
-          placeholder="搜尋站名或行政區"
-          autoCapitalize="none"
-          // The sheet's List does not drive UIKit's scroll-to-reveal, so the
-          // field stays visible instead of hiding under the bar.
-          hideWhenScrolling={false}
-          onChangeText={onSearchText}
-          onCancelButtonPress={clearSearch}
-          onClose={clearSearch}
-        />
+        <Stack.SearchBar placeholder="搜尋站名或行政區" autoCapitalize="none" {...searchBarProps} />
       ) : null}
       <ListScreen onRefresh={() => refetchYoubike(feeds, cities)}>
         <Section plain>
           <PickerRow label="新增方式" variant="segmented" value={mode} options={MODE_OPTIONS} onChange={changeMode} />
           {mode === 'search' ? (
-            <PickerRow label="城市" variant="segmented" value={city} options={CITY_OPTIONS} onChange={setCity} />
+            <PickerRow label="城市" variant="segmented" value={city} options={CITY_OPTIONS} onChange={changeCity} />
           ) : null}
         </Section>
 
         {mode === 'search' ? (
           <Section
             title={city}
-            footer={search.total > SEARCH_LIMIT ? '顯示前 30 個結果，請輸入站名或行政區縮小範圍。' : undefined}>
+            footer={
+              search.total > SEARCH_LIMIT ? `${ADD_HINT}\n顯示前 30 個結果，請輸入站名或行政區縮小範圍。` : ADD_HINT
+            }>
             {feed.isError ? (
               <Notice
                 tone="error"
@@ -155,7 +152,7 @@ export default function YoubikePicker() {
                 />
               )}
             </Section>
-            <Section title="附近九站">
+            <Section title="附近九站" footer={ADD_HINT}>
               {nearbyError ? (
                 <Notice
                   tone="error"

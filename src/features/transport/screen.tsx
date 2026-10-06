@@ -11,11 +11,13 @@ import { useTransportStore, type FollowedYoubike } from '@/store/transport';
 import { CrowdBar, EmptyState, ListScreen, MetricPills, Notice, Row, Section } from '@/ui';
 
 import { availabilityPills } from './availability-pills';
+import { confirmRemoval } from './confirm-remove';
 import {
   citiesOf,
   followedStationView,
   lineMetrics,
   metroFooter,
+  metroNotices,
   metroStationStatus,
   stationKey,
   trainViews,
@@ -82,6 +84,12 @@ export default function TransportScreen() {
 
   const tracks = metro.tracks.data ?? [];
   const weights = metro.weights.data ?? [];
+  const notices = metroNotices({
+    configured: metro.configured,
+    stationCount: metroStations.length,
+    arrivals: { isError: metro.tracks.isError, hasData: metro.tracks.data !== undefined },
+    crowdingError: metro.weights.isError,
+  });
 
   return (
     <>
@@ -141,7 +149,8 @@ export default function TransportScreen() {
                       label: '移除站點',
                       icon: icons.delete,
                       destructive: true,
-                      onPress: () => unfollowYoubike(follow.sna, follow.city),
+                      onPress: () =>
+                        confirmRemoval('移除站點', follow.nickname, () => unfollowYoubike(follow.sna, follow.city)),
                     },
                   ]}
                 />
@@ -158,10 +167,10 @@ export default function TransportScreen() {
               ? lines(metroFooter(metro.configured, metro.tracks.dataUpdatedAt), METRO_HINT)
               : undefined
           }>
-          {!metro.configured ? (
+          {notices.notConfigured ? (
             <Notice tone="info" title="捷運即時到站資訊暫未啟用" message="你仍可管理常用車站。" />
           ) : null}
-          {metro.configured && metro.tracks.isError ? (
+          {notices.arrivalsFailed ? (
             <Notice
               tone="error"
               title="捷運更新失敗"
@@ -169,7 +178,7 @@ export default function TransportScreen() {
               action={{ label: '重試', onPress: () => void metro.refetch() }}
             />
           ) : null}
-          {metro.configured && metro.weights.isError && metro.tracks.data ? (
+          {notices.crowdingFailed ? (
             <Notice tone="info" title="車廂擁擠資訊目前無法更新" />
           ) : null}
           {metroStations.length === 0 ? (
@@ -204,7 +213,7 @@ export default function TransportScreen() {
                       label: '移除車站',
                       icon: icons.delete,
                       destructive: true,
-                      onPress: () => removeMetro(station),
+                      onPress: () => confirmRemoval('移除車站', station, () => removeMetro(station)),
                     },
                   ]}
                 />

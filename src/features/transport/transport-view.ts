@@ -223,7 +223,35 @@ export function metroStationStatus(options: {
   return undefined;
 }
 
-export const CROWD_LEGEND = '車廂擁擠：綠色低、黃色中、橘色高、深橘色極高（前車廂起）。';
+export interface MetroNotices {
+  /** No credentials: arrivals are off, but stations can still be managed. */
+  notConfigured: boolean;
+  /** Arrivals failed to load or refresh. */
+  arrivalsFailed: boolean;
+  /** Crowding failed while arrivals are shown. */
+  crowdingFailed: boolean;
+}
+
+/**
+ * The notices above the Metro stations. Failures are reported only while
+ * stations are followed: with none, nothing is fetched, so an old error
+ * would stay on screen and retrying could not clear it.
+ */
+export function metroNotices(state: {
+  configured: boolean;
+  stationCount: number;
+  arrivals: { isError: boolean; hasData: boolean };
+  crowdingError: boolean;
+}): MetroNotices {
+  const live = state.configured && state.stationCount > 0;
+  return {
+    notConfigured: !state.configured,
+    arrivalsFailed: live && state.arrivals.isError,
+    crowdingFailed: live && state.crowdingError && state.arrivals.hasData,
+  };
+}
+
+export const CROWD_LEGEND ='車廂擁擠：綠色低、黃色中、橘色高、深橘色極高（前車廂起）。';
 
 /** The Metro section footer: the crowding legend and when arrivals were fetched. */
 export function metroFooter(configured: boolean, updatedAt: number): string | undefined {
