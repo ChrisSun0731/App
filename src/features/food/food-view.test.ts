@@ -1,11 +1,13 @@
 import { describe, expect, it } from '@jest/globals';
 
 import {
+  activeFilterLabels,
   addressText,
   filterRestaurants,
   findRestaurant,
   mapsUrl,
   pickRandomOpen,
+  resultsTitle,
   summarize,
   websiteUrl,
   weeklyHours,
@@ -47,6 +49,16 @@ describe('美食 list', () => {
     expect(filterRestaurants(all, { ...noFilters, favoritesOnly: true }, [cafe.name], mondayNoon)).toEqual([cafe]);
     expect(filterRestaurants(all, { query: '', openOnly: true, favoritesOnly: true }, [nightMarket.name], mondayNoon))
       .toEqual([]);
+  });
+
+  it('titles the results with the filters in use', () => {
+    expect(activeFilterLabels({ openOnly: false, favoritesOnly: false })).toEqual([]);
+    expect(activeFilterLabels({ openOnly: true, favoritesOnly: true })).toEqual(['正在營業', '我的最愛']);
+    expect(activeFilterLabels({ openOnly: false, favoritesOnly: true })).toEqual(['我的最愛']);
+    expect(resultsTitle(89)).toBe('89 間餐廳');
+    expect(resultsTitle(89, [])).toBe('89 間餐廳');
+    expect(resultsTitle(3, ['正在營業'])).toBe('3 間餐廳 · 篩選：正在營業');
+    expect(resultsTitle(1, ['正在營業', '我的最愛'])).toBe('1 間餐廳 · 篩選：正在營業、我的最愛');
   });
 
   it('describes the status and today’s hours on one line', () => {

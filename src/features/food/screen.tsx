@@ -2,8 +2,8 @@
 // status, name search, 正在營業 / 我的最愛 filters, favourites and a random
 // pick, each restaurant opening the /restaurant modal. Layout per
 // docs/design/native-ui.md, "美食 (Food)".
-import { router, Stack } from 'expo-router';
-import { useState, type ReactElement } from 'react';
+import { router, Stack, useFocusEffect } from 'expo-router';
+import { useCallback, useState, type ReactElement } from 'react';
 import { Alert, useWindowDimensions } from 'react-native';
 
 import { HeaderActions, type HeaderItem } from '@/components/header-actions';
@@ -14,9 +14,11 @@ import { usePalette } from '@/theme/palette';
 import { Embedded, EmptyState, FilterChips, ListScreen, Loading, Notice, Row, Section } from '@/ui';
 
 import {
+  activeFilterLabels,
   FILTER_LABELS,
   filterRestaurants,
   pickRandomOpen,
+  resultsTitle,
   STATUS_LEGEND,
   summarize,
 } from './food-view';
@@ -45,8 +47,13 @@ export default function FoodScreen() {
   const [openOnly, setOpenOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [view, setView] = useState<'map' | 'list'>(MAP_AVAILABLE ? 'map' : 'list');
-  // The restaurant last opened, so the map pans to it behind the modal.
+  // The restaurant just opened, so the map pans to it behind the modal.
   const [selected, setSelected] = useState<Restaurant | null>(null);
+
+  // Cleared once the modal closes (as the old sheet's onDismiss did): a map
+  // mounted later (顯示地圖) then starts at its overview instead of zooming to
+  // a stale pick, and opening the same restaurant again pans to it again.
+  useFocusEffect(useCallback(() => setSelected(null), []));
 
   const data = restaurants.data;
   const filtered = filterRestaurants(data ?? [], { query, openOnly, favoritesOnly }, favorites, now);
@@ -117,10 +124,14 @@ export default function FoodScreen() {
     });
   }
 
+  // iOS: the filter menu is the only filter UI, and the navigation bar (with
+  // the menu) hides while searching, so the title names the filters in use.
+  // Android's chips stay in view above the list.
+  const listTitle = resultsTitle(filtered.length, ANDROID ? [] : activeFilterLabels({ openOnly, favoritesOnly }));
   let listSection: ReactElement;
   if (data && filtered.length > 0) {
     listSection = (
-      <Section title={`${filtered.length} 間餐廳`}>
+      <Section title={listTitle}>
         {filtered.map((restaurant) => {
           const summary = summarize(restaurant, now);
           const favorite = favorites.includes(restaurant.name);

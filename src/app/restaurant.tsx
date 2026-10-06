@@ -21,6 +21,8 @@ import { useNow } from '@/features/home/use-now';
 import { useFoodStore } from '@/store/food';
 import { ButtonRow, EmptyState, ListScreen, Loading, Row, Section, TextBlock } from '@/ui';
 
+const ANDROID = process.env.EXPO_OS === 'android';
+
 /** The open status and today's mark tick while the modal is focused. */
 const CLOCK_INTERVAL_MS = 30_000;
 
@@ -37,7 +39,7 @@ export default function RestaurantScreen() {
   const close = () => router.back();
   // Nothing to save (favourites apply at once): iOS has 完成 on the right of
   // the page sheet, Android a close icon on the left of the full-screen modal.
-  const header: HeaderActionsProps = process.env.EXPO_OS === 'android'
+  const header: HeaderActionsProps = ANDROID
     ? { left: [{ kind: 'icon', key: 'close', label: '關閉', icon: icons.close, onPress: close }] }
     : { right: [{ kind: 'text', key: 'done', label: '完成', prominent: true, onPress: close }] };
 
@@ -106,11 +108,15 @@ export default function RestaurantScreen() {
         </Section>
 
         <Section title="營業時間">
+          {/* One line per range. Android's trailing detail stops at two lines
+              (a third range would be cut off), so the hours go in the
+              supporting text there, as Material lays out multi-line values. */}
           {weeklyHours(restaurant, now).map((day) => (
             <Row
               key={day.day}
               title={day.label}
-              detail={day.hours}
+              subtitle={ANDROID ? day.hours : undefined}
+              detail={ANDROID ? undefined : day.hours}
               emphasized={day.today}
               badge={day.today ? '今天' : undefined}
             />

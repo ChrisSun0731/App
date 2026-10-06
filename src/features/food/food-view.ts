@@ -56,6 +56,19 @@ export function filterRestaurants(
   );
 }
 
+/** The names of the filters in use, in menu order. */
+export function activeFilterLabels({ openOnly, favoritesOnly }: Omit<FoodFilters, 'query'>): string[] {
+  const labels: string[] = [];
+  if (openOnly) labels.push(FILTER_LABELS.open);
+  if (favoritesOnly) labels.push(FILTER_LABELS.favorites);
+  return labels;
+}
+
+/** The list's section title, `{n} 間餐廳`, naming the given filters (if any) so they are not missed. */
+export function resultsTitle(count: number, filterLabels: readonly string[] = []): string {
+  return filterLabels.length ? `${count} 間餐廳 · 篩選：${filterLabels.join('、')}` : `${count} 間餐廳`;
+}
+
 export interface RestaurantSummary {
   status: OpenStatus;
   statusLabel: string;
