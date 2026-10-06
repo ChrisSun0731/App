@@ -1,142 +1,251 @@
-import { BottomSheet, RNHostView } from '@expo/ui';
-import Constants from 'expo-constants';
-import { useIsFocused } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, AppState, Linking, Platform, ScrollView, StyleSheet, View } from 'react-native';
+// 美食: restaurants near 建中 on a map and in a list, with their opening
+// status, name search, 正在營業 / 我的最愛 filters, favourites and a random
+// pick, each restaurant opening the /restaurant modal. Layout per
+// docs/design/native-ui.md, "美食 (Food)".
+import { router, Stack, useFocusEffect } from 'expo-router';
+import { useCallback, useState, type ReactElement } from 'react';
+import { Alert, useWindowDimensions } from 'react-native';
 
-import { ActionButton, Body, Card, Field, Screen, Segment, Title, Toggle } from '@/components/ui/page';
+import { HeaderActions, type HeaderItem } from '@/components/header-actions';
+import { icons } from '@/components/icons';
+import { useNow } from '@/features/home/use-now';
 import { useFoodStore } from '@/store/food';
 import { usePalette } from '@/theme/palette';
+import { Embedded, EmptyState, FilterChips, ListScreen, Loading, Notice, Row, Section } from '@/ui';
 
 import {
-  DAY_LABELS, DISPLAY_DAY_ORDER, dayKeyOf, getOpenStatus, hoursLines, isOpenNow,
-  STATUS_LABELS, type Restaurant,
-} from './opening-hours';
+  activeFilterLabels,
+  FILTER_LABELS,
+  filterRestaurants,
+  pickRandomOpen,
+  resultsTitle,
+  STATUS_LEGEND,
+  summarize,
+} from './food-view';
+import { MAP_AVAILABLE } from './map-availability';
+import type { Restaurant } from './opening-hours';
 import RestaurantMap from './restaurant-map';
 import { useRestaurants } from './use-restaurants';
 
+const ANDROID = process.env.EXPO_OS === 'android';
+
+/** Statuses are minute-resolution; the clock only ticks while 美食 is focused. */
+const CLOCK_INTERVAL_MS = 30_000;
+
+/** The map takes about 60% of the screen height, leaving the list's first rows in view. */
+const MAP_HEIGHT_RATIO = 0.6;
+const MIN_MAP_HEIGHT = 240;
+
 export default function FoodScreen() {
+  const now = useNow(CLOCK_INTERVAL_MS);
   const palette = usePalette();
+  const { height: windowHeight } = useWindowDimensions();
   const restaurants = useRestaurants();
   const favorites = useFoodStore((state) => state.favorites);
   const toggleFavorite = useFoodStore((state) => state.toggleFavorite);
-  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
   const [openOnly, setOpenOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [view, setView] = useState(() => Platform.OS === 'ios' ||
-    (Platform.OS === 'android' && Constants.expoConfig?.extra?.googleMapsConfigured === true) ? 0 : 1);
+  const [view, setView] = useState<'map' | 'list'>(MAP_AVAILABLE ? 'map' : 'list');
+  // The restaurant just opened, so the map pans to it behind the modal.
   const [selected, setSelected] = useState<Restaurant | null>(null);
-  const [now, setNow] = useState(() => new Date());
-  const focused = useIsFocused();
 
-  useEffect(() => {
-    if (!focused) return;
-    const frame = requestAnimationFrame(() => setNow(new Date()));
-    const timer = setInterval(() => {
-      if (AppState.currentState === 'active') setNow(new Date());
-    }, 30_000);
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') setNow(new Date());
-    });
-    return () => { cancelAnimationFrame(frame); clearInterval(timer); subscription.remove(); };
-  }, [focused]);
+  // Cleared once the modal closes (as the old sheet's onDismiss did): a map
+  // mounted later (顯示地圖) then starts at its overview instead of zooming to
+  // a stale pick, and opening the same restaurant again pans to it again.
+  useFocusEffect(useCallback(() => setSelected(null), []));
 
-  const filtered = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase();
-    return (restaurants.data ?? []).filter((restaurant) =>
-      (!query || restaurant.name.toLocaleLowerCase().includes(query)) &&
-      (!openOnly || isOpenNow(restaurant.openingHours, now)) &&
-      (!favoritesOnly || favorites.includes(restaurant.name)),
-    );
-  }, [restaurants.data, search, openOnly, favoritesOnly, favorites, now]);
+  const data = restaurants.data;
+  const filtered = filterRestaurants(data ?? [], { query, openOnly, favoritesOnly }, favorites, now);
+  const filtering = openOnly || favoritesOnly;
+  const refresh = () => restaurants.refetch();
 
-  const chooseRestaurant = () => {
-    const open = filtered.filter((restaurant) => isOpenNow(restaurant.openingHours, now));
-    if (!open.length) {
+  function openDetail(restaurant: Restaurant) {
+    setSelected(restaurant);
+    router.push({ pathname: '/restaurant', params: { name: restaurant.name } });
+  }
+
+  function chooseRandom() {
+    // From what the list shows (search and filters apply), open ones only.
+    const choice = pickRandomOpen(filtered, now);
+    if (!choice) {
       Alert.alert('目前沒有營業中的餐廳', '調整篩選條件後再試一次。');
       return;
     }
-    setSelected(open[Math.floor(Math.random() * open.length)]);
-  };
+    openDetail(choice);
+  }
+
+  function toggleFilter(key: string) {
+    if (key === 'open') setOpenOnly((on) => !on);
+    else if (key === 'favorites') setFavoritesOnly((on) => !on);
+  }
+
+  function clearFilters() {
+    setOpenOnly(false);
+    setFavoritesOnly(false);
+  }
+
+  const header: HeaderItem[] = [];
+  if (MAP_AVAILABLE) {
+    header.push({
+      kind: 'icon',
+      key: 'view',
+      label: view === 'map' ? '顯示列表' : '顯示地圖',
+      icon: view === 'map' ? icons.list : icons.map,
+      onPress: () => setView((current) => (current === 'map' ? 'list' : 'map')),
+    });
+  }
+  header.push({
+    kind: 'icon',
+    key: 'random',
+    label: '隨機選擇營業中的餐廳',
+    icon: icons.shuffle,
+    disabled: !filtered.length,
+    onPress: chooseRandom,
+  });
+  // One filter control per platform: an iOS menu with checkmarks, and on
+  // Android the Material filter chips at the top of the list (a second copy
+  // in the top app bar's menu would only repeat them).
+  if (!ANDROID) {
+    header.push({
+      kind: 'menu',
+      key: 'filter',
+      label: filtering ? '篩選（已套用）' : '篩選',
+      icon: filtering ? icons.filterActive : icons.filter,
+      actions: [
+        { key: 'open', label: FILTER_LABELS.open, selected: openOnly, onPress: () => toggleFilter('open') },
+        {
+          key: 'favorites',
+          label: FILTER_LABELS.favorites,
+          selected: favoritesOnly,
+          onPress: () => toggleFilter('favorites'),
+        },
+      ],
+    });
+  }
+
+  // iOS: the filter menu is the only filter UI, and the navigation bar (with
+  // the menu) hides while searching, so the title names the filters in use.
+  // Android's chips stay in view above the list.
+  const listTitle = resultsTitle(filtered.length, ANDROID ? [] : activeFilterLabels({ openOnly, favoritesOnly }));
+  let listSection: ReactElement;
+  if (data && filtered.length > 0) {
+    listSection = (
+      <Section title={listTitle}>
+        {filtered.map((restaurant) => {
+          const summary = summarize(restaurant, now);
+          const favorite = favorites.includes(restaurant.name);
+          return (
+            <Row
+              key={restaurant.name}
+              title={restaurant.name}
+              subtitle={summary.subtitle}
+              dotColor={summary.color}
+              accessory="chevron"
+              accessibilityLabel={[restaurant.name, favorite ? FILTER_LABELS.favorites : null, summary.subtitle]
+                .filter(Boolean)
+                .join('，')}
+              toggle={{
+                label: favorite ? '移除最愛' : '加入最愛',
+                icon: icons.favorite,
+                activeIcon: icons.favoriteFilled,
+                active: favorite,
+                onPress: () => toggleFavorite(restaurant.name),
+              }}
+              onPress={() => openDetail(restaurant)}
+            />
+          );
+        })}
+      </Section>
+    );
+  } else if (data) {
+    listSection = (
+      <Section plain>
+        <EmptyState
+          icon={icons.forkKnife}
+          title="沒有符合條件的餐廳。"
+          description="試試其他關鍵字，或關閉篩選條件。"
+          // The search text lives in the native search bar; the filters are
+          // the part that is easy to forget when they sit in a menu.
+          action={filtering ? { label: '關閉篩選條件', onPress: clearFilters } : undefined}
+        />
+      </Section>
+    );
+  } else if (restaurants.isError) {
+    listSection = (
+      <Section plain>
+        <EmptyState
+          icon={icons.offline}
+          title="無法讀取餐廳資料"
+          description="請檢查網路後再試一次。"
+          action={{ label: '重新讀取', onPress: () => void refresh() }}
+        />
+      </Section>
+    );
+  } else {
+    listSection = (
+      <Section>
+        <Loading label="正在讀取餐廳資料…" />
+      </Section>
+    );
+  }
 
   return (
     <>
-      <Screen refreshing={restaurants.isFetching} onRefresh={() => { void restaurants.refetch(); }}>
-        <Title>美食</Title>
-        <Body secondary>查看建中附近餐廳，找到今天想吃的料理。</Body>
-        <Card>
-          <Field label="搜尋餐廳" value={search} onChangeText={setSearch} />
-          <Toggle label="正在營業" value={openOnly} onChange={setOpenOnly} />
-          <Toggle label="我的最愛" value={favoritesOnly} onChange={setFavoritesOnly} />
-          <Segment options={['地圖', '列表']} selectedIndex={view} onChange={setView} />
-          <ActionButton label="隨機選擇營業中的餐廳" onPress={chooseRestaurant} disabled={!filtered.length} />
-        </Card>
-        {restaurants.isPending && <Body secondary>正在讀取餐廳資料…</Body>}
-        {restaurants.isError && (
-          <Card>
-            <Body>{restaurants.data ? '無法更新餐廳資料，先顯示上次儲存的內容。' : '無法讀取餐廳資料，請檢查網路後再試一次。'}</Body>
-            <ActionButton label="重新讀取" onPress={() => { void restaurants.refetch(); }} />
-          </Card>
-        )}
-        {view === 0 && <RestaurantMap restaurants={filtered} selected={selected} now={now} onSelect={setSelected} />}
-        {view === 0 && <Body secondary>綠色：營業中　橘色：即將打烊　藍色：即將開業　灰色：已打烊</Body>}
-        <Body secondary>{filtered.length} 間餐廳</Body>
-        {!restaurants.isPending && !filtered.length && (
-          <Card><Body>沒有符合條件的餐廳。</Body><Body secondary>試試其他關鍵字，或關閉篩選條件。</Body></Card>
-        )}
-        {view === 1 && filtered.map((restaurant) => (
-          <Card key={restaurant.name}>
-            <Title>{restaurant.name}</Title>
-            <Body>{STATUS_LABELS[getOpenStatus(restaurant.openingHours, now)]}</Body>
-            <Body secondary>今日營業：{hoursLines(restaurant.openingHours[dayKeyOf(now)]).join('、')}</Body>
-            <View style={styles.actions}>
-              <ActionButton label="詳細資訊" onPress={() => setSelected(restaurant)} />
-              <ActionButton label={favorites.includes(restaurant.name) ? '移除最愛' : '加入最愛'} onPress={() => toggleFavorite(restaurant.name)} />
-            </View>
-          </Card>
-        ))}
-      </Screen>
-      <BottomSheet isPresented={selected !== null} onDismiss={() => setSelected(null)} snapPoints={['full']} containerColor={palette.surface}>
-        <RNHostView>
-          <ScrollView style={styles.details} contentContainerStyle={styles.detailsContent}>
-          {selected && (
-            <>
-              <Title>{selected.name}</Title>
-              <Body>{STATUS_LABELS[getOpenStatus(selected.openingHours, now)]}</Body>
-              <Body secondary>{typeof selected.address === 'string' ? selected.address : `位置：${selected.position[0]}, ${selected.position[1]}`}</Body>
-              <ActionButton label={favorites.includes(selected.name) ? '移除最愛' : '加入最愛'} onPress={() => toggleFavorite(selected.name)} />
-              <ActionButton label="在地圖開啟位置" onPress={() => {
-                const [latitude, longitude] = selected.position;
-                void openLink(`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`);
-              }} />
-              {typeof selected.website === 'string' && /^https?:\/\//i.test(selected.website) && (
-                <ActionButton label="餐廳網站" onPress={() => { void openLink(selected.website!); }} />
-              )}
-              <Title>營業時間</Title>
-              {DISPLAY_DAY_ORDER.map((day) => (
-                <View key={day} style={[styles.hours, day === dayKeyOf(now) && { backgroundColor: palette.tintContainer }]}>
-                  <Body>{DAY_LABELS[day]}{day === dayKeyOf(now) ? '（今天）' : ''}</Body>
-                  <Body>{hoursLines(selected.openingHours[day]).join('\n')}</Body>
-                </View>
-              ))}
-              <ActionButton label="關閉" onPress={() => setSelected(null)} />
-            </>
-          )}
-          </ScrollView>
-        </RNHostView>
-      </BottomSheet>
+      <Stack.SearchBar
+        placeholder="搜尋餐廳"
+        // The SwiftUI list inside the Host does not drive UIKit's
+        // hide-on-scroll, which could leave the bar unreachable.
+        hideWhenScrolling={false}
+        // Results filter as you type, so keep them visible and tappable.
+        obscureBackground={false}
+        onChangeText={(event) => setQuery(event.nativeEvent.text)}
+        // iOS clears the field on 取消 without a change event; Android
+        // clears it when the search view collapses.
+        onCancelButtonPress={() => setQuery('')}
+        onClose={() => setQuery('')}
+        // Android's search view takes the top app bar's colours, like the
+        // HeaderActions icons beside it (iOS draws system colours itself).
+        {...(ANDROID
+          ? { textColor: palette.text, hintTextColor: palette.textSecondary, headerIconColor: palette.textSecondary }
+          : null)}
+      />
+      <HeaderActions right={header} />
+      <ListScreen onRefresh={refresh}>
+        {/* Cached restaurants stay on screen when a refresh fails. */}
+        {data && restaurants.isError ? (
+          <Section>
+            <Notice
+              tone="error"
+              title="無法更新餐廳資料"
+              message="先顯示上次儲存的內容。"
+              action={{ label: '重新讀取', onPress: () => void refresh() }}
+            />
+          </Section>
+        ) : null}
+
+        {ANDROID ? (
+          <Section plain>
+            <FilterChips
+              options={[
+                { key: 'open', label: FILTER_LABELS.open, selected: openOnly },
+                { key: 'favorites', label: FILTER_LABELS.favorites, selected: favoritesOnly },
+              ]}
+              onToggle={toggleFilter}
+            />
+          </Section>
+        ) : null}
+
+        {view === 'map' ? (
+          <Section footer={STATUS_LEGEND}>
+            <Embedded height={Math.max(MIN_MAP_HEIGHT, Math.round(windowHeight * MAP_HEIGHT_RATIO))}>
+              <RestaurantMap restaurants={filtered} selected={selected} now={now} onSelect={openDetail} />
+            </Embedded>
+          </Section>
+        ) : null}
+
+        {listSection}
+      </ListScreen>
     </>
   );
 }
-
-async function openLink(url: string) {
-  try { await Linking.openURL(url); }
-  catch { Alert.alert('無法開啟連結', '請稍後再試一次。'); }
-}
-
-const styles = StyleSheet.create({
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  details: { flex: 1 },
-  detailsContent: { gap: 12, paddingTop: 12, paddingBottom: 32 },
-  hours: { gap: 4, padding: 12, borderRadius: 12 },
-});

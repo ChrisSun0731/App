@@ -227,8 +227,13 @@ export function getWeekNumber(semesterStart: string | null, date: Date): number 
 }
 
 /**
- * Both weeks of an alternating slot, or null. Returns null once the user has
- * typed their own subject, so their edit is not ignored.
+ * Both weeks of an alternating slot, or null.
+ *
+ * Cells saved by the editor are unambiguous: a rotating slot is stored as
+ * `{ subject: odd, alternating }` and a plain one has no `alternating`. The
+ * previous build instead kept `alternating` and only replaced `subject`, so a
+ * subject matching neither week is treated as that user's override and keeps
+ * the meaning it had when it was saved.
  */
 export function getAlternating(cell: ScheduleCell): { odd: string; even: string } | null {
   if (!cell.alternating) return null;
@@ -242,8 +247,51 @@ export function getAlternating(cell: ScheduleCell): { odd: string; even: string 
 /** The subject actually taught in this slot during a week of `parity`. */
 export function subjectFor(cell: ScheduleCell, parity: WeekParity): string {
   const alternating = getAlternating(cell);
-  if (alternating) {
-    return alternating[parity] || cell.subject || '';
-  }
+  // An empty week of a rotation is a free period. Falling back to `subject`
+  // here would show the 單週 subject on a 雙週 off week.
+  if (alternating) return alternating[parity];
   return cell.subject || '';
+}
+
+/** The schedule editor's form state for one slot. */
+export interface CellDraft {
+  /** 單雙週輪替: edit `odd` and `even` instead of `subject`. */
+  rotating: boolean;
+  subject: string;
+  odd: string;
+  even: string;
+  note: string;
+  color: CellColor;
+}
+
+export function draftFromCell(cell: ScheduleCell): CellDraft {
+  return {
+    rotating: getAlternating(cell) !== null,
+    subject: cell.subject,
+    // Kept for a slot whose rotation was overridden (by the previous build) so
+    // turning 輪替 back on offers the imported weeks again.
+    odd: cell.alternating?.odd ?? '',
+    even: cell.alternating?.even ?? '',
+    note: cell.note ?? '',
+    color: cell.color ?? 'Default',
+  };
+}
+
+/** Turns 單雙週輪替 on or off without discarding what was typed in either mode. */
+export function setDraftRotating(draft: CellDraft, rotating: boolean): CellDraft {
+  // A regular slot has no weeks yet; start 單週 from its subject so only the
+  // other week needs typing.
+  if (rotating && !draft.odd && !draft.even) return { ...draft, rotating, odd: draft.subject };
+  return { ...draft, rotating };
+}
+
+/** The cell to store for `draft`; never ambiguous to getAlternating(). */
+export function cellFromDraft(draft: CellDraft): ScheduleCell {
+  const base = { note: draft.note.trim(), color: draft.color };
+  if (!draft.rotating) return { subject: draft.subject.trim(), ...base };
+  const odd = draft.odd.trim();
+  const even = draft.even.trim();
+  // The same subject every week is not a rotation.
+  if (odd === even) return { subject: odd, ...base };
+  return { subject: odd, alternating: { odd, even }, ...base };
 }

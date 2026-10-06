@@ -3,6 +3,7 @@ import type { icons } from './icons';
 type IconValue = (typeof icons)[keyof typeof icons];
 
 export interface HeaderMenuAction {
+  kind?: 'action';
   key: string;
   label: string;
   icon?: IconValue;
@@ -11,6 +12,21 @@ export interface HeaderMenuAction {
   /** Shows a checkmark next to the action. */
   selected?: boolean;
 }
+
+/**
+ * A nested menu inside a 'menu' item, e.g. 選擇班級 with one action per class.
+ * iOS: a native submenu. Android: the open dropdown switches to its actions,
+ * under a back item.
+ */
+export interface HeaderSubmenu {
+  kind: 'submenu';
+  key: string;
+  label: string;
+  icon?: IconValue;
+  actions: HeaderMenuAction[];
+}
+
+export type HeaderMenuEntry = HeaderMenuAction | HeaderSubmenu;
 
 export type HeaderItem =
   | {
@@ -36,7 +52,8 @@ export type HeaderItem =
       key: string;
       label: string;
       icon: IconValue;
-      actions: HeaderMenuAction[];
+      actions: HeaderMenuEntry[];
+      disabled?: boolean;
     };
 
 export interface HeaderActionsProps {

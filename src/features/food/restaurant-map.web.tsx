@@ -1,7 +1,7 @@
-import { Card, Body } from '@/components/ui/page';
-
 import type { RestaurantMapProps } from './restaurant-map.types';
 
+// react-native-maps has no web implementation, and 美食 never offers the map
+// on web (MAP_AVAILABLE is false there), so this only keeps the bundle valid.
 export default function RestaurantMap(_props: RestaurantMapProps) {
-  return <Card><Body secondary>切換到餐廳列表查看營業時間，或在地圖 App 開啟餐廳位置。</Body></Card>;
+  return null;
 }

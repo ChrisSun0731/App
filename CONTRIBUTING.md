@@ -61,7 +61,7 @@ yarn lint
 
 簽署帳密／金鑰存放 GitHub Secrets；本機 API 設定放 `.env.local`。不要提交私鑰、provisioning profile 或真正的 API 帳密。
 
-**舊版 Capacitor WebView localStorage 尚未遷移到新版 SQLite。** 在提供既有使用者更新之前，必須先完成待辦、活動、課表修改、最愛、釘選與設定的遷移／復原設計及測試。PR 與發布說明應清楚交代這項限制。
+**舊版 Capacitor WebView localStorage 由 `src/features/legacy-import` 在首次啟動時匯入。** 修改 store 結構或預設值時，請一併更新該資料夾的轉換／合併邏輯與測試。發布前必須在 Android 與 iOS 上以實際舊版升級驗證匯入結果。
 
 ## 聯絡
 

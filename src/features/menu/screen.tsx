@@ -1,100 +1,115 @@
+// 熱食部: the cafeteria's menu image for one school day, paged by week from the
+// header and by weekday with a segmented control, reloadable past the caches
+// and openable in the browser. Layout per docs/design/native-ui.md,
+// "熱食部 (Menu)".
 import { Image } from 'expo-image';
-import { useEffect, useState } from 'react';
-import { Alert, Linking, StyleSheet, View } from 'react-native';
+import { useState, type ReactElement } from 'react';
+import { Alert, Linking, StyleSheet } from 'react-native';
 
-import { ActionButton, Body, Card, Screen, Segment, Title } from '@/components/ui/page';
-import { addDays, formatFullDate, formatMonthDay, fromDateKey, toDateKey } from '@/lib/dates';
+import { HeaderActions, type HeaderItem } from '@/components/header-actions';
+import { icons } from '@/components/icons';
+import { ButtonRow, Embedded, EmptyState, ListScreen, Loading, PickerRow, Section } from '@/ui';
 
-import { defaultMenuDay, MENU_DAYS, menuImageUrl, menuWeekStart, type MenuDay } from './menu-week';
+import {
+  DAY_OPTIONS,
+  imageAspectRatio,
+  menuDayTitle,
+  shiftWeek,
+  toMenuDay,
+  weekRangeLabel,
+} from './menu-view';
+import { defaultMenuDay, menuWeekStart, type MenuDay } from './menu-week';
+import { useMenuImage } from './use-menu-image';
 
 export default function MenuScreen() {
   const [week, setWeek] = useState(() => menuWeekStart(new Date()));
   const [day, setDay] = useState<MenuDay>(() => defaultMenuDay(new Date()));
-  const [revision, setRevision] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-  const [imageRatio, setImageRatio] = useState(0.7);
-  const url = menuImageUrl(week, day);
-  const requestUrl = revision ? `${url}?refresh=${revision}` : url;
-  const monday = fromDateKey(week);
-  const selectedDate = addDays(monday, day - 1);
+  const menu = useMenuImage(week, day);
+  const dayTitle = menuDayTitle(week, day);
 
-  useEffect(() => {
-    if (!loading) return;
-    const timeout = setTimeout(() => {
-      setFailed(true);
-      setLoading(false);
-    }, 15_000);
-    return () => clearTimeout(timeout);
-  }, [loading, week, day, revision]);
+  function showThisWeek() {
+    // Back to today's menu (Monday's at the weekend), as when the screen opens.
+    const now = new Date();
+    setWeek(menuWeekStart(now));
+    setDay(defaultMenuDay(now));
+  }
 
-  const refresh = () => {
-    setFailed(false);
-    setLoading(true);
-    setRevision(Date.now());
-  };
-  const chooseDay = (index: number) => {
-    if (index + 1 === day) return;
-    setLoading(true);
-    setFailed(false);
-    setDay((index + 1) as MenuDay);
-  };
-  const chooseWeek = (nextWeek: string) => {
-    if (nextWeek === week) return;
-    setLoading(true);
-    setFailed(false);
-    setWeek(nextWeek);
-  };
-  const today = () => {
-    const current = new Date();
-    chooseWeek(menuWeekStart(current));
-    chooseDay(defaultMenuDay(current) - 1);
-  };
+  function openInBrowser() {
+    void Linking.openURL(menu.url).catch(() => Alert.alert('無法開啟菜單', '請稍後再試一次。'));
+  }
+
+  const header: HeaderItem[] = [
+    {
+      kind: 'icon',
+      key: 'previous',
+      label: '上一週',
+      icon: icons.chevronLeft,
+      onPress: () => setWeek((current) => shiftWeek(current, -1)),
+    },
+    { kind: 'text', key: 'this-week', label: '本週', onPress: showThisWeek },
+    {
+      kind: 'icon',
+      key: 'next',
+      label: '下一週',
+      icon: icons.chevronRight,
+      onPress: () => setWeek((current) => shiftWeek(current, 1)),
+    },
+  ];
+
+  let content: ReactElement;
+  if (menu.status === 'failed') {
+    content = (
+      <EmptyState
+        icon={icons.forkKnife}
+        title="這一天的菜單尚未公布，或目前無法讀取。"
+        description="可以切換其他日期，或重新整理再試一次。"
+        action={{ label: '重新讀取菜單', onPress: () => void menu.refresh() }}
+      />
+    );
+  } else if (menu.image) {
+    // Also while a refresh is loading: the pull indicator shows progress.
+    content = (
+      <Embedded aspectRatio={imageAspectRatio(menu.image.width, menu.image.height)}>
+        <Image
+          source={menu.image}
+          style={styles.image}
+          contentFit="contain"
+          accessibilityLabel={`${dayTitle} 熱食部菜單`}
+        />
+      </Embedded>
+    );
+  } else {
+    content = <Loading label="正在讀取菜單…" />;
+  }
 
   return (
-    <Screen refreshing={loading} onRefresh={refresh}>
-      <Title>熱食部菜單</Title>
-      <Body secondary>{formatMonthDay(monday)} — {formatMonthDay(addDays(monday, 4))}</Body>
-      <Card>
-        <View style={styles.actions}>
-          <ActionButton label="上一週" onPress={() => chooseWeek(toDateKey(addDays(monday, -7)))} />
-          <ActionButton label="本週" onPress={today} />
-          <ActionButton label="下一週" onPress={() => chooseWeek(toDateKey(addDays(monday, 7)))} />
-        </View>
-        <Segment options={MENU_DAYS.map((item) => item.label.slice(-1))} selectedIndex={day - 1} onChange={chooseDay} />
-      </Card>
-      <Title>{formatFullDate(selectedDate)} {MENU_DAYS[day - 1].label}</Title>
-      {loading && <Body secondary>正在讀取菜單…</Body>}
-      {failed ? (
-        <Card>
-          <Body>這一天的菜單尚未公布，或目前無法讀取。</Body>
-          <Body secondary>可以切換其他日期，或重新整理再試一次。</Body>
-          <ActionButton label="重新讀取菜單" onPress={refresh} />
-        </Card>
-      ) : (
-        <Image
-          key={`${week}-${day}-${revision}`}
-          source={{ uri: requestUrl }}
-          style={[styles.image, { aspectRatio: imageRatio }]}
-          contentFit="contain"
-          cachePolicy="disk"
-          accessibilityLabel={`${formatFullDate(selectedDate)}熱食部菜單`}
-          onLoad={(event) => {
-            const ratio = event.source.width / event.source.height;
-            setImageRatio(Number.isFinite(ratio) && ratio > 0 ? ratio : 0.7);
-            setLoading(false);
-          }}
-          onError={() => { setFailed(true); setLoading(false); }}
-        />
-      )}
-      <ActionButton label="在瀏覽器開啟菜單" onPress={() => {
-        void Linking.openURL(requestUrl).catch(() => Alert.alert('無法開啟菜單', '請稍後再試一次。'));
-      }} />
-    </Screen>
+    <>
+      <HeaderActions right={header} />
+      {/* onRefresh from the first render: the iOS List is rebuilt if it appears later. */}
+      <ListScreen onRefresh={menu.refresh}>
+        <Section plain title={weekRangeLabel(week)}>
+          <PickerRow
+            variant="segmented"
+            label="星期"
+            value={`${day}`}
+            options={DAY_OPTIONS}
+            onChange={(value) => setDay(toMenuDay(value))}
+          />
+        </Section>
+
+        {/* A full empty state sits without the card, as elsewhere in the kit. */}
+        <Section title={dayTitle} plain={menu.status === 'failed'}>
+          {content}
+        </Section>
+
+        <Section>
+          <ButtonRow label="在瀏覽器開啟菜單" icon={icons.openExternal} onPress={openInBrowser} />
+        </Section>
+      </ListScreen>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  image: { width: '100%', borderRadius: 12 },
+  image: { flex: 1 },
 });

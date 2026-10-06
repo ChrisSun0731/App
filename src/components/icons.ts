@@ -25,6 +25,8 @@ export const icons = {
   location: Icon.select({ ios: 'location', android: import('@expo/material-symbols/near_me.xml') }),
   chevronRight: Icon.select({ ios: 'chevron.right', android: import('@expo/material-symbols/chevron_right.xml') }),
   chevronLeft: Icon.select({ ios: 'chevron.left', android: import('@expo/material-symbols/chevron_left.xml') }),
+  // The back item of an Android header submenu (HeaderActions).
+  back: Icon.select({ ios: 'chevron.backward', android: import('@expo/material-symbols/arrow_back.xml') }),
   folder: Icon.select({ ios: 'folder', android: import('@expo/material-symbols/folder.xml') }),
   label: Icon.select({ ios: 'tag', android: import('@expo/material-symbols/label.xml') }),
   markRead: Icon.select({ ios: 'checkmark.circle', android: import('@expo/material-symbols/done_all.xml') }),
@@ -65,6 +67,19 @@ export const icons = {
   favoriteFilled: Icon.select({ ios: 'heart.fill', android: require('@/assets/icons/favorite_fill.xml') }),
   train: Icon.select({ ios: 'tram', android: import('@expo/material-symbols/train.xml') }),
   otherHouses: Icon.select({ ios: 'house.and.flag', android: import('@expo/material-symbols/other_houses.xml') }),
+  // Exposed dropdown menu arrow (Android kit PickerRow).
+  dropDown: Icon.select({ ios: 'chevron.up.chevron.down', android: import('@expo/material-symbols/arrow_drop_down.xml') }),
+  // MonthCalendar's "jump to today" button.
+  today: Icon.select({ ios: 'calendar.circle', android: import('@expo/material-symbols/today.xml') }),
+  // 建北特約's area links.
+  mapPin: Icon.select({ ios: 'mappin', android: import('@expo/material-symbols/location_on.xml') }),
+  // 美食's filter menu; the filled glyph shows (as in Mail) that a filter is on.
+  filter: Icon.select({ ios: 'line.3.horizontal.decrease.circle', android: import('@expo/material-symbols/filter_list.xml') }),
+  filterActive: Icon.select({ ios: 'line.3.horizontal.decrease.circle.fill', android: import('@expo/material-symbols/filter_list.xml') }),
+  // 校網's pin toggle in its pinned state. Android reuses the outlined glyph
+  // (the kit tints an active toggle) as only outlined symbols ship.
+  pinFilled: Icon.select({ ios: 'pin.fill', android: import('@expo/material-symbols/keep.xml') }),
+  share: Icon.select({ ios: 'square.and.arrow.up', android: import('@expo/material-symbols/share.xml') }),
 };
 
 export type IconKey = keyof typeof icons;

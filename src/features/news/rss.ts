@@ -4,11 +4,19 @@ import { XMLParser } from 'fast-xml-parser';
 
 import { getText } from '@/lib/http';
 
-export const SCHOOL_NEWS_URLS = [
-  // 重要公告
-  'https://www.ck.tp.edu.tw/nss/main/feeder/5abf2d62aa93092cee58ceb4/KG5mY0d9355?f=normal&%240=hhyrNQJ0110&vector=private&static=false',
-  // 最新消息
-  'https://www.ck.tp.edu.tw/nss/main/feeder/5abf2d62aa93092cee58ceb4/IXZld9j7619?f=normal&%240=kpenVCJ9015&vector=private&static=false',
+export type NewsFeed = 'important' | 'latest';
+
+export const SCHOOL_NEWS_FEEDS: readonly { id: NewsFeed; label: string; url: string }[] = [
+  {
+    id: 'important',
+    label: '重要公告',
+    url: 'https://www.ck.tp.edu.tw/nss/main/feeder/5abf2d62aa93092cee58ceb4/KG5mY0d9355?f=normal&%240=hhyrNQJ0110&vector=private&static=false',
+  },
+  {
+    id: 'latest',
+    label: '最新消息',
+    url: 'https://www.ck.tp.edu.tw/nss/main/feeder/5abf2d62aa93092cee58ceb4/IXZld9j7619?f=normal&%240=kpenVCJ9015&vector=private&static=false',
+  },
 ];
 
 export interface NewsItem {
@@ -16,6 +24,11 @@ export interface NewsItem {
   link: string;
   /** ISO timestamp. */
   pubDate: string;
+  /**
+   * Feeds the item was last seen in, so a refresh where one feed fails can keep
+   * that feed's cached items. Absent on items cached by earlier versions.
+   */
+  feeds?: NewsFeed[];
 }
 
 const parser = new XMLParser({
@@ -59,7 +72,10 @@ const text = (value: unknown): string =>
 /** Items from one RSS document; entries without a title, link or date are dropped. */
 export function parseRss(xml: string): NewsItem[] {
   const doc = parser.parse(xml) as { rss?: { channel?: { item?: Record<string, unknown>[] } } };
-  const items = doc.rss?.channel?.item ?? [];
+  // An HTML error or maintenance page served with 200 is a failed feed, not an
+  // empty one -- otherwise it would wipe that feed's cached items.
+  if (!doc.rss) throw new Error('Not an RSS document');
+  const items = doc.rss.channel?.item ?? [];
   return items.flatMap((item): NewsItem[] => {
     const title = text(item.title).trim();
     const link = text(item.link).trim();
@@ -70,16 +86,91 @@ export function parseRss(xml: string): NewsItem[] {
   });
 }
 
-/** Both feeds merged, newest first. */
-export async function fetchSchoolNews(signal?: AbortSignal): Promise<NewsItem[]> {
-  const documents = await Promise.all(
-    SCHOOL_NEWS_URLS.map((url) => getText(url, { signal, timeoutMs: 15_000 })),
-  );
+/** De-duplicated by title, keeping the newest copy, newest first. */
+function dedupeNewest(items: NewsItem[]): NewsItem[] {
   const unique = new Map<string, NewsItem>();
-  for (const item of documents.flatMap(parseRss).sort((a, b) => b.pubDate.localeCompare(a.pubDate))) {
-    if (!unique.has(item.title)) unique.set(item.title, item);
+  for (const item of [...items].sort((a, b) => b.pubDate.localeCompare(a.pubDate))) {
+    const kept = unique.get(item.title);
+    if (!kept) {
+      unique.set(item.title, item);
+      continue;
+    }
+    // Remember every feed carrying the title. An untagged (legacy) copy keeps
+    // the result untagged, which mergeSchoolNews treats as "always keep".
+    const feeds = kept.feeds && item.feeds ? [...new Set([...kept.feeds, ...item.feeds])] : undefined;
+    unique.set(item.title, { ...kept, feeds });
   }
   return [...unique.values()];
+}
+
+/** One refresh round: what to show and cache, and which feeds did not answer. */
+export interface SchoolNewsRound {
+  items: NewsItem[];
+  /**
+   * Feeds that failed this round while another loaded. Their part of `items`
+   * is carried over from the cached list, so it may be out of date.
+   */
+  failed: NewsFeed[];
+  /**
+   * The failed feeds that still have cached items in `items`. A feed missing
+   * here had nothing saved (a first launch, or after a reset), so none of its
+   * items are shown at all.
+   */
+  carriedOver: NewsFeed[];
+}
+
+/**
+ * One refresh round as the list to show and cache, de-duplicated and newest
+ * first. `loaded` holds the items of every feed that answered. A feed that
+ * failed keeps the items it contributed to `previous` (the cached list), so one
+ * timed-out feed does not empty its half of the list until the next refresh.
+ */
+export function mergeSchoolNews(
+  loaded: Partial<Record<NewsFeed, NewsItem[]>>,
+  previous: readonly NewsItem[] = [],
+): SchoolNewsRound {
+  const failed = SCHOOL_NEWS_FEEDS.map(({ id }) => id).filter((id) => !loaded[id]);
+  const fresh = SCHOOL_NEWS_FEEDS.flatMap(({ id }) =>
+    (loaded[id] ?? []).map((item) => ({ ...item, feeds: [id] })),
+  );
+  const retained = !failed.length ? [] : previous.flatMap((item): NewsItem[] => {
+    // Cached before items were tagged, so it may belong to the failed feed.
+    if (!item.feeds) return [item];
+    const feeds = item.feeds.filter((feed) => failed.includes(feed));
+    return feeds.length ? [{ ...item, feeds }] : [];
+  });
+  return {
+    items: dedupeNewest([...fresh, ...retained]),
+    failed,
+    // An untagged item counts for every failed feed, since it may be theirs.
+    carriedOver: failed.filter((feed) => retained.some((item) => !item.feeds || item.feeds.includes(feed))),
+  };
+}
+
+/**
+ * Both feeds merged with mergeSchoolNews. Succeeds as long as one feed loads;
+ * rejects with the first error only when every feed fails.
+ */
+export async function fetchSchoolNews(
+  signal?: AbortSignal,
+  previous: readonly NewsItem[] = [],
+): Promise<SchoolNewsRound> {
+  const results = await Promise.allSettled(
+    SCHOOL_NEWS_FEEDS.map(async ({ url }) => parseRss(await getText(url, { signal, timeoutMs: 15_000 }))),
+  );
+  const loaded: Partial<Record<NewsFeed, NewsItem[]>> = {};
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') loaded[SCHOOL_NEWS_FEEDS[index].id] = result.value;
+  });
+  const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+  // A cancelled query rejects too, rather than caching a half-finished round.
+  if (failure && (!Object.keys(loaded).length || signal?.aborted)) throw failure.reason;
+  return mergeSchoolNews(loaded, previous);
+}
+
+/** The feeds' display names (重要公告, 最新消息), in feed order. */
+export function feedLabels(feeds: readonly NewsFeed[]): string[] {
+  return SCHOOL_NEWS_FEEDS.filter(({ id }) => feeds.includes(id)).map(({ label }) => label);
 }
 
 /**

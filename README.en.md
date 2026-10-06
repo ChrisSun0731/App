@@ -96,9 +96,9 @@ Gradle signs APK/AAB files with the existing `PLAY_SIGNING_KEY`, `PLAY_SIGNING_K
 
 ## Required before shipping updates
 
-**Automatic recovery of legacy Capacitor WebView localStorage is not implemented.** New Zustand state uses Expo SQLite, which has a different storage location and data format. Keeping the same bundle/package ID does not automatically recover existing tasks, events, timetable edits, favorites, pins, or settings. Implement and validate a storage migration or export/import path before shipping updates to existing users.
+**The legacy data import needs on-device validation.** New Zustand state uses Expo SQLite, separate from the previous Capacitor WebView's localStorage. On first launch, `src/features/legacy-import` reads the previous app's tasks, events, timetable edits, class, favorites, pins, followed stations, and settings through a hidden WebView, converts them, and merges them in without overwriting data created in the new app (see [docs/native-rewrite-progress.md](docs/native-rewrite-progress.md)). Before shipping to existing users, install a real previous release (for example 3.4.0) on Android and iOS, create data, upgrade, and confirm everything arrives.
 
-First-time requests without connectivity or a saved cache show an error/empty state. Store signing, legacy data migration, and native device behavior still require full release validation.
+First-time requests without connectivity or a saved cache show an error/empty state. Store signing, the legacy data import, and native device behavior still require full release validation.
 
 ## Contributing and contact
 

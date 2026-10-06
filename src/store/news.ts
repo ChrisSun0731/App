@@ -8,7 +8,10 @@ interface NewsState {
   pinned: NewsItem[];
   /** Items published before this ISO time count as read. */
   lastClearedTime: string | null;
-  /** The last successful fetch, shown immediately on the next launch. */
+  /**
+   * The last successful fetch, shown immediately on the next launch. When only
+   * one feed loaded, the other feed's items here are carried over from before.
+   */
   cached: NewsItem[];
   lastFetchTime: string | null;
   pin: (item: NewsItem) => void;

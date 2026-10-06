@@ -1,8 +1,21 @@
 import { router, Stack } from 'expo-router';
-import { ActionButton, Body, Screen } from '@/components/ui/page';
+
+import { icons } from '@/components/icons';
+import { EmptyState, ListScreen, Section } from '@/ui';
 
 export default function NotFoundScreen() {
-  return <Screen><Stack.Screen options={{ title: '找不到頁面' }} /><Body>找不到這個頁面。</Body>
-    <ActionButton label="回到首頁" onPress={() => router.replace('/')} />
-  </Screen>;
+  return (
+    <>
+      <Stack.Screen options={{ title: '找不到頁面' }} />
+      <ListScreen>
+        <Section plain>
+          <EmptyState
+            icon={icons.help}
+            title="找不到這個頁面。"
+            action={{ label: '回到首頁', onPress: () => router.replace('/') }}
+          />
+        </Section>
+      </ListScreen>
+    </>
+  );
 }
