@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { Alert } from 'react-native';
 
 import { icons } from '@/components/icons';
-import { FEATURES, MAX_FEATURE_TABS, type TabFeatureId } from '@/features/registry';
+import { FEATURES, MAX_FEATURE_TABS } from '@/features/registry';
 import { useTimetables } from '@/features/schedule/use-timetables';
 import { confirmPickerChange } from '@/hooks/use-confirmed-picker';
 import { queryClient } from '@/lib/query-client';
@@ -29,10 +29,11 @@ const HOME_WIDGETS: readonly { key: keyof HomeWidgets; label: string }[] = [
   { key: 'news', label: '釘選校網內容' },
 ];
 
-const TOOLBAR_LIMIT = `除了首頁，最多顯示 ${MAX_FEATURE_TABS} 個功能。`;
 // iOS keeps 上移/下移 in each row's long-press menu, which nothing on screen
 // reveals; Android shows an overflow button on every row.
-const TOOLBAR_FOOTER = `${TOOLBAR_LIMIT}其他功能可由首頁開啟。${process.env.EXPO_OS === 'ios' ? '長按功能可調整順序。' : ''}`;
+const TOOLBAR_FOOTER = `除了首頁，最多顯示 ${MAX_FEATURE_TABS} 個功能。其他功能可由首頁開啟。${
+  process.env.EXPO_OS === 'ios' ? '長按功能可調整順序。' : ''
+}`;
 
 export default function SettingsScreen() {
   const settings = useSettingsStore();
@@ -63,29 +64,35 @@ export default function SettingsScreen() {
     void timetable.refetch();
   }
 
-  function setToolbarVisible(id: TabFeatureId, visible: boolean) {
-    // The switch stays enabled at the limit so the row keeps its 上移/下移
-    // actions (the kit drops a disabled row's menu); explain instead.
-    if (visible && shownTabs >= MAX_FEATURE_TABS) {
-      Alert.alert('工具列已滿', `${TOOLBAR_LIMIT}請先關閉其他功能。`);
-      return;
-    }
-    settings.setToolbarVisible(id, visible);
-  }
-
+  // The labels name the feature, as the old buttons did: TalkBack reads only
+  // the item text, and every row's overflow button sounds the same.
   function moveActions(index: number): RowAction[] {
+    const { tabLabel } = FEATURES[settings.toolbar[index].id];
     const actions: RowAction[] = [];
     if (index > 0) {
-      actions.push({ key: 'up', label: '上移', icon: icons.moveUp, onPress: () => settings.moveToolbarItem(index, index - 1) });
+      actions.push({
+        key: 'up',
+        label: `上移 ${tabLabel}`,
+        icon: icons.moveUp,
+        onPress: () => settings.moveToolbarItem(index, index - 1),
+      });
     }
     if (index < settings.toolbar.length - 1) {
-      actions.push({ key: 'down', label: '下移', icon: icons.moveDown, onPress: () => settings.moveToolbarItem(index, index + 1) });
+      actions.push({
+        key: 'down',
+        label: `下移 ${tabLabel}`,
+        icon: icons.moveDown,
+        onPress: () => settings.moveToolbarItem(index, index + 1),
+      });
     }
     return actions;
   }
 
+  // Pull to refresh retries a class list that failed or went stale. It is
+  // passed from the first render: the iOS kit rebuilds the List when
+  // `refreshable` first appears.
   return (
-    <ListScreen>
+    <ListScreen onRefresh={() => timetable.refetch()}>
       <Section title="我的班級" footer="班級用於匯入課表。">
         {classOptions ? (
           <PickerRow label="班級" value={userClass} options={classOptions} onChange={changeClass} />
@@ -117,13 +124,19 @@ export default function SettingsScreen() {
             key={item.id}
             label={FEATURES[item.id].title}
             value={item.visible}
-            onValueChange={(visible) => setToolbarVisible(item.id, visible)}
+            // Greyed out at the limit rather than refused with an alert: a
+            // refused SwiftUI Toggle can stay drawn on (ToggleView only redraws
+            // when its private @State changes). The store enforces the limit
+            // too. The kit drops a disabled row's 上移/下移 for now; the order
+            // of hidden features does not change the tab bar.
+            disabled={!item.visible && shownTabs >= MAX_FEATURE_TABS}
+            onValueChange={(visible) => settings.setToolbarVisible(item.id, visible)}
             actions={moveActions(index)}
           />
         ))}
       </Section>
 
-      <Section title="個人資料" footer="下載的校務資料及網站登入狀態會保留。">
+      <Section title="個人資料" footer="重設個人資料與設定。下載的校務資料及網站登入狀態會保留。">
         <ButtonRow label="重設個人資料與設定" role="destructive" onPress={confirmReset} />
       </Section>
     </ListScreen>

@@ -26,8 +26,8 @@ export default function AboutScreen() {
       </Section>
 
       <Section title="關於這個 APP">
-        <TextBlock text="由 Diego Peng 與 Kimi Yang 於 2024 年開發，幫助建中生解決生活中的大小困難。" />
-        <TextBlock text="班聯會資訊股自 2025 年 10 月起負責維護與更新。歡迎提供使用建議。" />
+        <TextBlock text="由 Diego Peng 與 Kimi Yang 於 2024 年開發，幫助建中生解決生活中的大小困難。" selectable />
+        <TextBlock text="班聯會資訊股自 2025 年 10 月起負責維護與更新。歡迎提供使用建議。" selectable />
       </Section>
 
       <Section title="聯絡我們">

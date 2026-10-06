@@ -16,8 +16,8 @@ export default function PromoScreen() {
   return (
     <ListScreen>
       <Section title="建北特約">
-        <TextBlock text="特約店家會在店內明顯處張貼建北特約專用貼紙。" />
-        <TextBlock text="使用優惠時，請出示學生證或教師證。店家可以拒絕僅穿著制服的使用者。" />
+        <TextBlock text="特約店家會在店內明顯處張貼建北特約專用貼紙。" selectable />
+        <TextBlock text="使用優惠時，請出示學生證或教師證。店家可以拒絕僅穿著制服的使用者。" selectable />
       </Section>
 
       <Section title="尋找特約店家">
