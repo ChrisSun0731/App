@@ -5,7 +5,7 @@
 import { formatFullDate, fromDateKey, toDateKey, WEEKDAY_ZH } from '@/lib/dates';
 import type { CalendarCell, CalendarIndicator, ChoiceOption } from '@/ui/types';
 
-import { buildMonthGrid, groupTodosByDate, itemsForDay, MAX_DAY_INDICATORS, type DayItem } from './calendar-grid';
+import { buildMonthGrid, groupTodosByDate, itemsForDay, type DayItem } from './calendar-grid';
 import type { CalendarEvent, Todo, TodoCategory } from './types';
 
 function monthDayWeekday(date: Date): string {
@@ -38,10 +38,36 @@ function daySummary(items: readonly DayItem[]): string {
 }
 
 /**
- * The 42 MonthCalendar cells of `year`/`month` (0-based): events as dots in
- * their category colour, then todos as squares in `todoColor`. Each cell's
- * spoken label carries the full date, weekday and what is on that day, since
- * the indicators are colour only.
+ * Indicators a day cell can count on showing on every platform: the Android
+ * (and fallback) kit MonthCalendar draws only the first 3 (iOS draws 6).
+ */
+export const MAX_DAY_INDICATORS = 3;
+
+/**
+ * A day's MonthCalendar indicators, at most MAX_DAY_INDICATORS: one dot per
+ * distinct event category colour, then one square in `todoColor` when the day
+ * has any todo. Deduplicating matters because a busy school day is many
+ * same-colour 學校事務 events, which would otherwise fill every slot; and the
+ * todo square always keeps its slot so a todo never hides behind events. The
+ * exact counts are in the cell's spoken label and the day list.
+ */
+export function dayIndicators(items: readonly DayItem[], todoColor: string): CalendarIndicator[] {
+  const hasTodo = items.some((item) => item.type === 'todo');
+  const dots = new Map<string, CalendarIndicator>();
+  for (const item of items) {
+    if (item.type !== 'event') continue;
+    // Hex colours are case-insensitive; "#00897b" and "#00897B" are one dot.
+    const key = `event-${item.event.category.color.toLowerCase()}`;
+    if (!dots.has(key)) dots.set(key, { key, color: item.event.category.color, shape: 'dot' });
+  }
+  const shown = [...dots.values()].slice(0, MAX_DAY_INDICATORS - (hasTodo ? 1 : 0));
+  return hasTodo ? [...shown, { key: 'todo', color: todoColor, shape: 'square' }] : shown;
+}
+
+/**
+ * The 42 MonthCalendar cells of `year`/`month` (0-based), indicators per
+ * dayIndicators. Each cell's spoken label carries the full date, weekday and
+ * what is on that day, since the indicators are colour only.
  */
 export function calendarCells(
   year: number,
@@ -53,17 +79,12 @@ export function calendarCells(
 ): CalendarCell[] {
   return buildMonthGrid(year, month, today).map((day) => {
     const items = itemsForDay(day.key, events, todos);
-    const indicators = items.slice(0, MAX_DAY_INDICATORS).map((item): CalendarIndicator => (
-      item.type === 'event'
-        ? { key: item.key, color: item.event.category.color, shape: 'dot' }
-        : { key: item.key, color: todoColor, shape: 'square' }
-    ));
     return {
       key: day.key,
       day: day.date.getDate(),
       inMonth: day.inMonth,
       isToday: day.isToday,
-      indicators,
+      indicators: dayIndicators(items, todoColor),
       accessibilityLabel: [day.isToday ? '今天' : '', formatLongDate(day.key), daySummary(items)].filter(Boolean).join('，'),
     };
   });

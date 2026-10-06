@@ -40,6 +40,13 @@ import { isSchoolEvent } from './school-calendar';
 import type { CalendarEvent, Todo, TodoView } from './types';
 import { useSchoolEvents } from './use-school-events';
 
+/**
+ * Title lines for a read-only school event row. It opens nothing, so the
+ * whole title has to fit in the row: titles run to ~40 characters and large
+ * text sizes wrap them over many lines.
+ */
+const SCHOOL_TITLE_LINES = 10;
+
 const VIEW_OPTIONS: readonly ChoiceOption<TodoView>[] = [
   { label: '月曆', value: 'calendar' },
   { label: '待辦', value: 'todoList' },
@@ -178,6 +185,7 @@ export default function TodoScreen() {
               <Row
                 key={item.key}
                 title={event.title}
+                titleLines={readOnly ? SCHOOL_TITLE_LINES : undefined}
                 dotColor={event.category.color}
                 {...eventRowText(event)}
                 accessory={readOnly ? 'none' : 'chevron'}

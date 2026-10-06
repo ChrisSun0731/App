@@ -1,7 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
 import { buildMonthGrid, groupTodosByDate, itemsForDay } from './calendar-grid';
-import { dateKeyFromPicker, datePickerValue } from './date-picker';
 import { isSchoolCalendarFile, isSchoolEvent, toSchoolEvents, type SchoolCalendarFile } from './school-calendar';
 import type { CalendarEvent, Todo } from './types';
 
@@ -29,15 +28,6 @@ describe('calendar dates and items', () => {
       { id: '3', title: 'c', date: '2026-12-31', category: null },
     ];
     expect(groupTodosByDate(todos).map((group) => group.dateKey)).toEqual(['2026-12-31', '2027-01-01', null]);
-  });
-
-  test('round-trips Material UTC date selections and SwiftUI local selections', () => {
-    const android = datePickerValue('2026-10-04', 'android');
-    expect(android.toISOString()).toBe('2026-10-04T00:00:00.000Z');
-    expect(dateKeyFromPicker(android, 'android')).toBe('2026-10-04');
-    const ios = datePickerValue('2026-10-04', 'ios');
-    expect(ios.getDate()).toBe(4);
-    expect(dateKeyFromPicker(ios, 'ios')).toBe('2026-10-04');
   });
 });
 

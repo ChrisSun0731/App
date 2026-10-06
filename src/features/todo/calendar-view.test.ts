@@ -3,6 +3,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
   ALL_TODOS,
   calendarCells,
+  dayIndicators,
   effectiveFilter,
   eventRowText,
   filterTodos,
@@ -11,6 +12,7 @@ import {
   todoFilterOptions,
   todoSections,
 } from './calendar-view';
+import { itemsForDay } from './calendar-grid';
 import { SCHOOL_EVENT_CATEGORY } from './school-calendar';
 import type { CalendarEvent, Todo } from './types';
 
@@ -39,13 +41,13 @@ describe('day titles and ranges', () => {
 });
 
 describe('month calendar cells', () => {
-  test('draws events as category-colour dots before todos as tint squares', () => {
+  test('draws events as category-colour dots before a todo tint square', () => {
     const cells = calendarCells(2026, 9, [exam], [homework], TINT, new Date(2026, 9, 5));
     expect(cells).toHaveLength(42);
     const day = cells.find((cell) => cell.key === '2026-10-04')!;
     expect(day.indicators).toEqual([
-      { key: 'event-exam', color: '#C62828', shape: 'dot' },
-      { key: 'todo-hw', color: TINT, shape: 'square' },
+      { key: 'event-#c62828', color: '#C62828', shape: 'dot' },
+      { key: 'todo', color: TINT, shape: 'square' },
     ]);
     expect(day.accessibilityLabel).toBe('2026年10月4日 星期日，1 個活動、1 個待辦');
     // Multi-day events mark every day they cover.
@@ -59,13 +61,55 @@ describe('month calendar cells', () => {
     expect(today.accessibilityLabel).toBe('今天，2026年10月5日 星期一，沒有活動或待辦');
     expect(cells[0]).toMatchObject({ key: '2026-09-27', day: 27, inMonth: false });
   });
+});
 
-  test('keeps at most six indicators per day', () => {
-    const todos = Array.from({ length: 8 }, (_, index): Todo => ({ ...homework, id: String(index) }));
-    const cells = calendarCells(2026, 9, [], todos, TINT, new Date(2026, 9, 5));
-    const day = cells.find((cell) => cell.key === '2026-10-04')!;
-    expect(day.indicators).toHaveLength(6);
-    expect(day.accessibilityLabel).toContain('8 個待辦');
+describe('day indicators', () => {
+  const day = '2026-10-14';
+  const schoolEvent = (index: number): CalendarEvent => ({
+    id: `school-${index}`,
+    title: `學校活動 ${index}`,
+    startDate: day,
+    endDate: day,
+    category: SCHOOL_EVENT_CATEGORY,
+  });
+  const userEvent = (index: number, color: string): CalendarEvent => ({
+    id: `user-${index}`,
+    title: `活動 ${index}`,
+    startDate: day,
+    endDate: day,
+    category: { name: `類別 ${index}`, color },
+  });
+  const todo = (index: number): Todo => ({ id: `todo-${index}`, title: `待辦 ${index}`, date: day, category: null });
+
+  test('a busy school day shows one school dot and still shows its todo', () => {
+    const events = Array.from({ length: 5 }, (_, index) => schoolEvent(index));
+    const cell = calendarCells(2026, 9, events, [todo(1)], TINT, new Date(2026, 9, 5)).find(({ key }) => key === day)!;
+    expect(cell.indicators).toEqual([
+      { key: 'event-#00897b', color: SCHOOL_EVENT_CATEGORY.color, shape: 'dot' },
+      { key: 'todo', color: TINT, shape: 'square' },
+    ]);
+    // The spoken label keeps the real counts.
+    expect(cell.accessibilityLabel).toContain('5 個活動、1 個待辦');
+  });
+
+  test('keeps the todo square within three slots and caps colours to fit', () => {
+    const events = ['#C62828', '#1565C0', '#2E7D32', '#6A1B9A'].map((color, index) => userEvent(index, color));
+    const withTodos = dayIndicators(itemsForDay(day, events, [todo(1), todo(2), todo(3)]), TINT);
+    expect(withTodos.map((indicator) => indicator.color)).toEqual(['#C62828', '#1565C0', TINT]);
+    expect(withTodos.map((indicator) => indicator.shape)).toEqual(['dot', 'dot', 'square']);
+    const eventsOnly = dayIndicators(itemsForDay(day, events, []), TINT);
+    expect(eventsOnly.map((indicator) => indicator.color)).toEqual(['#C62828', '#1565C0', '#2E7D32']);
+  });
+
+  test('treats colours differing only in case as one dot, and todos alone as one square', () => {
+    const events = [userEvent(1, '#00897b'), userEvent(2, '#00897B')];
+    expect(dayIndicators(itemsForDay(day, events, []), TINT)).toEqual([
+      { key: 'event-#00897b', color: '#00897b', shape: 'dot' },
+    ]);
+    expect(dayIndicators(itemsForDay(day, [], [todo(1), todo(2)]), TINT)).toEqual([
+      { key: 'todo', color: TINT, shape: 'square' },
+    ]);
+    expect(dayIndicators([], TINT)).toEqual([]);
   });
 });
 

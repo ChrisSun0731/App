@@ -33,7 +33,7 @@ export function eventCoversDay(event: CalendarEvent, dayKey: string): boolean {
 
 /**
  * Events (by start date) followed by todos, for one day. Events come first
- * because the calendar dots and the day sheet both list them first.
+ * because the calendar indicators and the day list both show them first.
  */
 export function itemsForDay(dayKey: string, events: CalendarEvent[], todos: Todo[]): DayItem[] {
   const dayEvents: DayItem[] = events
@@ -45,9 +45,6 @@ export function itemsForDay(dayKey: string, events: CalendarEvent[], todos: Todo
     .map((todo) => ({ type: 'todo', key: `todo-${todo.id}`, todo }));
   return [...dayEvents, ...dayTodos];
 }
-
-/** Calendar dots: at most this many indicators per day cell. */
-export const MAX_DAY_INDICATORS = 6;
 
 export function monthTitle(year: number, month: number): string {
   return `${year}年${month + 1}月`;
