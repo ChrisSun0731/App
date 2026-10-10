@@ -9,8 +9,10 @@ import {
   footerSpeech,
   iosMajorVersion,
   isAccessibilityTextSize,
+  layoutScale,
   pickerDate,
   pickerMinimum,
+  reachesTextSize,
   sf,
   spokenLabel,
   trailingSwipeActions,
@@ -91,6 +93,25 @@ describe('SwiftUI kit helpers', () => {
     expect(isAccessibilityTextSize(1.353)).toBe(false);
     expect(isAccessibilityTextSize(1.786)).toBe(true);
     expect(isAccessibilityTextSize(3.571)).toBe(true);
+  });
+
+  test('tells when the text has reached a size, allowing for float noise', () => {
+    expect(reachesTextSize(1.118, 'xxLarge')).toBe(false);
+    expect(reachesTextSize(1.235, 'xxLarge')).toBe(true);
+    expect(reachesTextSize(1.235, 'xxxLarge')).toBe(false);
+    expect(reachesTextSize(1.353, 'xxxLarge')).toBe(true);
+    expect(reachesTextSize(1.3529999, 'xxxLarge')).toBe(true);
+    // The accessibility sizes draw the capped grid too.
+    expect(reachesTextSize(2.643, 'xxxLarge')).toBe(true);
+  });
+
+  test('grows layout geometry with the text up to the layout cap, never below the default', () => {
+    expect(layoutScale(0.823, 'xxLarge')).toBe(1);
+    expect(layoutScale(1, 'xxLarge')).toBe(1);
+    expect(layoutScale(1.118, 'xxLarge')).toBe(1.118);
+    expect(layoutScale(1.353, 'xxLarge')).toBe(1.235);
+    expect(layoutScale(3.571, 'xxxLarge')).toBe(1.353);
+    expect(layoutScale(Number.NaN, 'xxxLarge')).toBe(1);
   });
 
   test('adds an alpha channel to hex colours only', () => {

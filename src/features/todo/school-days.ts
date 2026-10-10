@@ -92,8 +92,25 @@ function daysBetween(fromKey: string, toKey: string): number {
   return Math.round((Date.parse(`${toKey}T12:00:00`) - Date.parse(`${fromKey}T12:00:00`)) / DAY_MS);
 }
 
-/** The first day of the term (開學) and its last (休業式), as the 行事曆 lists them. */
-function termBounds(events: readonly CalendarEvent[]): { start: string | null; end: string | null; nextStart: string | null } {
+/** The first day of the term (開學) and its last (休業式), as the 行事曆 lists them; null where it lists none. */
+interface TermBounds {
+  start: string | null;
+  end: string | null;
+  /** The next term's 開學, when the file lists one after `end`. */
+  nextStart: string | null;
+}
+
+// Computed once per events array: nextSchoolDay asks for the bounds up to 45
+// times, and 今天's 現在 card and the widget timeline ask on every tick, so
+// filtering a few hundred events through two regexes on each call would be tens
+// of thousands of regex tests per render. useSchoolEvents memoizes the array per
+// file, so it is the same object until the 行事曆 changes; a new array recomputes.
+const termBoundsCache = new WeakMap<readonly CalendarEvent[], TermBounds>();
+
+/** The bounds of the term `events` describes, from the cache or a first pass over the array. */
+function termBounds(events: readonly CalendarEvent[]): TermBounds {
+  const cached = termBoundsCache.get(events);
+  if (cached) return cached;
   const dates = (pattern: RegExp) =>
     events.filter((event) => event.school !== undefined && pattern.test(event.title)).map((event) => event.startDate).sort();
   const starts = dates(/^開學$/);
@@ -102,7 +119,9 @@ function termBounds(events: readonly CalendarEvent[]): { start: string | null; e
   const end = ends[ends.length - 1] ?? null;
   // The file also lists the next term's 開學; after it the next term's file applies.
   const nextStart = end ? (starts.find((key) => key > end) ?? null) : null;
-  return { start, end, nextStart };
+  const bounds: TermBounds = { start, end, nextStart };
+  termBoundsCache.set(events, bounds);
+  return bounds;
 }
 
 /** 暑假 or 寒假 around a 第1/第2學期, by which side of the term `key` falls on. */

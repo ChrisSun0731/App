@@ -3,7 +3,7 @@ import { describe, expect, test } from '@jest/globals';
 import { PERIOD_NAMES, WEEKDAYS, type Period, type ScheduleRow } from '@/features/schedule/timetable';
 import { toSchoolEvents } from '@/features/todo/school-calendar';
 
-import { clock, dayLabel, nowCard, nowState, railOf, slotsOn, type NowInput } from './now';
+import { dayLabel, nowCard, nowState, railOf, slotsOn, type NowInput } from './now';
 
 // The real bell times and class 201's timetable (schedules/gaoer_schedules.json).
 const PERIODS: Period[] = [
@@ -133,10 +133,32 @@ describe('the moment of the school day', () => {
     });
   });
 
-  test('a free period in session and a class without a timetable', () => {
+  test('a free period in session', () => {
     const rows = ROWS.map((row) => (row.name === '三' ? { ...row, Wednesday: { subject: '' } } : row));
     expect(nowState(input(at(10, 30), { rows }))).toMatchObject({ kind: 'class', slot: { subject: '' } });
-    expect(nowState(input(at(10, 30), { rows: [] }))).toEqual({ kind: 'no-timetable' });
+  });
+
+  test('without rows: no class yet asks for one, a class the data lacks says so', () => {
+    const noClass = nowState(input(at(10, 30), { rows: [], userClass: '' }));
+    expect(noClass).toEqual({ kind: 'no-timetable', hasClass: false });
+    expect(nowCard(noClass, at(10, 30), null)).toMatchObject({
+      eyebrow: '現在',
+      title: '選擇班級',
+      subtitle: '選好班級，就能看到現在的課。',
+      rail: undefined,
+    });
+    // Blank is no class either.
+    expect(nowState(input(at(10, 30), { rows: [], userClass: ' ' }))).toEqual({ kind: 'no-timetable', hasClass: false });
+
+    const unknown = nowState(input(at(10, 30), { rows: [], userClass: '999' }));
+    expect(unknown).toEqual({ kind: 'no-timetable', hasClass: true });
+    expect(nowCard(unknown, at(10, 30), null)).toMatchObject({
+      eyebrow: '現在',
+      title: '還沒有課表',
+      subtitle: '找不到這個班級的課表，可在設定換一班。',
+    });
+    // A caller that does not know the class (the widget timeline) gets the timetable wording.
+    expect(nowState(input(at(10, 30), { rows: [] }))).toEqual({ kind: 'no-timetable', hasClass: true });
   });
 
   test('a free period with only a note is still worth pointing at', () => {
@@ -188,9 +210,7 @@ describe('the bell rail', () => {
 });
 
 describe('labels', () => {
-  test('clock times and day names', () => {
-    expect(clock(490)).toBe('08:10');
-    expect(clock(1020)).toBe('17:00');
+  test('day names', () => {
     expect(dayLabel(new Date(2026, 9, 8), at(16, 0))).toBe('明天');
     expect(dayLabel(new Date(2026, 9, 12), at(16, 0, 10, 9))).toBe('10/12 星期一');
   });

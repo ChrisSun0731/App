@@ -47,8 +47,15 @@ export function subjectHint(draft: CellDraft, stored: ScheduleCell['alternating'
   return `每週都顯示此科目，留空代表空堂。${replaced}`;
 }
 
-/** The eight cell colours for the 顏色 picker. */
-export const CELL_COLOR_OPTIONS: readonly ChoiceOption<CellColor>[] = CELL_COLORS.map((option) => ({
-  label: option.label,
-  value: option.key,
-}));
+/**
+ * The 顏色 picker's eight options, each with a dot in its hue before the name:
+ * 預設 first, its dot `ownDot` (the subject's own colour; none for a 空堂),
+ * then the seven colours in `scheme`.
+ */
+export function cellColorOptions(scheme: 'light' | 'dark', ownDot?: string): ChoiceOption<CellColor>[] {
+  return CELL_COLORS.map((option) => ({
+    label: option.label,
+    value: option.key,
+    dot: option.dot ? option.dot[scheme] : ownDot,
+  }));
+}

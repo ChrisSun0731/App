@@ -1,12 +1,14 @@
 // Pure helpers behind the 行事曆 screen: month cells for the kit's
-// MonthCalendar (with 假 / 考 marks), the grade filter, day titles, event row
-// text, todo filter options and the date groups of the 待辦 view. Kept out of the screen so they can be unit
-// tested without a renderer.
+// MonthCalendar (with 假 / 考 marks), the grade filter and the footer that
+// controls it, day titles, event row text, todo filter options and the date
+// groups of the 待辦 view. Kept out of the screen so they can be unit tested
+// without a renderer.
 import { addDays, formatFullDate, formatMonthDayRange, fromDateKey, toDateKey, WEEKDAY_ZH } from '@/lib/dates';
 import { CALENDAR_CELL_INDICATORS, type CalendarCell, type CalendarIndicator, type ChoiceOption } from '@/ui/types';
 
 import { buildMonthGrid, groupTodosByDate, itemsForDay, type DayItem } from './calendar-grid';
 import { GRADE_LABELS, isDayOff, isExamFor, isForGrade, showsOnDay, type Grade } from './school-days';
+import { isCompleted, openFirst, openTodos } from './todo-state';
 import type { CalendarEvent, Todo, TodoCategory } from './types';
 
 function monthDayWeekday(date: Date): string {
@@ -87,8 +89,9 @@ export function calendarCells(
   return buildMonthGrid(year, month, today).map((day) => {
     const items = itemsForDay(day.key, events, todos);
     // A long school event (a sign-up window) would dot every day it spans;
-    // it dots its first and last day, and the day list still shows it.
-    const marked = items.filter((item) => item.type !== 'event' || showsOnDay(item.event, day.key));
+    // it dots its first and last day, and the day list still shows it. A todo
+    // checked off keeps its row in the day list but gives up its square.
+    const marked = items.filter((item) => (item.type === 'event' ? showsOnDay(item.event, day.key) : !isCompleted(item.todo)));
     return {
       key: day.key,
       day: day.date.getDate(),
@@ -148,9 +151,10 @@ export interface UpcomingItem {
 }
 
 /**
- * What comes after `dayKey`: events starting and todos due on the next days
- * (up to `days` ahead), soonest first, at most `limit`. Events that started
- * earlier are left out; the day lists show them.
+ * What comes after `dayKey`: events starting and open todos due on the next
+ * days (up to `days` ahead), soonest first, at most `limit`. Events that
+ * started earlier are left out; the day lists show them. So are todos checked
+ * off: they are done, whatever day they were due.
  */
 export function upcomingItems(
   dayKey: string,
@@ -164,7 +168,7 @@ export function upcomingItems(
       .filter((event) => event.startDate > dayKey && event.startDate <= last)
       .map((event): UpcomingItem => ({ key: `event-${event.id}`, date: fromDateKey(event.startDate), item: { type: 'event', key: `event-${event.id}`, event } })),
     ...todos
-      .filter((todo): todo is Todo & { date: string } => todo.date !== null && todo.date > dayKey && todo.date <= last)
+      .filter((todo): todo is Todo & { date: string } => !isCompleted(todo) && todo.date !== null && todo.date > dayKey && todo.date <= last)
       .map((todo): UpcomingItem => ({ key: `todo-${todo.id}`, date: fromDateKey(todo.date), item: { type: 'todo', key: `todo-${todo.id}`, todo } })),
   ];
   return items.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, limit);
@@ -180,6 +184,26 @@ export function otherGrades(grade: Grade): string {
   return ([1, 2, 3] as const).filter((other) => other !== grade).map((other) => GRADE_LABELS[other]).join('、');
 }
 
+export interface GradeFilterFooter {
+  text: string;
+  /** The footer link: its label, and the value it gives the filter. */
+  action: { label: string; gradeOnly: boolean };
+}
+
+/**
+ * The footer under the month that is the grade filter's one control on the
+ * screen (設定 has the other). `hidden` counts the month's school events for
+ * other grades only: with the filter on it says how many are hidden and
+ * offers 全部顯示, with it off it offers the filter back. Nothing when the
+ * month has none, or the grade is unknown: the filter needs one.
+ */
+export function gradeFilterFooter(grade: Grade | null, gradeOnly: boolean, hidden: number): GradeFilterFooter | null {
+  if (grade === null || hidden === 0) return null;
+  return gradeOnly
+    ? { text: `已隱藏 ${hidden} 則只給${otherGrades(grade)}的活動。`, action: { label: '全部顯示', gradeOnly: false } }
+    : { text: '顯示所有年級的活動。', action: { label: `只顯示和${GRADE_LABELS[grade]}有關的`, gradeOnly: true } };
+}
+
 /** The 顯示類別 value meaning every todo. Category names are never empty. */
 export const ALL_TODOS = '';
 
@@ -191,12 +215,17 @@ export function todoCategoryNames(todos: readonly Todo[], categories: readonly T
   ])];
 }
 
-/** 顯示類別 options with counts, e.g. "所有待辦 (3)", "作業 (2)". */
+/**
+ * 顯示類別 options with counts of what is left to do, e.g. "所有待辦 (3)",
+ * "作業 (2)". A category only a checked-off todo carries is still offered, so
+ * that todo can be found while it shows.
+ */
 export function todoFilterOptions(todos: readonly Todo[], categories: readonly TodoCategory[]): ChoiceOption[] {
+  const open = openTodos(todos);
   return [
-    { label: `所有待辦 (${todos.length})`, value: ALL_TODOS },
+    { label: `所有待辦 (${open.length})`, value: ALL_TODOS },
     ...todoCategoryNames(todos, categories).map((name) => ({
-      label: `${name} (${todos.filter((todo) => todo.category?.name === name).length})`,
+      label: `${name} (${open.filter((todo) => todo.category?.name === name).length})`,
       value: name,
     })),
   ];
@@ -224,13 +253,13 @@ export interface TodoSection {
   todos: Todo[];
 }
 
-/** One section per date (ascending, undated last), overdue dates flagged. */
+/** One section per date (ascending, undated last), open todos before checked-off ones, overdue dates flagged. */
 export function todoSections(todos: Todo[], today: Date = new Date()): TodoSection[] {
   const todayKey = toDateKey(today);
   return groupTodosByDate(todos).map((group) => ({
     key: group.dateKey ?? 'undated',
     title: group.dateKey ? formatDayTitle(group.dateKey, today) : '無日期',
     overdue: group.dateKey !== null && group.dateKey < todayKey,
-    todos: group.todos,
+    todos: openFirst(group.todos),
   }));
 }

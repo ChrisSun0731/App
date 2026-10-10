@@ -42,8 +42,15 @@ export default function SettingsScreen() {
   const calendarGradeOnly = useSettingsStore((state) => state.calendarGradeOnly);
   const setCalendarGradeOnly = useSettingsStore((state) => state.setCalendarGradeOnly);
 
-  const classOptions = timetable.data
-    ? Array.from(new Set([userClass, ...timetable.data.classIds])).sort().map((id) => ({ label: id, value: id }))
+  const classIds = timetable.data
+    ? Array.from(new Set(userClass ? [userClass, ...timetable.data.classIds] : timetable.data.classIds)).sort()
+    : null;
+  const classOptions = classIds
+    ? [
+        // PickerRow always shows `value`, so until a class is chosen that is 尚未選擇.
+        ...(userClass === '' ? [{ label: '尚未選擇', value: '' }] : []),
+        ...classIds.map((id) => ({ label: id, value: id })),
+      ]
     : null;
 
   function changeClass(id: string) {
@@ -52,6 +59,13 @@ export default function SettingsScreen() {
     // Nothing to switch to. PickerRow always shows `value`, so leaving
     // userClass alone puts the picker back on it.
     if (!rows) return;
+    // With no timetable there are no edits to lose, so nothing to confirm. The
+    // rows decide, not the class: an import whose class could not be read
+    // still brings the previous app's edited rows, which a first pick replaces.
+    if (useScheduleStore.getState().rows.length === 0) {
+      useScheduleStore.getState().setClass(id, rows);
+      return;
+    }
     confirmPickerChange(
       `更改為 ${id} 班？`,
       '更改班級會取代自訂科目、備註及顏色。',
@@ -125,10 +139,11 @@ function confirmReset() {
 }
 
 /**
- * Puts every store back to its initial state and closes the sheet on 今天.
- * The six resets run together in one task on purpose: that is how the legacy
- * import (features/legacy-import/session.ts) recognises "start over" and gives
- * up an import still owed, so the previous app's data cannot arrive afterwards.
+ * Puts every store back to its initial state and starts over on 你是哪一班？,
+ * as a new install does. The six resets run together in one task on purpose:
+ * that is how the legacy import (features/legacy-import/session.ts)
+ * recognises "start over" and gives up an import still owed, so the previous
+ * app's data cannot arrive afterwards.
  */
 function resetEverything() {
   void queryClient.cancelQueries();
@@ -139,6 +154,11 @@ function resetEverything() {
   useTransportStore.getState().reset();
   useSettingsStore.getState().reset();
   queryClient.clear();
-  // This is the sheet stack's first screen, so going back closes the sheet.
-  router.back();
+  // Only closing the sheet would leave 今天 up with no class, and the welcome
+  // screen the reset re-armed would wait for the next launch: index.tsx
+  // decides on it only when it mounts. So pop the root stack back to (tabs)
+  // (this is the sheet stack's first screen, so the pop bubbles up to the
+  // root) and replace that with "/", which now redirects to /welcome.
+  router.dismissAll();
+  router.replace('/');
 }

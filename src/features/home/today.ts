@@ -4,6 +4,7 @@
 // renderer.
 import type { ScheduleRow, Timetables, WeekParity } from '@/features/schedule/timetable';
 import { isDayOff, isExamFor, isForGrade, showsOnDay, type Grade } from '@/features/todo/school-days';
+import { openFirst } from '@/features/todo/todo-state';
 import type { CalendarEvent, Todo } from '@/features/todo/types';
 import { formatFullDate, fromDateKey, toDateKey, WEEKDAY_ZH } from '@/lib/dates';
 
@@ -29,10 +30,10 @@ export function formatPinnedDate(pubDate: string): string | undefined {
   return Number.isNaN(date.getTime()) ? undefined : formatFullDate(date);
 }
 
-/** Todos dated `date` (local day), in the order they were added. */
+/** Todos dated `date` (local day): the open ones, then those checked off, each in the order they were added. */
 export function todosDueOn(todos: readonly Todo[], date: Date): Todo[] {
   const key = toDateKey(date);
-  return todos.filter((todo) => todo.date === key);
+  return openFirst(todos.filter((todo) => todo.date === key));
 }
 
 /**

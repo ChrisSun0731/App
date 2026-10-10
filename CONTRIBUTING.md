@@ -28,14 +28,14 @@ Android debug 版本以 **CK APP Dev**（`org.capacitor.quasar.ckapp.dev`）安�
 3. 新功能放進既有分頁：每天用的放在對應分頁裡，其他的加到校園（`src/app/(tabs)/campus/` 與 `CAMPUS_SCREENS`）。
 4. 持久狀態使用 `src/store/` 的 Zustand store 與 `src/lib/storage.ts`。不要在畫面中直接改動陣列；使用 store action。
 5. 畫面只用 `@/ui` 的元件：`ListScreen` 裡只有 `Section`，`Section` 裡是列與區塊。不要在其中直接放 React Native 或 `@expo/ui` 的元件；地圖、圖片等 React Native 內容用 `Embedded`。需要新元件或新屬性時，先在 `src/ui/types.ts` 定義，再分別實作 `src/ui/ios/`（SwiftUI）、`src/ui/android/`（Compose）與 `src/ui/kit.tsx`（網頁與 Jest 用），並更新 [設計規格](docs/design/native-ui.md) 的對照表。
-6. 導覽列按鈕、選單與切換檢視（例如日／週）用 `src/components/header-actions` 的 `HeaderActions`；圖示加在 `src/components/icons.ts`，同時給 SF Symbol 與 Material Symbol。分頁標題下方的一行用 `ListScreen` 的 `subtitle`。
+6. 導覽列按鈕、選單與切換檢視（例如美食的熱食部／附近）用 `src/components/header-actions` 的 `HeaderActions`；圖示加在 `src/components/icons.ts`，同時給 SF Symbol 與 Material Symbol。分頁標題下方的一行用 `ListScreen` 的 `subtitle`。
 
 ### 設計原則
 
 介面依 [設計規格](docs/design/native-ui.md)。改畫面時：
 
 - 倒三角只代表「現在」；滿版建中藍只給「今天」的「現在」卡片。
-- 文字、背景與分隔線用系統語意色，跟著淺色／深色模式與「增加對比」。課表顏色只用 `src/features/schedule/cell-colors.ts` 的色票（文字與底色對比至少 4.5:1）。
+- 文字、背景與分隔線用系統語意色，跟著淺色／深色模式與「增加對比」。課表顏色只來自 `src/features/schedule/cell-colors.ts`（使用者可選的七色）與 `subject-colors.ts`（每個科目各自的顏色），文字與底色對比至少 4.5:1。文字一律用系統文字樣式（`textStyle`），不要用固定字級（`font({ size })` 不會跟著動態字體縮放）。
 - 狀態一定有文字，不只靠顏色，例如「營業中」旁的圓點。
 - 時間、價格與數量用等寬數字。
 - 位置固定，只有內容跟著時間變。
@@ -54,7 +54,7 @@ Android debug 版本以 **CK APP Dev**（`org.capacitor.quasar.ckapp.dev`）安�
 | 班級課表           | Data repo 的 `schedules/gaoyi_schedules.json`、`gaoer_schedules.json`、`gaosan_schedules.json`                              |
 | 餐廳               | Data repo 的 `restaurantData.json`，含名稱、座標與營業時間                                                                  |
 | 校方行事曆         | Data repo 的 `calendar/<學期>.json`，目前為 `calendar/115-1.json`；來源與格式以 `src/features/todo/school-calendar.ts` 為準 |
-| 菜單               | Data repo 的 `menus/<週一日期>_<1至5>.png`                                                                                  |
+| 菜單               | Data repo 的 `menus/<週一日期>.json`（每週菜色）與 `menus/<週一日期>_<1至5>.png`（每日圖片）                                |
 | 北捷靜態站點／路線 | `src/features/transport/metro-lines.ts`                                                                                     |
 
 資料來源是 [CKApp-Dev/Data](https://github.com/CKApp-Dev/Data)。更新資料時先對照功能內的驗證器；`tools/` 的歷史轉檔工具不保證符合目前格式，使用前須檢查輸出。

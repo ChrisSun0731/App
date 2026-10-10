@@ -81,6 +81,23 @@ describe('the 現在 widget timeline', () => {
     ]);
   });
 
+  test('two note-only slots in a row are separate lessons, not a 連堂', () => {
+    // Thursday's 數學 連堂 (第五、六節) becomes 自習 then 班會, neither with a
+    // subject: two rows, while the 歷史 連堂 before 午餐 still merges into one.
+    const rows: ScheduleRow[] = ROWS.map((row) => {
+      if (row.name === '五') return { ...row, Thursday: { subject: '', note: '自習' } };
+      if (row.name === '六') return { ...row, Thursday: { subject: '', note: '班會' } };
+      return row;
+    });
+    const [entry] = nowTimeline({ ...INPUT, rows }, new Date(2026, 9, 8, 9, 30));
+    expect(entry.props.upcoming).toEqual([
+      { title: '歷史 · 連堂', time: '10:10' },
+      { title: '午餐', time: '12:00' },
+      { title: '自習', time: '13:00' },
+      { title: '班會', time: '14:00' },
+    ]);
+  });
+
   test('a day off from the 行事曆 names it', () => {
     const holiday = nowTimeline(INPUT, new Date(2026, 9, 8, 20, 0)).find((entry) => time(entry.date) === '9 00:00');
     expect(holiday?.props).toEqual({ eyebrow: '今天不用上課', title: '國慶日補假', next: '下次上課 10/12 星期一 公民與社會' });

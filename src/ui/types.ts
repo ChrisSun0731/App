@@ -9,6 +9,8 @@
 //   DateRow, ButtonRow, TextBlock, EmptyState, Notice, Loading, FilterChips,
 //   TileGrid, ChoiceGrid, MonthCalendar, TimetableGrid, Embedded; NowCard and
 //   DayStrip go alone in a plain Section.
+// - An Embedded with fit 'screen' goes alone in the last Section of its
+//   ListScreen.
 // - MetricPills and CrowdBar only go in Row.footer.
 // - Never put raw React Native or @expo/ui views inside a kit tree; Embedded
 //   is the one way to show React Native content (maps, images).
@@ -51,9 +53,9 @@ export interface SectionProps {
   title?: string;
   /** Short text after the title in the tint, e.g. 2 則未讀. */
   titleBadge?: string;
-  /** Trailing header text, e.g. 08:10–12:00 or 8 道. */
+  /** Trailing header text, e.g. 08:10–12:00 or 8 道. At the accessibility text sizes iOS puts it on its own line under the title. */
   detail?: string;
-  /** A trailing header link, e.g. 全部. */
+  /** A trailing header link, e.g. 全部. At the accessibility text sizes iOS puts it on its own line under the title. */
   action?: KitAction;
   /**
    * A large bold header (iOS: increased header prominence), for the groups
@@ -69,6 +71,12 @@ export interface SectionProps {
    * empty state, which look heavy inside a card.
    */
   plain?: boolean;
+  /**
+   * Sits close under the section above: 12pt on iOS 17 and later (Android
+   * keeps its 16dp). For content that belongs with the control above it, e.g.
+   * 熱食部's menu under its week strip.
+   */
+  tight?: boolean;
   children?: ReactNode;
 }
 
@@ -203,6 +211,13 @@ export interface ToggleRowProps {
 export interface ChoiceOption<T extends string = string> {
   label: string;
   value: T;
+  /**
+   * A round dot in this colour before the label, e.g. the colour a 顏色
+   * option names; once any option has one, the others keep its column with
+   * an empty ring. iOS lists such options inline (a menu would draw every dot
+   * in the tint); Android keeps its dropdown. Menu pickers only.
+   */
+  dot?: HexColor;
 }
 
 /**
@@ -448,30 +463,33 @@ export interface TimetableGridColumn {
 
 export interface TimetableGridCell {
   key: string;
-  /** A short subject; '' for a free period. */
+  /** The subject in full, or a free period's note; '' for neither. */
   text: string;
-  /** The subject's fill; undefined keeps the plain cell background. */
+  /** The lesson's fill (the user's colour, else the subject's own); undefined keeps the plain cell. */
   color?: HexColor;
   /** The text colour on `color`. */
   ink?: HexColor;
-  /** A free period: drawn as a dashed outline. */
+  /** Nothing to show (a free period without a note): nothing is drawn, but the slot still takes a tap (to fill it). */
   empty?: boolean;
-  /**
-   * How many periods this cell covers (a 連堂 is one tall cell). The cells it
-   * covers below it have `span: 0` and are not drawn. @default 1
-   */
-  span?: number;
+  /** The slot has a note: a small note mark under the text. */
+  note?: boolean;
+  /** The period in session: a ring in the tint round the cell, a free one too, so 現在 is not told by colour alone. */
+  current?: boolean;
   accessibilityLabel: string;
 }
 
 /** A week timetable: weekday columns, period rows, an optional labelled gap (lunch). */
 export interface TimetableGridProps {
   columns: readonly TimetableGridColumn[];
-  /** One per period, e.g. { label: '一', detail: '08:10' }; `highlighted` is the period in session. */
+  /**
+   * One per period, e.g. { label: '一', detail: '08:10' }; `highlighted` is
+   * the period in session. iOS leaves `detail` out from the xxxLarge text
+   * size up, where it no longer fits beside the grid.
+   */
   rows: readonly { key: string; label: string; detail?: string; highlighted?: boolean }[];
   /** cells[row][column] */
   cells: readonly (readonly TimetableGridCell[])[];
-  /** A labelled gap after row `index`, e.g. 午餐 12:00–13:00. Spans never cross it. */
+  /** A labelled gap after row `index`, e.g. 午休 12:00–13:00. */
   breakAfter?: { index: number; label: string };
   onPress?: (row: number, column: number) => void;
 }
@@ -482,6 +500,29 @@ export interface EmbeddedProps {
   height?: number;
   /** width / height; used when `height` is not given. */
   aspectRatio?: number;
+  /**
+   * 'screen': once the list is at rest, no taller than the room from this
+   * view's top to the end of the visible list (above the tab or navigation
+   * bar), so it shows whole without scrolling. Never taller than its natural
+   * size (`height`, else width / `aspectRatio`) or `maxHeight`; with less room
+   * than `minHeight` it keeps its natural size and the list scrolls. The
+   * content shows once its height is settled. @default 'width'
+   */
+  fit?: 'width' | 'screen';
+  /** fit 'screen': the least room worth fitting into; Infinity always keeps the natural size. @default 0 */
+  minHeight?: number;
+  /** fit 'screen': the most it grows to. */
+  maxHeight?: number;
+  /**
+   * Makes the whole view one button, laid over the content: the content then
+   * takes no touches and is hidden from VoiceOver and TalkBack, which read
+   * `accessibilityLabel` instead.
+   */
+  onPress?: () => void;
+  /** The button's spoken label; required with `onPress`. */
+  accessibilityLabel?: string;
+  /** What the button does, e.g. what it opens (VoiceOver only). */
+  accessibilityHint?: string;
 }
 
 /** Every platform kit file must satisfy this (checked with `satisfies Kit`). */
@@ -509,4 +550,11 @@ export interface Kit {
   Embedded: ComponentType<EmbeddedProps>;
   NowCard: ComponentType<NowCardProps>;
   TimetableGrid: ComponentType<TimetableGridProps>;
+  /**
+   * Whether the text is so large that columns side by side should stack, as
+   * for a screen that swaps a grid for a list: the accessibility text sizes
+   * on iOS (SwiftUI's isAccessibilitySize), a font scale of 1.5 or more on
+   * Android and elsewhere.
+   */
+  useAccessibilityTextSize: () => boolean;
 }

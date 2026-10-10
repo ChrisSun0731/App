@@ -1,4 +1,4 @@
-import { DatePicker, LabeledContent, Picker, Text, TextField, type TextFieldProps, VStack } from '@expo/ui/swift-ui';
+import { DatePicker, Image, Label, LabeledContent, Picker, Text, TextField, type TextFieldProps, VStack } from '@expo/ui/swift-ui';
 import {
   accessibilityHidden,
   accessibilityHint,
@@ -8,6 +8,7 @@ import {
   disabled as disabledModifier,
   font,
   id,
+  imageScale,
   keyboardType,
   labelsHidden,
   lineLimit,
@@ -16,6 +17,8 @@ import {
   textInputAutocapitalization,
   type ModifierConfig,
 } from '@expo/ui/swift-ui/modifiers';
+
+import { PlatformColor } from 'react-native';
 
 import { fromDateKey, toDateKey } from '@/lib/dates';
 
@@ -28,8 +31,10 @@ import { useSnapBack } from './use-snap-back';
 /**
  * A single choice: a menu picker row (label, current value and the
  * up/down chevrons) or a segmented control with its label hidden visually
- * (VoiceOver still reads it). The control always shows `value`; see
- * useSnapBack for how a refused choice is undone.
+ * (VoiceOver still reads it). Options with colour dots are listed inline
+ * instead, a row each with the chosen one checked: a menu draws every item's
+ * icon in the tint, which would lose the colours. The control always shows
+ * `value`; see useSnapBack for how a refused choice is undone.
  */
 export function PickerRow<T extends string>({
   label,
@@ -42,25 +47,43 @@ export function PickerRow<T extends string>({
 }: PickerRowProps<T>) {
   const { identity, choose } = useSnapBack(value, onChange);
   const segmented = variant === 'segmented';
+  const inline = !segmented && options.some((option) => option.dot !== undefined);
   const chrome = useRowChrome({ flushInPlain: segmented });
   return (
     <Picker<T>
       label={label}
-      systemImage={segmented ? undefined : sf(icon)}
+      systemImage={segmented || inline ? undefined : sf(icon)}
       selection={value}
       onSelectionChange={choose}
       modifiers={[
-        pickerStyle(segmented ? 'segmented' : 'menu'),
-        ...(segmented ? [labelsHidden()] : []),
+        pickerStyle(segmented ? 'segmented' : inline ? 'inline' : 'menu'),
+        ...(segmented || inline ? [labelsHidden()] : []),
         disabledModifier(disabled),
         id(identity),
         ...chrome,
       ]}>
-      {options.map((option) => (
-        <Text key={option.value} modifiers={[tag(option.value)]}>
-          {option.label}
-        </Text>
-      ))}
+      {options.map((option) =>
+        inline ? (
+          // The dot before the label in its own colour; an option without one
+          // keeps the column with an empty ring.
+          <Label
+            key={option.value}
+            title={option.label}
+            icon={
+              option.dot ? (
+                <Image systemName="circle.fill" color={option.dot} modifiers={[imageScale('small')]} />
+              ) : (
+                <Image systemName="circle.dashed" color={PlatformColor('tertiaryLabel')} modifiers={[imageScale('small')]} />
+              )
+            }
+            modifiers={[tag(option.value)]}
+          />
+        ) : (
+          <Text key={option.value} modifiers={[tag(option.value)]}>
+            {option.label}
+          </Text>
+        ),
+      )}
     </Picker>
   );
 }

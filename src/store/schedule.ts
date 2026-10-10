@@ -4,10 +4,15 @@ import { persist } from 'zustand/middleware';
 import type { PeriodName, ScheduleCell, ScheduleRow, Weekday } from '@/features/schedule/timetable';
 import { persistStorage } from '@/lib/storage';
 
-export const DEFAULT_CLASS = '101';
+/**
+ * No class until the user picks one (on 你是哪一班？ or in 設定), so nothing is
+ * auto-filled or shown as theirs before that. Installs that already saved a
+ * class keep it: the persisted state is unchanged.
+ */
+export const DEFAULT_CLASS = '';
 
 interface ScheduleState {
-  /** Class id, e.g. "101". */
+  /** Class id, e.g. "101"; '' until one is chosen. */
   userClass: string;
   /**
    * The user's timetable: a copy of the class's bundled timetable, plus any

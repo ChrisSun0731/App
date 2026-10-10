@@ -6,19 +6,19 @@ CK APP was created in 2024 by CK students Kimi and Diego to help students manage
 
 The app now uses **React Native, TypeScript, and Expo SDK 57**. Android interactive controls use Material 3 / Jetpack Compose; iOS uses SwiftUI controls and native navigation. Screen logic and layout are shared through React Native. The current package version is **4.0.0**; `app.config.ts` resolves the app version and build number.
 
-The interface follows the school bell: the emblem's inverted triangle only ever points at "now", and the full CK navy is reserved for the 現在 card at the top of Today. On iOS the tabs use the system large title with one line under it (the date, class or week), and view switches (日 / 週, 熱食部 / 附近) sit in the navigation bar. See the [design spec](docs/design/native-ui.md) for each screen's layout and the component mapping.
+The interface follows the school bell: the emblem's inverted triangle only ever points at "now", and the full CK navy is reserved for the 現在 card at the top of Today. On iOS the tabs use the system large title with one line under it (the date, class or week), and Food's 熱食部 / 附近 switch sits in the navigation bar. See the [design spec](docs/design/native-ui.md) for each screen's layout and the component mapping.
 
 ## Features
 
 There are five fixed tabs:
 
-| Tab               | Behavior                                                                                                                                                                                       |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Today (今天)      | The 現在 card (bell rail, countdown to the bell, days off and exam days), today's tasks and events, lunch, the commute, and pinned school news; the class button opens Settings                |
-| Timetable (課表)  | Day view (a dated week strip, morning/afternoon, colored period badges, double periods merged) and week view (the grid); custom subjects, odd/even-week rotation, notes, colors, and re-import |
-| Calendar (行事曆) | Month grid (days-off and exam marks, grade filter), the day's events and tasks, what comes next, and the full task list with categories                                                        |
-| Food (美食)       | Cafeteria (熱食部): the weekly menu image with a dated week strip and days off. Nearby (附近): map, open-now / favorites filters, nicknames and distances, favorites, and a random pick        |
-| Campus (校園)     | School news (unread, tags, pins, search), transport (YouBike and Metro), partner shops, souvenirs, and the decision helper                                                                     |
+| Tab               | Behavior                                                                                                                                                                                                                                       |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Today (今天)      | The 現在 card (bell rail, countdown to the bell, days off and exam days), today's tasks and events, lunch, the commute, and pinned school news; the class button opens Settings                                                                |
+| Timetable (課表)  | One table for the whole week (a cell per period, every subject in its own color, the current period and days off marked); custom subjects, odd/even-week rotation, notes, colors, and re-import                                                |
+| Calendar (行事曆) | Month grid (days-off and exam marks, grade filter), the day's events and tasks, what comes next, and the full task list with categories                                                                                                        |
+| Food (美食)       | Cafeteria (熱食部): the day's dishes and prices (rice dishes first) with a dated week strip and days off, and the original menu image. Nearby (附近): map, open-now / favorites filters, nicknames and distances, favorites, and a random pick |
+| Campus (校園)     | School news (unread, tags, pins, search), transport (YouBike and Metro), partner shops, souvenirs, and the decision helper                                                                                                                     |
 
 | Other        | Behavior                                                                                                                                           |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -44,11 +44,11 @@ There are five fixed tabs:
 | `.github/workflows/`            | Native builds, signing, and testing-track uploads                                                  |
 | `tools/`, `docs/`               | Data utilities, the design spec, and historical decision records                                   |
 
-Timetables, restaurants, the school calendar, and cafeteria menus come from the [Data repository](https://github.com/CKApp-Dev/Data). JSON is validated before caching; failed refreshes keep the last saved content. Menu filenames use the local Monday and weekday, such as `menus/2026-10-05_4.png`.
+Timetables, restaurants, the school calendar, and cafeteria menus come from the [Data repository](https://github.com/CKApp-Dev/Data). JSON is validated before caching; failed refreshes keep the last saved content. Menus come as one `menus/<Monday>.json` per week (each day's dishes and prices) plus a daily image named after the local Monday and weekday, such as `menus/2026-10-05_4.png`; a week without the JSON shows the image.
 
 Native apps request upstream services directly. School news refreshes every two minutes; news and transport polling pause according to screen focus / app foreground state. The tabs are fixed: Today, Timetable, Calendar, Food and Campus. The cafeteria menu is inside Food; school news, transport, partner shops, souvenirs and the helper are inside Campus. A new install opens on 你是哪一班？ first; an import from the previous app that brings a class skips it.
 
-Classes, breaks and days off are worked out from the timetable's bell times and the school calendar (`src/features/home/now.ts`, `src/features/todo/school-days.ts`): a period ends at its bell, and days off and exam days listed in the calendar replace that day's lessons. The cafeteria publishes its menu as an image; the app does not read the dishes out of it.
+Classes, breaks and days off are worked out from the timetable's bell times and the school calendar (`src/features/home/now.ts`, `src/features/todo/school-days.ts`): a period ends at its bell, and days off and exam days listed in the calendar replace that day's lessons. The cafeteria's dishes come from JSON the Data repo generates from the school's menu spreadsheet; the app does not read them out of the image.
 
 The settings reset restores personal stores/settings and clears in-memory query data. It retains remote JSON caches, cached menu images, and souvenir website data.
 

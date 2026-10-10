@@ -52,12 +52,58 @@ Home Screen) and on the CK_Pixel emulator as a separate `.codexverify` build
 (every tab, the welcome flow, 設定). The 熱食部 menu is published as an image,
 so the dishes the design lists in text appear in the image only.
 
+A design review against Apple's HIG followed (2026-10-10), and its findings
+were fixed: the subtitle under the large title in the primary colour; no class
+assumed when the welcome screen is skipped (`DEFAULT_CLASS` is ""); every text
+size a system text style, with the geometry around it scaling (`layoutScale`)
+and the grid, headers and card adapting at the accessibility sizes; checking a
+todo off reversible until the day ends; one control for the calendar's grade
+filter; the toolbar `space` item so text buttons sit apart from chevrons; the
+widget's rail kinds told apart by shape. The week grid was then restyled after
+the printed timetable: one coloured cell per period with the subject's full
+name, colours by subject family unless the user chose one (`subject-colors.ts`).
+課表 then became one table for the whole week: the 日 / 週 switch, the week
+strip and the day list went, and every subject got a colour of its own (a
+wheel of 22 hues, each subject at the slot its name hashes to or the next
+free one, anchored on the class's own timetable so its subjects keep their
+colours through edits up to 22 subjects); a colour the user picks for a slot
+still wins. A
+review of that change added a ring on the cell in session (none on a day
+off), a free period's note in its cell, the bell times, rotation and note in
+each cell's spoken label, a list of the week at the accessibility text sizes,
+and the coming week's subject in the editor's preview at the weekend. The
+顏色 pickers (a slot's, an event category's) show each colour as a dot before
+its name: inline rows on iOS, whose menus would tint every dot, and the
+dropdown on Android.
+
+熱食部 was then rebuilt to the PDF: the day's dishes listed natively (項次,
+dish, price; the rice dishes, then the rest), `8 道` in the header, and the
+printed image a link away. The dishes come from `menus/<Monday>.json`, which
+the Data repo's update_menu.py has to start writing next to the images (a
+patch for its scripts is prepared, not yet applied); until it does, every
+week falls back to the image, as before.
+
+The image fallback now uses a fitted paper card immediately below the weekday
+strip. It crops the known printed template to its eight dish rows and measures
+the space above the native tab bar, so the whole picture fits at ordinary
+portrait text sizes. The card opens the original in the native in-app browser;
+large accessibility text keeps the full-width picture and scrolling. Loading
+keeps the card's frame, named calendar holidays offer the next school day,
+and native dish-list cards omit the repeated date/count header.
+
 ## Verification
 
 - TypeScript and lint pass.
-- 37 domain and HTTP regression tests pass across nine suites.
+- 308 domain and HTTP regression tests pass across 38 suites.
 - Expo Doctor passes 21/21 checks with CocoaPods available on PATH.
 - Android and iOS Hermes production bundles export successfully.
+- The fitted 熱食部 picture shows all eight dishes above the native tab bar
+  on iPhone Air and CK_Pixel. Native taps open the in-app browser; drags and
+  pull-to-refresh retain the fitted frame without opening it. The named
+  holiday state and next-school-day action pass on iOS.
+- Dark mode and large-text scrolling pass on both platforms. A temporary
+  JSON fixture shows all eight native dish rows; the original cache values
+  and device text/theme settings were restored after verification.
 - Android debug APK builds; a separate `.codexverify` application was installed
   so the emulator's existing app and personal data remain untouched.
 - iOS simulator build passes with scene lifecycle enabled. The rebuilt app

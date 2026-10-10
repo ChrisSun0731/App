@@ -1,12 +1,12 @@
-// Pure helpers behind the 課表 screen and the 編輯課程 preview: what each
-// period row shows (overline, subject, rotation / note, colour, 現在), the
-// day's 上午 / 下午 with 連堂 merged, the week grid, the week line and the
-// picker options. Kept out of the screens so they can be unit tested without
-// a renderer.
-import { addDays, isSameDay, minutesOfDay, parseClockTime, startOfWeekMonday, WEEKDAY_ZH } from '@/lib/dates';
+// Pure helpers behind the 課表 screen and the 編輯課程 preview: the week as one
+// table (a coloured cell per period, each subject in its own colour), one
+// slot's preview row, the subtitle and the picker options. Kept out of the
+// screens so they can be unit tested without a renderer.
+import { addDays, isSameDay, parseClockTime, startOfWeekMonday, WEEKDAY_ZH } from '@/lib/dates';
 import type { ChoiceOption } from '@/ui/types';
 
-import { cellColorLabel, cellSwatch } from './cell-colors';
+import { cellColorLabel } from './cell-colors';
+import { lessonSwatch, subjectPalette, type SubjectPalette } from './subject-colors';
 import {
   getAlternating,
   getCurrentPeriod,
@@ -15,7 +15,6 @@ import {
   subjectFor,
   WEEKDAYS,
   WEEKDAY_SHORT_LABELS,
-  weekdayOf,
   type Period,
   type PeriodName,
   type ScheduleCell,
@@ -25,10 +24,10 @@ import {
   type Weekday,
 } from './timetable';
 
-/** A gap between periods at least this long (minutes) splits the day: 上午, 下午. */
-const DAY_PART_GAP = 30;
+/** A gap between periods at least this long (minutes) is lunch. */
+const LUNCH_GAP = 30;
 
-/** What one timetable slot's row shows. */
+/** What one timetable slot's row shows: 編輯課程's preview. */
 export interface CellRowModel {
   /** e.g. "第一節 · 08:10". */
   overline: string;
@@ -36,29 +35,12 @@ export interface CellRowModel {
   title: string;
   /** "單週：A　雙週：B" for a rotation and/or the note, one per line. */
   subtitle?: string;
-  /** The cell colour's soft fill for the colour scheme; undefined for 預設. */
+  /** The lesson's fill (the user's colour, else the subject's own); undefined for a 空堂. */
   fill?: string;
   /** Text on `fill`. */
   ink?: string;
-  /** In session right now. */
-  current: boolean;
   /** Overline first, so VoiceOver and TalkBack read the period before the subject. */
   accessibilityLabel: string;
-}
-
-export interface PeriodRowModel extends CellRowModel {
-  period: PeriodName;
-}
-
-/** The segmented 一 … 五 picker. */
-export const DAY_OPTIONS: readonly ChoiceOption<Weekday>[] = WEEKDAYS.map((day) => ({
-  label: WEEKDAY_SHORT_LABELS[day],
-  value: day,
-}));
-
-/** The weekday 課表 opens on: today, or Monday at the weekend. */
-export function defaultDay(date: Date): Weekday {
-  return weekdayOf(date) ?? 'Monday';
 }
 
 /** e.g. "第一節 · 08:10"; just "第一節" when the bell times are not loaded. */
@@ -77,36 +59,41 @@ export function cellDetails(cell: ScheduleCell): string | undefined {
   return lines.length > 0 ? lines.join('\n') : undefined;
 }
 
-/** The row for one slot during a week of `parity`. */
+/**
+ * The user's own colour, named for the spoken label; undefined for 預設 (the
+ * subject's colour is not their marking) and for a 空堂, which is drawn plain
+ * whatever colour the slot has.
+ */
+function ownColorLabel(cell: ScheduleCell, subject: string): string | undefined {
+  return subject && cell.color && cell.color !== 'Default' ? cellColorLabel(cell.color) : undefined;
+}
+
+/** The row for one slot during a week of `parity`, its subject coloured from `palette`. */
 export function describeCell(
   cell: ScheduleCell,
-  { overline, parity, scheme, current = false }: {
+  { overline, parity, scheme, palette }: {
     overline: string;
     parity: WeekParity;
     scheme: 'light' | 'dark';
-    current?: boolean;
+    palette: SubjectPalette;
   },
 ): CellRowModel {
-  const title = subjectFor(cell, parity) || '空堂';
+  const subject = subjectFor(cell, parity);
+  const title = subject || '空堂';
   const subtitle = cellDetails(cell);
-  const color = cell.color && cell.color !== 'Default' ? cellColorLabel(cell.color) : undefined;
-  const swatch = cellSwatch(cell.color, scheme);
+  const color = ownColorLabel(cell, subject);
+  const swatch = lessonSwatch({ subject, color: cell.color }, scheme, palette);
   return {
     overline,
     title,
     subtitle,
     fill: swatch?.fill,
     ink: swatch?.ink,
-    current,
-    // Pauses instead of the drawn separators, and the colour is spoken too:
-    // it is the user's own marking.
-    accessibilityLabel: [
-      overline.replace(/ · /g, '，'),
-      title,
-      subtitle?.replace(/\n/g, '，'),
-      current ? '現在' : '',
-      color,
-    ].filter(Boolean).join('，'),
+    // Pauses instead of the drawn separators, and the user's own colour is
+    // spoken too while a lesson is drawn in it.
+    accessibilityLabel: [overline.replace(/ · /g, '，'), title, subtitle?.replace(/\n/g, '，'), color]
+      .filter(Boolean)
+      .join('，'),
   };
 }
 
@@ -117,164 +104,6 @@ export function describeCell(
 export function displayedWeek(now: Date): Date {
   const day = now.getDay();
   return startOfWeekMonday(day === 6 ? addDays(now, 2) : day === 0 ? addDays(now, 1) : now);
-}
-
-/**
- * One row per period of `day`, in timetable order. The 現在 period is only
- * marked while `day` is today, using the real bell times (a period ends at its
- * bell, as on 今天).
- */
-export function describeDay({ rows, day, periods, semesterStart, now, scheme }: {
-  rows: readonly ScheduleRow[];
-  day: Weekday;
-  periods: Period[];
-  semesterStart: string | null;
-  now: Date;
-  scheme: 'light' | 'dark';
-}): PeriodRowModel[] {
-  const parity = getWeekParity(semesterStart, displayedWeek(now));
-  const current = weekdayOf(now) === day ? getCurrentPeriod(periods, now) : null;
-  return rows.map((row) => ({
-    period: row.name,
-    ...describeCell(row[day], {
-      overline: periodOverline(row.name, periods),
-      parity,
-      scheme,
-      current: row.name === current,
-    }),
-  }));
-}
-
-/** A row of the day view: one period, or a 連堂's periods together. */
-export interface DayRowModel extends CellRowModel {
-  /** The periods it covers, first to last; editing opens the first. */
-  periods: PeriodName[];
-  /** e.g. 08:10–10:00 */
-  time: string;
-  /** Minutes to the bell of the period in session, while `current`. */
-  untilBell: number | null;
-}
-
-/** 上午 or 下午: the periods between two long gaps. */
-export interface DayPartModel {
-  key: string;
-  /** 上午, 下午 */
-  title: string;
-  /** e.g. 08:10–12:00 */
-  detail: string;
-  rows: DayRowModel[];
-}
-
-/** Two adjacent slots that are one lesson: the same subject, rotation, note and colour. */
-function sameLesson(a: ScheduleCell, b: ScheduleCell, parity: WeekParity): boolean {
-  const subject = subjectFor(a, parity);
-  return subject !== '' &&
-    subject === subjectFor(b, parity) &&
-    JSON.stringify(getAlternating(a)) === JSON.stringify(getAlternating(b)) &&
-    (a.note?.trim() ?? '') === (b.note?.trim() ?? '') &&
-    (a.color ?? 'Default') === (b.color ?? 'Default');
-}
-
-const PART_NAMES = ['上午', '下午'];
-
-/**
- * `day` as 上午 and 下午 (split at the lunch gap), with a 連堂 (the same
- * lesson in adjacent periods) as one row. Without the bell times it is one
- * part of single periods, since breaks cannot be told apart from lunch.
- */
-export function describeDayParts(input: {
-  rows: readonly ScheduleRow[];
-  day: Weekday;
-  periods: Period[];
-  semesterStart: string | null;
-  now: Date;
-  scheme: 'light' | 'dark';
-}): DayPartModel[] {
-  const single = describeDay(input);
-  const timed = input.periods
-    .map((period) => ({ period, start: parseClockTime(period.start), end: parseClockTime(period.end) }))
-    .filter((entry): entry is { period: Period; start: number; end: number } => entry.start !== null && entry.end !== null)
-    .sort((a, b) => a.start - b.start);
-  if (timed.length === 0) {
-    return [{ key: 'day', title: '', detail: '', rows: single.map((row) => ({ ...row, periods: [row.period], time: '', untilBell: null })) }];
-  }
-
-  const parity = getWeekParity(input.semesterStart, displayedWeek(input.now));
-  const cellOf = (name: PeriodName) => input.rows.find((row) => row.name === name)?.[input.day];
-  const parts: DayPartModel[] = [];
-  let group: typeof timed = [];
-  let partStart = timed[0].start;
-  let partRows: DayRowModel[] = [];
-
-  const closeGroup = () => {
-    if (group.length === 0) return;
-    const first = group[0];
-    const last = group[group.length - 1];
-    const cell = cellOf(first.period.name);
-    const names = group.map((entry) => entry.period.name);
-    const times = `${first.period.start}–${last.period.end}`;
-    const overline = names.length > 1 ? `第${names.join('、')}節 · ${times} · 連堂` : `第${first.period.name}節 · ${times}`;
-    const inSession = group.find((entry) => single.find((row) => row.period === entry.period.name)?.current);
-    if (cell) {
-      partRows.push({
-        ...describeCell(cell, { overline, parity, scheme: input.scheme, current: inSession !== undefined }),
-        periods: names,
-        time: times,
-        untilBell: inSession ? inSession.end - minutesOfDay(input.now) : null,
-      });
-    }
-    group = [];
-  };
-  const closePart = (end: number) => {
-    closeGroup();
-    if (partRows.length > 0) {
-      const name = PART_NAMES[parts.length] ?? `第${parts.length + 1}段`;
-      parts.push({ key: `part-${parts.length}`, title: name, detail: `${clockText(partStart)}–${clockText(end)}`, rows: partRows });
-    }
-    partRows = [];
-  };
-
-  timed.forEach((entry, index) => {
-    const previous = timed[index - 1];
-    if (previous && entry.start - previous.end >= DAY_PART_GAP) {
-      closePart(previous.end);
-      partStart = entry.start;
-    } else if (previous && group.length > 0) {
-      const a = cellOf(previous.period.name);
-      const b = cellOf(entry.period.name);
-      if (!(a && b && sameLesson(a, b, parity))) closeGroup();
-    }
-    group.push(entry);
-  });
-  closePart(timed[timed.length - 1].end);
-  return parts;
-}
-
-const clockText = (minutes: number) =>
-  `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-
-// Names shortened to fit a week-grid cell; others keep their first four characters.
-const SHORT_SUBJECTS: Record<string, string> = {
-  國語文: '國文',
-  英語文: '英文',
-  公民與社會: '公民',
-  生活科技: '生科',
-  資訊科技: '資科',
-  各類文學選讀: '文學選讀',
-  彈性學習: '彈性',
-  綜合活動: '綜合',
-  全民國防教育: '國防',
-  健康與護理: '健護',
-  專題寫作與表達: '專題寫作',
-};
-
-/** A subject short enough for the week grid: 國語文 → 國文, 數學(彈性學習) → 數學彈. */
-export function shortSubject(subject: string): string {
-  const trimmed = subject.trim();
-  if (SHORT_SUBJECTS[trimmed]) return SHORT_SUBJECTS[trimmed];
-  const bracket = /^(.+?)\s*[（(]([^）)]*)[）)]$/.exec(trimmed);
-  const base = bracket ? bracket[1] + (bracket[2].startsWith('彈性') ? '彈' : '') : trimmed;
-  return Array.from(SHORT_SUBJECTS[base] ?? base).slice(0, 4).join('');
 }
 
 export interface WeekColumnModel {
@@ -293,21 +122,40 @@ export interface WeekColumnModel {
 
 export interface WeekCellModel {
   key: string;
-  /** The short subject, '' for a free period. */
+  /** This week's subject; '' for a free period. */
+  subject: string;
+  /** What the table shows: the subject in full, else a free period's note (as 今天 titles it); '' for neither. */
   text: string;
+  /** The lesson's fill and text colour (the user's colour, else the subject's own); none for a free period. */
   color?: string;
   ink?: string;
+  /** In session now: today's column (unless it is a day off) at the period of the bell. */
   current: boolean;
+  /** Nothing to show: a free period without a note. */
   empty: boolean;
-  /** Periods this cell covers (a 連堂); 0 for one covered by the cell above. */
-  span: number;
+  /** The slot has a note. */
+  note: boolean;
+  /** "單週：A　雙週：B" for a rotation and/or the note, one per line. */
+  details?: string;
+  /** The weekday, period, bell times, subject, rotation, note, 現在 and the user's own colour. */
   accessibilityLabel: string;
+}
+
+export interface WeekRowModel {
+  key: PeriodName;
+  /** 一 … 八 */
+  label: string;
+  /** The start time, e.g. 08:10; '' before the bell times load. */
+  detail: string;
+  /** The bell times, e.g. 08:10–09:00; '' before they load. */
+  time: string;
+  /** The period in session today. */
+  highlighted: boolean;
 }
 
 export interface WeekModel {
   columns: WeekColumnModel[];
-  /** `highlighted`: the period in session today. */
-  rows: { key: PeriodName; label: string; detail: string; highlighted: boolean }[];
+  rows: WeekRowModel[];
   /** cells[row][column], rows in bell order. */
   cells: WeekCellModel[][];
   /** The row after which lunch falls, or null. */
@@ -317,11 +165,14 @@ export interface WeekModel {
 }
 
 /**
- * The displayed week as a grid: a column per weekday (dated, today marked,
- * days off named by `offDay`), a row per period in bell order.
+ * The displayed week as one table: a column per weekday (dated, today marked,
+ * days off named by `offDay`), a row per period in bell order, and every
+ * subject in its own colour, anchored on `base`, the class's own timetable
+ * (see subjectPalette).
  */
-export function describeWeek({ rows, periods, semesterStart, now, scheme, offDay }: {
+export function describeWeek({ rows, base, periods, semesterStart, now, scheme, offDay }: {
   rows: readonly ScheduleRow[];
+  base?: readonly ScheduleRow[];
   periods: Period[];
   semesterStart: string | null;
   now: Date;
@@ -331,7 +182,12 @@ export function describeWeek({ rows, periods, semesterStart, now, scheme, offDay
   const monday = displayedWeek(now);
   const parity = getWeekParity(semesterStart, monday);
   const current = getCurrentPeriod(periods, now);
-  const ordered = [...periods].sort((a, b) => (parseClockTime(a.start) ?? 0) - (parseClockTime(b.start) ?? 0));
+  const palette = subjectPalette(rows, base);
+  // Bell order; until the bell times load, the timetable's own order, untimed.
+  const ordered: Period[] =
+    periods.length > 0
+      ? [...periods].sort((a, b) => (parseClockTime(a.start) ?? 0) - (parseClockTime(b.start) ?? 0))
+      : rows.map((row) => ({ name: row.name, start: '', end: '' }));
 
   const columns = WEEKDAYS.map((day, index): WeekColumnModel => {
     const date = addDays(monday, index);
@@ -353,42 +209,40 @@ export function describeWeek({ rows, periods, semesterStart, now, scheme, offDay
     const next = ordered[index + 1];
     const end = parseClockTime(period.end);
     const start = next ? parseClockTime(next.start) : null;
-    return end !== null && start !== null && start - end >= DAY_PART_GAP;
+    return end !== null && start !== null && start - end >= LUNCH_GAP;
   });
 
-  const todayColumn = columns.some((column) => column.today);
-  const cellAt = (period: Period, column: WeekColumnModel) =>
-    rows.find((candidate) => candidate.name === period.name)?.[column.key] ?? { subject: '' };
-  // A 連堂 is one tall cell: the same lesson in the period before, on the
-  // same side of lunch, covers this one.
-  const continues = (index: number, column: WeekColumnModel) =>
-    index > 0 && index - 1 !== lunchIndex && sameLesson(cellAt(ordered[index - 1], column), cellAt(ordered[index], column), parity);
-
+  // 現在 is on today's column only, and not when today is a day off.
+  const live = columns.find((column) => column.today && column.off === null);
+  const times = ordered.map((period) => (period.start && period.end ? `${period.start}–${period.end}` : ''));
+  // One cell per period, as on the printed timetable: a 連堂 is two cells of
+  // the same colour.
   const cells = ordered.map((period, index) =>
     columns.map((column): WeekCellModel => {
-      const cell = cellAt(period, column);
+      const cell = rows.find((candidate) => candidate.name === period.name)?.[column.key] ?? { subject: '' };
       const subject = subjectFor(cell, parity);
-      const isCurrent = column.today && current === period.name;
-      const color = cell.color && cell.color !== 'Default' ? cellColorLabel(cell.color) : '';
-      const swatch = cellSwatch(cell.color, scheme);
-      let span = 0;
-      if (!continues(index, column)) {
-        span = 1;
-        while (index + span < ordered.length && continues(index + span, column)) span += 1;
-      }
-      const names = ordered.slice(index, index + Math.max(span, 1)).map((entry) => entry.name);
+      const note = cell.note?.trim() ?? '';
+      const details = cellDetails(cell);
+      const isCurrent = column === live && current === period.name;
+      const color = ownColorLabel(cell, subject);
+      const swatch = lessonSwatch({ subject, color: cell.color }, scheme, palette);
       return {
         key: `${period.name}-${column.key}`,
-        text: shortSubject(subject),
+        subject,
+        text: subject || note,
         color: swatch?.fill,
         ink: swatch?.ink,
         current: isCurrent,
-        empty: subject === '',
-        span,
+        empty: subject === '' && note === '',
+        note: note !== '',
+        details,
+        // Pauses instead of the drawn separators; the user's own colour is
+        // spoken too while a lesson is drawn in it.
         accessibilityLabel: [
-          `星期${WEEKDAY_SHORT_LABELS[column.key]}第${names.join('、')}節`,
+          `星期${WEEKDAY_SHORT_LABELS[column.key]}第${period.name}節`,
+          times[index],
           subject || '空堂',
-          span > 1 ? '連堂' : '',
+          details?.replace(/\n/g, '，'),
           isCurrent ? '現在' : '',
           color,
         ]
@@ -400,11 +254,12 @@ export function describeWeek({ rows, periods, semesterStart, now, scheme, offDay
 
   return {
     columns,
-    rows: ordered.map((period) => ({
+    rows: ordered.map((period, index) => ({
       key: period.name,
       label: period.name,
       detail: period.start,
-      highlighted: todayColumn && current === period.name,
+      time: times[index],
+      highlighted: live !== undefined && current === period.name,
     })),
     cells,
     lunchAfter: lunchIndex >= 0 ? lunchIndex : null,
@@ -412,20 +267,7 @@ export function describeWeek({ rows, periods, semesterStart, now, scheme, offDay
   };
 }
 
-/**
- * e.g. "115學年度第1學期 · 第6週 · 雙週", for the displayed week (the coming
- * one at the weekend). The week number is left out before the semester
- * starts; the parity is always shown because it decides which subject
- * rotating slots display (單週 when the start date is unknown).
- */
-export function formatWeekInfo(academicYear: string, semesterStart: string | null, now: Date): string {
-  const shown = displayedWeek(now);
-  const week = getWeekNumber(semesterStart, shown);
-  const parity = getWeekParity(semesterStart, shown);
-  return [academicYear, week ? `第${week}週` : '', parity === 'odd' ? '單週' : '雙週'].filter(Boolean).join(' · ');
-}
-
-/** 課表's subtitle, e.g. "201 · 第 6 週 · 雙週", for the displayed week. */
+/** 課表's subtitle, e.g. "201 · 第 6 週 · 雙週", for the displayed week; the week alone until a class is chosen. */
 export function scheduleSubtitle(userClass: string, semesterStart: string | null, now: Date): string {
   const shown = displayedWeek(now);
   const week = getWeekNumber(semesterStart, shown);
@@ -436,10 +278,10 @@ export function scheduleSubtitle(userClass: string, semesterStart: string | null
 /**
  * Class picker options in the feed's order. The user's class stays listed
  * (first) even when the loaded timetables no longer include it, so the picker
- * can always show it.
+ * can always show it; no class chosen yet ('') adds nothing.
  */
 export function classOptions(classIds: readonly string[], userClass: string): ChoiceOption[] {
-  const ids = classIds.includes(userClass) ? classIds : [userClass, ...classIds];
+  const ids = userClass === '' || classIds.includes(userClass) ? classIds : [userClass, ...classIds];
   return ids.map((id) => ({ label: `${id} 班`, value: id }));
 }
 
@@ -452,20 +294,20 @@ export function classTimetable(timetables: Timetables | undefined, id: string): 
 /** What 課表 shows while the class timetables load, fail or reload. */
 export interface ScheduleLoadState {
   /**
-   * Above the days: 'error' is the 暫時無法更新課表 notice with 重試;
+   * Above the table: 'error' is the 暫時無法更新課表 notice with 重試;
    * 'retrying' is a loading row in its place while a refetch runs.
    */
   banner: 'none' | 'error' | 'retrying';
-  /** The day section: the period rows, a loading row, or the empty state. */
-  day: 'rows' | 'loading' | 'empty';
+  /** The table itself, a loading row, or the empty state. */
+  table: 'rows' | 'loading' | 'empty';
 }
 
 /**
  * React Query keeps `isError` (and `isPending` stays false) while a retry
  * runs, so 重試 and 重新整理 would look like they did nothing for the whole
  * round trip. Any running fetch therefore replaces those buttons with a
- * loading row: in the day section when it has no rows (so a second one is not
- * needed above), otherwise in place of the notice.
+ * loading row: in the table's place when there are no rows (so a second one
+ * is not needed above), otherwise in place of the notice.
  */
 export function scheduleLoadState({ hasRows, isPending, isFetching, isError }: {
   hasRows: boolean;
@@ -473,9 +315,9 @@ export function scheduleLoadState({ hasRows, isPending, isFetching, isError }: {
   isFetching: boolean;
   isError: boolean;
 }): ScheduleLoadState {
-  const day = hasRows ? 'rows' : isPending || isFetching ? 'loading' : 'empty';
+  const table = hasRows ? 'rows' : isPending || isFetching ? 'loading' : 'empty';
   let banner: ScheduleLoadState['banner'] = 'none';
   if (isError && !isFetching) banner = 'error';
   else if (isError && hasRows) banner = 'retrying';
-  return { banner, day };
+  return { banner, table };
 }

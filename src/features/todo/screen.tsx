@@ -1,11 +1,13 @@
 // 行事曆: a month calendar with the selected day's events and todos, what
 // comes next, and a link to every todo. Layout per docs/design/native-ui.md,
 // "行事曆 (Todo)". School 行事曆 events are merged in read-only, by default
-// only those for the user's grade; days off are marked 假 and exam days 考.
+// only those for the user's grade (the footer under the month is the one
+// switch here; 設定 has the other); days off are marked 假 and exam days 考.
+// A todo checked off stays, checked, until the day ends (todo-state.ts).
 import { router } from 'expo-router';
 import { useState } from 'react';
 
-import { HeaderActions, type HeaderItem } from '@/components/header-actions';
+import { HeaderActions } from '@/components/header-actions';
 import { icons } from '@/components/icons';
 import { fromDateKey, toDateKey, WEEKDAY_ZH } from '@/lib/dates';
 import { useScheduleStore } from '@/store/schedule';
@@ -22,13 +24,14 @@ import {
   eventSource,
   formatDayTitle,
   formatShortRange,
-  otherGrades,
+  gradeFilterFooter,
   spacedTerm,
   upcomingItems,
 } from './calendar-view';
 import { isSchoolEvent } from './school-calendar';
-import { GRADE_LABELS, gradeOfClass } from './school-days';
-import { completeTodo, editEvent, editTodo, eventActions, todoActions, todoSubtitle } from './todo-rows';
+import { gradeOfClass } from './school-days';
+import { editEvent, editTodo, eventActions, todoActions, todoSubtitle, toggleTodo } from './todo-rows';
+import { isCompleted, openTodos, visibleTodos } from './todo-state';
 import type { CalendarEvent } from './types';
 import { useSchoolEvents } from './use-school-events';
 
@@ -59,7 +62,7 @@ function upcomingEventSubtitle(event: CalendarEvent): string {
 
 export default function TodoScreen() {
   const events = useTodoStore((state) => state.events);
-  const todos = useTodoStore((state) => state.todos);
+  const allTodos = useTodoStore((state) => state.todos);
   const school = useSchoolEvents();
   const todoColor = useTodoColor();
   const grade = gradeOfClass(useScheduleStore((state) => state.userClass));
@@ -75,14 +78,18 @@ export default function TodoScreen() {
   const today = new Date();
   const todayKey = toDateKey(today);
   // The React Compiler memoizes these on their inputs (todayKey included, so
-  // the today marker moves after midnight).
-  const schoolShown = gradeOnly ? eventsForGrade(school.events, grade, month) : { events: school.events, hidden: 0 };
-  const allEvents = [...events, ...schoolShown.events];
-  const cells = calendarCells(month.year, month.month, allEvents, todos, todoColor, fromDateKey(todayKey), grade);
-  const hidden = schoolShown.hidden > 0 && grade !== null;
+  // after midnight the today marker moves and yesterday's done todos go).
+  const todayStart = fromDateKey(todayKey);
+  const todos = visibleTodos(allTodos, todayStart);
+  // Only with a known grade: the filter needs one.
+  const forGrade = grade !== null ? eventsForGrade(school.events, grade, month) : null;
+  const allEvents = [...events, ...(gradeOnly && forGrade ? forGrade.events : school.events)];
+  const cells = calendarCells(month.year, month.month, allEvents, todos, todoColor, todayStart, grade);
+  const filterFooter = gradeFilterFooter(grade, gradeOnly, forGrade?.hidden ?? 0);
   const items = itemsForDay(selectedDate, allEvents, todos);
   const hasSchoolEvents = items.some((item) => item.type === 'event' && isSchoolEvent(item.event));
   const upcoming = upcomingItems(selectedDate, allEvents, todos);
+  const open = openTodos(todos);
 
   function showMonth(offset: number) {
     const first = new Date(month.year, month.month + offset, 1);
@@ -91,10 +98,14 @@ export default function TodoScreen() {
     setSelectedDate(toDateKey(first));
   }
 
+  // 接下來 looks 14 days ahead, which can be in the next month, so the grid has to follow the selection.
+  function showDay(date: Date) {
+    setMonth({ year: date.getFullYear(), month: date.getMonth() });
+    setSelectedDate(toDateKey(date));
+  }
+
   function showToday() {
-    const now = new Date();
-    setMonth({ year: now.getFullYear(), month: now.getMonth() });
-    setSelectedDate(toDateKey(now));
+    showDay(new Date());
   }
 
   // New items default to the selected day, as before.
@@ -106,32 +117,17 @@ export default function TodoScreen() {
     router.push({ pathname: '/event-editor', params: { date: selectedDate } });
   }
 
-  // Only with a known grade: the filter needs one.
-  const filterMenu: HeaderItem[] = grade !== null
-    ? [{
-        kind: 'menu',
-        key: 'filter',
-        label: '篩選',
-        icon: gradeOnly ? icons.filterActive : icons.filter,
-        actions: [{
-          key: 'grade',
-          label: `只顯示${GRADE_LABELS[grade]}的學校活動`,
-          selected: gradeOnly,
-          onPress: () => setGradeOnly(!gradeOnly),
-        }],
-      }]
-    : [];
-
   return (
     <>
       <HeaderActions
         left={[
+          // The chevrons pair as a stepper; the text button sits apart from them.
           { kind: 'icon', key: 'previous', label: '上個月', icon: icons.chevronLeft, onPress: () => showMonth(-1) },
-          { kind: 'text', key: 'today', label: '今天', onPress: showToday },
           { kind: 'icon', key: 'next', label: '下個月', icon: icons.chevronRight, onPress: () => showMonth(1) },
+          { kind: 'space', key: 'gap' },
+          { kind: 'text', key: 'today', label: '今天', onPress: showToday },
         ]}
         right={[
-          ...filterMenu,
           {
             kind: 'menu',
             key: 'add',
@@ -149,8 +145,8 @@ export default function TodoScreen() {
         onRefresh={() => school.refetch()}
         fab={{ label: '新增待辦', icon: icons.add, onPress: addTodo }}>
         <Section
-          footer={hidden ? `已隱藏 ${schoolShown.hidden} 則只給${otherGrades(grade)}的活動。` : undefined}
-          footerAction={hidden ? { label: '全部顯示', onPress: () => setGradeOnly(false) } : undefined}>
+          footer={filterFooter?.text}
+          footerAction={filterFooter ? { label: filterFooter.action.label, onPress: () => setGradeOnly(filterFooter.action.gradeOnly) } : undefined}>
           <MonthCalendar weekdays={WEEKDAY_ZH} cells={cells} selectedKey={selectedDate} onSelect={setSelectedDate} />
           {school.isPending ? <Loading label="正在載入學校行事曆…" /> : null}
           {school.error ? (
@@ -172,8 +168,8 @@ export default function TodoScreen() {
                   key={item.key}
                   title={item.todo.title}
                   subtitle={todoSubtitle(item.todo)}
-                  checked={false}
-                  onCheckedChange={(checked) => completeTodo(item.todo, checked)}
+                  checked={isCompleted(item.todo)}
+                  onCheckedChange={(checked) => toggleTodo(item.todo, checked)}
                   onPress={() => editTodo(item.todo)}
                   actions={todoActions(item.todo)}
                 />
@@ -221,7 +217,7 @@ export default function TodoScreen() {
                   subtitle={upcomingEventSubtitle(item.event)}
                   mark={mark}
                   accessibilityLabel={`${formatDayTitle(toDateKey(date), today)}，${item.event.title}，${upcomingEventSubtitle(item.event)}`}
-                  onPress={readOnly ? () => setSelectedDate(toDateKey(date)) : () => editEvent(item.event)}
+                  onPress={readOnly ? () => showDay(date) : () => editEvent(item.event)}
                 />
               );
             })}
@@ -231,7 +227,7 @@ export default function TodoScreen() {
         <Section>
           <Row
             title="所有待辦"
-            detail={todos.length > 0 ? `${todos.length} 項` : undefined}
+            detail={open.length > 0 ? `${open.length} 項` : undefined}
             icon={icons.todo}
             accessory="chevron"
             onPress={() => router.push('/(tabs)/todo/list')}

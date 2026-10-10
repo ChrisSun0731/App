@@ -43,6 +43,13 @@ describe('today\'s todos', () => {
     const todos = [todo('a', '2026-10-05'), todo('b', '2026-10-04'), todo('c', null), todo('d', '2026-10-05')];
     expect(todosDueOn(todos, at(23, 59)).map((item) => item.id)).toEqual(['a', 'd']);
   });
+
+  test('lists the open ones before those checked off, each in saved order', () => {
+    const done = at(9, 0).toISOString();
+    const todo = (id: string, completedAt?: string): Todo => ({ id, title: id, date: '2026-10-05', category: null, ...(completedAt ? { completedAt } : {}) });
+    const todos = [todo('a', done), todo('b'), todo('c', done), todo('d')];
+    expect(todosDueOn(todos, at(23, 59)).map((item) => item.id)).toEqual(['b', 'd', 'a', 'c']);
+  });
 });
 
 describe('the 今日 agenda', () => {

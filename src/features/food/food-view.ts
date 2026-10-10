@@ -2,6 +2,7 @@
 // screens stay declarative and this stays unit-tested: filtering, the status
 // line and dot colour, the random pick, the weekly hours and the links.
 import { CK_COORDINATE, distanceKm } from '@/features/transport/youbike';
+import { clock } from '@/lib/dates';
 
 import {
   DAY_LABELS,
@@ -52,10 +53,8 @@ const SHORT_STATUS: Record<OpenStatus, string> = {
   closed: '休息中',
 };
 
-const clockOf = (minutes: number) => {
-  const day = ((minutes % 1440) + 1440) % 1440;
-  return `${String(Math.floor(day / 60)).padStart(2, '0')}:${String(day % 60).padStart(2, '0')}`;
-};
+/** "HH:MM" on the day's clock: nextChange counts tomorrow's minutes from 1440, so they wrap. */
+const clockOf = (minutes: number) => clock(((minutes % 1440) + 1440) % 1440);
 
 /**
  * A list row's status, e.g. 營業中 · 至 13:30, 快打烊 · 13:00, 快開門 · 17:00,

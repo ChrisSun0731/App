@@ -11,13 +11,14 @@ import {
   Text,
   TextButton,
 } from '@expo/ui/jetpack-compose';
-import { align, clip, fillMaxSize, fillMaxWidth, imePadding, padding, Shapes, weight } from '@expo/ui/jetpack-compose/modifiers';
-import { useEffect, useState, type ReactElement } from 'react';
-import { Keyboard } from 'react-native';
+import { align, clip, fillMaxSize, fillMaxWidth, imePadding, onGloballyPositioned, padding, Shapes, weight } from '@expo/ui/jetpack-compose/modifiers';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { Keyboard, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BRAND } from '@/theme/brand';
 
+import { ViewportContext } from '../fit';
 import type { ButtonRowProps, ListScreenProps, SectionProps } from '../types';
 import { MonthCalendar } from './calendar';
 import { ChoiceGrid, Embedded, EmptyState, Loading, Notice, TextBlock, TileGrid } from './content';
@@ -75,8 +76,14 @@ const FAB_CLEARANCE = 80;
 export function ListScreen({ children, subtitle, onRefresh, refreshing = false, fab }: ListScreenProps) {
   const m = useM3();
   const insets = useSafeAreaInsets();
+  const { width, height, fontScale } = useWindowDimensions();
   const keyboardVisible = useKeyboardVisible();
   const [pulling, setPulling] = useState(false);
+  const [boundaryBottom, setBoundaryBottom] = useState<number | null>(null);
+  const bottomPadding = keyboardVisible ? 16 : insets.bottom + 16 + (fab ? FAB_CLEARANCE : 0);
+  const bottom = boundaryBottom === null ? null : boundaryBottom - bottomPadding;
+  const epoch = `${width}:${height}:${fontScale}:${insets.top}:${insets.right}:${insets.bottom}:${insets.left}:${bottomPadding}:${boundaryBottom}:${subtitle ?? ''}`;
+  const viewport = useMemo(() => ({ bottom, paused: refreshing || pulling, epoch }), [bottom, refreshing, pulling, epoch]);
 
   async function refresh() {
     if (!onRefresh) return;
@@ -107,7 +114,7 @@ export function ListScreen({ children, subtitle, onRefresh, refreshing = false, 
         // The IME inset already includes the navigation bar, and the FAB
         // stays behind the keyboard, so neither is cleared while it is up
         // (@expo/ui has no consumeWindowInsets to do this natively).
-        bottom: keyboardVisible ? 16 : insets.bottom + 16 + (fab ? FAB_CLEARANCE : 0),
+        bottom: bottomPadding,
       }}
       verticalArrangement={{ spacedBy: 16 }}>
       {/* The screen's subtitle under the top app bar's title, e.g. today's date. */}
@@ -121,35 +128,46 @@ export function ListScreen({ children, subtitle, onRefresh, refreshing = false, 
   );
 
   return (
-    <Host style={{ flex: 1 }} seedColor={BRAND}>
-      <Box modifiers={[fillMaxSize()]}>
-        {onRefresh ? (
-          // One indicator for a pull and for a refresh the screen started
-          // itself (`refreshing`, e.g. a header button): Compose shows the
-          // same spinner while either runs.
-          <PullToRefreshBox
-            isRefreshing={refreshing || pulling}
-            onRefresh={() => void refresh()}
-            modifiers={[fillMaxSize()]}>
-            {list}
-          </PullToRefreshBox>
-        ) : (
-          list
-        )}
-        {fab ? (
-          <ExtendedFloatingActionButton
-            onClick={fab.onPress}
-            modifiers={[align('bottomEnd'), padding(0, 0, 16 + insets.right, insets.bottom + 16)]}>
-            <ExtendedFloatingActionButton.Icon>
-              <Icon source={iconSource(fab.icon)} size={24} />
-            </ExtendedFloatingActionButton.Icon>
-            <ExtendedFloatingActionButton.Text>
-              <Text style={{ typography: 'labelLarge' }}>{fab.label}</Text>
-            </ExtendedFloatingActionButton.Text>
-          </ExtendedFloatingActionButton>
-        ) : null}
-      </Box>
-    </Host>
+    <ViewportContext.Provider value={viewport}>
+      <Host style={{ flex: 1 }} seedColor={BRAND}>
+        <Box
+          modifiers={[
+            fillMaxSize(),
+            // Native tabs already inset this Host. Measure its window boundary
+            // rather than estimating the space from the device's height.
+            onGloballyPositioned(({ y, height: measuredHeight }) => {
+              const nextBottom = Math.round(y + measuredHeight);
+              setBoundaryBottom((previous) => previous === nextBottom ? previous : nextBottom);
+            }),
+          ]}>
+          {onRefresh ? (
+            // One indicator for a pull and for a refresh the screen started
+            // itself (`refreshing`, e.g. a header button): Compose shows the
+            // same spinner while either runs.
+            <PullToRefreshBox
+              isRefreshing={refreshing || pulling}
+              onRefresh={() => void refresh()}
+              modifiers={[fillMaxSize()]}>
+              {list}
+            </PullToRefreshBox>
+          ) : (
+            list
+          )}
+          {fab ? (
+            <ExtendedFloatingActionButton
+              onClick={fab.onPress}
+              modifiers={[align('bottomEnd'), padding(0, 0, 16 + insets.right, insets.bottom + 16)]}>
+              <ExtendedFloatingActionButton.Icon>
+                <Icon source={iconSource(fab.icon)} size={24} />
+              </ExtendedFloatingActionButton.Icon>
+              <ExtendedFloatingActionButton.Text>
+                <Text style={{ typography: 'labelLarge' }}>{fab.label}</Text>
+              </ExtendedFloatingActionButton.Text>
+            </ExtendedFloatingActionButton>
+          ) : null}
+        </Box>
+      </Host>
+    </ViewportContext.Provider>
   );
 }
 

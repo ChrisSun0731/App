@@ -5,7 +5,6 @@
 // the countdown between bells is drawn live by the widget itself. Pure, so it
 // is unit-tested (now-timeline.test.ts).
 import {
-  clock,
   dayLabel,
   hasRail,
   isLesson,
@@ -17,7 +16,7 @@ import {
   type NowState,
   type Slot,
 } from '@/features/home/now';
-import { addDays, minutesOfDay } from '@/lib/dates';
+import { addDays, clock, minutesOfDay } from '@/lib/dates';
 
 /** What one widget entry shows; plain JSON, as the widget extension receives it. */
 export interface NowWidgetProps {
@@ -76,8 +75,10 @@ export function upcomingToday(now: Date, slots: readonly Slot[]): { title: strin
       items.push({ title: '午餐', time: clock(previous.end) });
     }
     if (!isLesson(slot) || slot.start <= time) return;
+    // Only a real subject continues, as doubleUntil in now.ts: two note-only
+    // slots in a row (自習, then 班會) are separate lessons, not a 連堂.
     const continues =
-      previous !== undefined && isLesson(previous) && previous.subject === slot.subject && slot.start - previous.end < LUNCH_GAP;
+      previous !== undefined && slot.subject !== '' && previous.subject === slot.subject && slot.start - previous.end < LUNCH_GAP;
     if (continues) {
       // The same lesson goes on: one row, marked 連堂 (unless it is the one in session).
       const last = items[items.length - 1];

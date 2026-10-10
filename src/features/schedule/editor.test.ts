@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { CELL_COLOR_OPTIONS, editorTitle, parseEditorTarget, subjectHint } from './editor';
+import { cellColorOptions, editorTitle, parseEditorTarget, subjectHint } from './editor';
 import { draftFromCell, setDraftRotating } from './timetable';
 
 describe('the schedule editor route', () => {
@@ -30,8 +30,16 @@ describe('the 科目 section footer', () => {
   });
 });
 
-test('offers the eight cell colours, 預設 first', () => {
-  expect(CELL_COLOR_OPTIONS).toHaveLength(8);
-  expect(CELL_COLOR_OPTIONS[0]).toEqual({ label: '預設', value: 'Default' });
-  expect(CELL_COLOR_OPTIONS.map((option) => option.label)).toContain('粉紅色');
+test('offers the eight cell colours, 預設 first, each with a dot in its hue', () => {
+  const light = cellColorOptions('light', '#2E9E5B');
+  expect(light).toHaveLength(8);
+  // 預設's dot is the subject's own colour.
+  expect(light[0]).toEqual({ label: '預設（依科目）', value: 'Default', dot: '#2E9E5B' });
+  expect(light.find((option) => option.value === 'Red')).toEqual({ label: '紅色', value: 'Red', dot: '#FF3B30' });
+  expect(cellColorOptions('dark').find((option) => option.value === 'Red')?.dot).toBe('#FF453A');
+  expect(light.map((option) => option.label)).toContain('粉紅色');
+  // Each named colour has a dot of its own.
+  expect(new Set(light.slice(1).map((option) => option.dot)).size).toBe(7);
+  // A 空堂 has no colour of its own, so 預設 has no dot.
+  expect(cellColorOptions('light')[0].dot).toBeUndefined();
 });

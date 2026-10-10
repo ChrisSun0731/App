@@ -29,8 +29,8 @@ import { chunk } from './helpers';
 
 const INDICATOR_SIZE = 5;
 const INDICATOR_SPACING = 2;
-/** The indicator row's height: enough for a 假 / 考 mark, the same for every day so weeks stay level. */
-const MARK_ROW_HEIGHT = 12;
+/** The indicator row's height: a caption2 假 / 考 mark's line at its cap, the same for every day so weeks stay level. */
+const MARK_ROW_HEIGHT = 13;
 
 const RECT = contentShape(shapes.rectangle());
 
@@ -134,7 +134,7 @@ function DayCell({ cell, selected, onSelect }: {
           {cell.mark ? (
             <Text
               modifiers={[
-                font({ size: 10, weight: 'bold' }),
+                font({ textStyle: 'caption2', weight: 'bold' }),
                 cell.mark.tone === 'holiday' ? foregroundStyle(DESTRUCTIVE) : primaryText,
                 dynamicTypeSize({ max: 'large' }),
               ]}>

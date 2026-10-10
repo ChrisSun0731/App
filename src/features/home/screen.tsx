@@ -58,7 +58,7 @@ export default function TodayScreen() {
   const data = timetable.data;
   // The Home Screen and Lock Screen widget follows the same day (in builds that have it).
   useNowWidget(data ? { ...calendar, periods: data.periods, rows, semesterStart: data.semesterStart } : null, toDateKey(now));
-  const state = data ? nowState({ ...calendar, now, periods: data.periods, rows, semesterStart: data.semesterStart }) : null;
+  const state = data ? nowState({ ...calendar, now, periods: data.periods, rows, semesterStart: data.semesterStart, userClass }) : null;
   const rail = data ? railOf(now, slotsOn(now, data.periods, rows, data.semesterStart)) : null;
 
   // The commute is fetched live only around it: before school and after.
