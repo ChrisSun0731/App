@@ -13,13 +13,19 @@ import {
   opacity,
   shapes,
 } from '@expo/ui/swift-ui/modifiers';
+import { useWindowDimensions } from 'react-native';
 
 import { usePalette } from '@/theme/palette';
 
 import type { DayStripDay, DayStripProps } from '../types';
 import { DESTRUCTIVE, labelText, secondaryLabelText, useRowChrome } from './chrome';
+import { layoutScale } from './helpers';
 
+/** Geometry at the default text size (pt); it grows with the text up to the strip's xxLarge cap. */
 const CIRCLE = 40;
+const MARKER_HEIGHT = 10;
+/** The least height of a tappable item. */
+const MIN_TAP = 44;
 
 /**
  * The school week on the grouped background: one plain button per day with
@@ -30,19 +36,28 @@ const CIRCLE = 40;
  */
 export function DayStrip({ days, selectedKey, onSelect }: DayStripProps) {
   const chrome = useRowChrome();
+  // From xLarge up a title3 date over its 放假 caption outgrows the 40pt
+  // circle, so the circle (and the 倒三角's row) grow with the text.
+  const scale = layoutScale(useWindowDimensions().fontScale, 'xxLarge');
   return (
     <HStack
       spacing={0}
       modifiers={[listRowInsets({ top: 0, leading: 0, bottom: 4, trailing: 0 }), dynamicTypeSize({ max: 'xxLarge' }), ...chrome]}>
       {days.map((day) => (
-        <Day key={day.key} day={day} selected={day.key === selectedKey} onSelect={onSelect} />
+        <Day key={day.key} day={day} selected={day.key === selectedKey} scale={scale} onSelect={onSelect} />
       ))}
     </HStack>
   );
 }
 
-function Day({ day, selected, onSelect }: { day: DayStripDay; selected: boolean; onSelect: (key: string) => void }) {
+function Day({ day, selected, scale, onSelect }: {
+  day: DayStripDay;
+  selected: boolean;
+  scale: number;
+  onSelect: (key: string) => void;
+}) {
   const palette = usePalette();
+  const circle = Math.round(CIRCLE * scale);
   const tinted = foregroundStyle(palette.tint);
   let numberStyle = labelText;
   if (selected) numberStyle = foregroundStyle(palette.onTint);
@@ -57,10 +72,10 @@ function Day({ day, selected, onSelect }: { day: DayStripDay; selected: boolean;
         accessibilityLabel(day.accessibilityLabel),
         ...(selected ? [accessibilityAddTraits(['isSelected'])] : []),
       ]}>
-      <VStack spacing={2} modifiers={[frame({ maxWidth: Infinity }), contentShape(shapes.rectangle())]}>
+      <VStack spacing={2} modifiers={[frame({ maxWidth: Infinity, minHeight: Math.round(MIN_TAP * scale) }), contentShape(shapes.rectangle())]}>
         <Image
           systemName="arrowtriangle.down.fill"
-          modifiers={[font({ size: 10 }), tinted, frame({ height: 10 }), opacity(day.isToday ? 1 : 0)]}
+          modifiers={[font({ textStyle: 'caption2' }), tinted, frame({ height: MARKER_HEIGHT * scale }), opacity(day.isToday ? 1 : 0)]}
         />
         <Text
           modifiers={[
@@ -69,12 +84,12 @@ function Day({ day, selected, onSelect }: { day: DayStripDay; selected: boolean;
           ]}>
           {day.weekday}
         </Text>
-        <ZStack modifiers={[frame({ width: CIRCLE, height: CIRCLE })]}>
+        <ZStack modifiers={[frame({ width: circle, height: circle })]}>
           {selected ? <Circle modifiers={[foregroundStyle(palette.tint)]} /> : null}
           <VStack spacing={0}>
-            <Text modifiers={[font({ size: 20, weight: 'semibold' }), monospacedDigit(), numberStyle]}>{day.day}</Text>
+            <Text modifiers={[font({ textStyle: 'title3', weight: 'semibold' }), monospacedDigit(), numberStyle]}>{day.day}</Text>
             {day.holiday ? (
-              <Text modifiers={[font({ size: 10, weight: 'semibold' }), numberStyle]}>{day.holiday}</Text>
+              <Text modifiers={[font({ textStyle: 'caption2', weight: 'semibold' }), numberStyle]}>{day.holiday}</Text>
             ) : null}
           </VStack>
         </ZStack>

@@ -52,7 +52,17 @@ export type HeaderItem =
       prominent?: boolean;
     }
   | {
-      /** A segmented control, e.g. 日 / 週. */
+      /**
+       * A fixed gap between items. On iOS 26 it also ends the shared glass
+       * background, so a text button (今天) sits apart from symbol buttons.
+       */
+      kind: 'space';
+      key: string;
+      /** @default 8 */
+      width?: number;
+    }
+  | {
+      /** A segmented control, e.g. 熱食部 / 附近. */
       kind: 'segmented';
       key: string;
       /** Spoken name of the control. */

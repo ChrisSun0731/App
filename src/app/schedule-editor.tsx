@@ -7,18 +7,20 @@ import { useState } from 'react';
 import { HeaderActions } from '@/components/header-actions';
 import { icons } from '@/components/icons';
 import {
-  CELL_COLOR_OPTIONS,
+  cellColorOptions,
   editorTitle,
   parseEditorTarget,
   subjectHint,
   type EditorTarget,
 } from '@/features/schedule/editor';
-import { describeCell, periodOverline } from '@/features/schedule/schedule-view';
+import { classTimetable, describeCell, displayedWeek, periodOverline } from '@/features/schedule/schedule-view';
+import { subjectDot, subjectPalette } from '@/features/schedule/subject-colors';
 import {
   cellFromDraft,
   draftFromCell,
   getWeekParity,
   setDraftRotating,
+  subjectFor,
   type CellDraft,
   type ScheduleCell,
 } from '@/features/schedule/timetable';
@@ -67,10 +69,13 @@ export default function ScheduleEditor() {
 
 function CellForm({ target, cell, onClose }: { target: EditorTarget; cell: ScheduleCell; onClose: () => void }) {
   const updateCell = useScheduleStore((state) => state.updateCell);
+  const rows = useScheduleStore((state) => state.rows);
+  const userClass = useScheduleStore((state) => state.userClass);
   const timetable = useTimetables();
   const { scheme } = usePalette();
   const [draft, setDraft] = useState(() => draftFromCell(cell));
-  // The preview shows this week's subject of a rotating slot, as 課表 does.
+  // The preview shows the displayed week's subject of a rotating slot (the
+  // coming week's at the weekend), as 課表 does.
   const [openedAt] = useState(() => new Date());
   const edit = (patch: Partial<CellDraft>) => setDraft((current) => ({ ...current, ...patch }));
 
@@ -79,11 +84,23 @@ function CellForm({ target, cell, onClose }: { target: EditorTarget; cell: Sched
     onClose();
   }
 
-  const preview = describeCell(cellFromDraft(draft), {
+  const drafted = cellFromDraft(draft);
+  const parity = getWeekParity(timetable.data?.semesterStart ?? null, displayedWeek(openedAt));
+  // The subjects' colours as 課表 will draw them once saved: the timetable with
+  // this draft in place, anchored on the class's own timetable.
+  const palette = subjectPalette(
+    rows.map((row) => (row.name === target.period ? { ...row, [target.day]: drafted } : row)),
+    classTimetable(timetable.data, userClass),
+  );
+  const preview = describeCell(drafted, {
     overline: `預覽 · ${periodOverline(target.period, timetable.data?.periods ?? [])}`,
-    parity: getWeekParity(timetable.data?.semesterStart ?? null, openedAt),
+    parity,
     scheme,
+    palette,
   });
+  // 預設's dot in the picker: this subject's own colour.
+  const own = palette.get(subjectFor(drafted, parity).trim());
+  const colorOptions = cellColorOptions(scheme, own ? subjectDot(own, scheme) : undefined);
 
   return (
     <>
@@ -119,8 +136,8 @@ function CellForm({ target, cell, onClose }: { target: EditorTarget; cell: Sched
         </Section>
 
         <Section title="顏色">
-          <PickerRow label="顏色" value={draft.color} options={CELL_COLOR_OPTIONS} onChange={(color) => edit({ color })} />
-          {/* The kit's menu pickers show text only, so the colour is previewed as 課表 will draw it (light or dark). */}
+          <PickerRow label="顏色" value={draft.color} options={colorOptions} onChange={(color) => edit({ color })} />
+          {/* The picker shows each colour's hue as a dot; the cell itself is previewed as 課表 will draw it (light or dark). */}
           <Row
             overline={preview.overline}
             title={preview.title}

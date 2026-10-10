@@ -1,4 +1,4 @@
-import { describe, expect, test } from '@jest/globals';
+import { describe, expect, jest, test } from '@jest/globals';
 
 import { toSchoolEvents } from './school-calendar';
 import {
@@ -100,6 +100,30 @@ describe('school days', () => {
     expect(nextSchoolDay(day(10, 8), SECOND_YEAR)).toEqual(new Date(2026, 9, 12));
     expect(nextSchoolDay(day(10, 5), SECOND_YEAR)).toEqual(new Date(2026, 9, 6));
     expect(nextSchoolDay(day(1, 21, 2027), SECOND_YEAR, 7)).toBeNull();
+  });
+
+  test('reads the term bounds once per events array', () => {
+    // 今天's 現在 card and the widget timeline ask on every tick, and nextSchoolDay
+    // asks for every day it tries, so 開學 / 休業式 are looked up once per array.
+    const events = [...EVENTS];
+    const context: SchoolCalendarContext = { ...SECOND_YEAR, events };
+    const filter = jest.spyOn(events, 'filter');
+    // The first call filters the day's events, then the array twice for the bounds.
+    expect(schoolDayOf(day(10, 7), context).kind).toBe('school');
+    expect(filter).toHaveBeenCalledTimes(3);
+    // Later calls reuse them: one pass for the day's events, per day tried.
+    filter.mockClear();
+    expect(schoolDayOf(day(1, 25, 2027), context)).toEqual({ kind: 'off', name: '寒假' });
+    expect(nextSchoolDay(day(1, 21, 2027), context, 7)).toBeNull();
+    expect(filter).toHaveBeenCalledTimes(1 + 7);
+    filter.mockRestore();
+
+    // Another array (a new term file) is read afresh rather than given the first one's bounds.
+    const noEnd = EVENTS.filter((event) => !event.title.includes('休業式'));
+    const otherFilter = jest.spyOn(noEnd, 'filter');
+    expect(schoolDayOf(day(1, 25, 2027), { ...SECOND_YEAR, events: noEnd }).kind).toBe('school');
+    expect(otherFilter).toHaveBeenCalledTimes(3);
+    otherFilter.mockRestore();
   });
 });
 

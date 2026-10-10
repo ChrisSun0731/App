@@ -56,8 +56,9 @@ function NowWidgetLayout(props: NowWidgetProps, environment: WidgetEnvironment) 
   }
 
   const medium = environment.widgetFamily === 'systemMedium';
-  // The bell rail: one bar per period (passed white, ahead faded, 空堂 fainter),
-  // a short dash for lunch, the 倒三角 over the period in session.
+  // The bell rail: one bar per period (passed white, ahead 45% white: 3.5:1
+  // on the navy), a 空堂 a thin bar and lunch a short dash, so the kinds
+  // differ by shape, not only by colour; the 倒三角 over the period in session.
   const rail = props.rail?.length ? (
     <HStack spacing={2} alignment="bottom">
       {props.rail.map((mark, index) => (
@@ -68,8 +69,12 @@ function NowWidgetLayout(props: NowWidgetProps, environment: WidgetEnvironment) 
           />
           <Capsule
             modifiers={[
-              foregroundStyle(mark.state === 'ahead' ? (mark.kind === 'free' ? '#FFFFFF38' : '#FFFFFF73') : '#FFFFFF'),
-              frame(mark.kind === 'lunch' ? { width: 6, height: 2 } : { maxWidth: Infinity, height: 4 }),
+              foregroundStyle(mark.state === 'ahead' ? '#FFFFFF73' : '#FFFFFF'),
+              frame(
+                mark.kind === 'lunch'
+                  ? { width: 6, height: 2 }
+                  : { maxWidth: Infinity, height: mark.kind === 'free' ? 2 : 4 },
+              ),
             ]}
           />
         </VStack>

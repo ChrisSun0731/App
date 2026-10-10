@@ -1,4 +1,5 @@
 import {
+  Box,
   DropdownMenuItem,
   ExposedDropdownMenu,
   ExposedDropdownMenuBox,
@@ -13,7 +14,7 @@ import {
   type ObservableState,
   type TextFieldKeyboardType,
 } from '@expo/ui/jetpack-compose';
-import { fillMaxWidth, menuAnchor, padding, rotate, semantics } from '@expo/ui/jetpack-compose/modifiers';
+import { background, border, clip, fillMaxWidth, menuAnchor, padding, rotate, semantics, Shapes, size } from '@expo/ui/jetpack-compose/modifiers';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useWindowDimensions } from 'react-native';
 
@@ -36,11 +37,24 @@ export function PickerRow<T extends string>(props: PickerRowProps<T>): ReactNode
   return props.variant === 'segmented' ? <SegmentedPicker {...props} /> : <MenuPicker {...props} />;
 }
 
+/** An option's colour dot (ChoiceOption.dot), sized like a small icon; without a colour, an empty ring. */
+function Dot({ color }: { color?: string }) {
+  const m = useM3();
+  return (
+    <Box
+      modifiers={[size(14, 14), clip(Shapes.Circle), ...(color ? [background(color)] : [border(1.5, m.outline)])]}
+    />
+  );
+}
+
 function MenuPicker<T extends string>({ label, value, options, onChange, icon, disabled = false }: PickerRowProps<T>) {
   const m = useM3();
   const inCard = useInCard();
   const [expanded, setExpanded] = useState(false);
-  const selected = options.find((option) => option.value === value)?.label ?? '';
+  const current = options.find((option) => option.value === value);
+  const selected = current?.label ?? '';
+  // Options with colour dots: every row keeps the dot column, a dotless one with an empty ring.
+  const dotted = options.some((option) => option.dot !== undefined);
   // The field owns its text in a native state; it is read-only, so only
   // `value` ever writes to it.
   const text = useNativeState(selected);
@@ -68,6 +82,10 @@ function MenuPicker<T extends string>({ label, value, options, onChange, icon, d
           <OutlinedTextField.LeadingIcon>
             <Icon source={iconSource(icon)} size={24} />
           </OutlinedTextField.LeadingIcon>
+        ) : dotted ? (
+          <OutlinedTextField.LeadingIcon>
+            <Dot color={current?.dot} />
+          </OutlinedTextField.LeadingIcon>
         ) : null}
         <OutlinedTextField.TrailingIcon>
           <Icon source={iconSource(icons.dropDown)} size={24} modifiers={[rotate(open ? 180 : 0)]} />
@@ -81,6 +99,11 @@ function MenuPicker<T extends string>({ label, value, options, onChange, icon, d
               setExpanded(false);
               if (option.value !== value) onChange(option.value);
             }}>
+            {dotted ? (
+              <DropdownMenuItem.LeadingIcon>
+                <Dot color={option.dot} />
+              </DropdownMenuItem.LeadingIcon>
+            ) : null}
             <DropdownMenuItem.Text>
               <Text style={{ typography: 'bodyLarge' }}>{option.label}</Text>
             </DropdownMenuItem.Text>

@@ -11,6 +11,7 @@ import {
   formatDateRange,
   formatDayTitle,
   formatShortRange,
+  gradeFilterFooter,
   otherGrades,
   spacedTerm,
   todoFilterOptions,
@@ -31,6 +32,8 @@ const exam: CalendarEvent = {
 };
 const homework: Todo = { id: 'hw', title: '數學作業', date: '2026-10-04', category: { name: '作業' } };
 const undated: Todo = { id: 'read', title: '讀書', date: null, category: null };
+/** 數學作業, checked off on the evening of its day. */
+const done: Todo = { ...homework, id: 'done', completedAt: new Date(2026, 9, 4, 20).toISOString() };
 
 describe('day titles and ranges', () => {
   test('drops the year only for the current year', () => {
@@ -58,6 +61,11 @@ describe('day titles and ranges', () => {
     expect(spacedTerm('115學年度第1學期')).toBe('115 學年度第 1 學期');
   });
 
+  test('接下來 leaves out todos already checked off', () => {
+    const todos: Todo[] = [{ ...done, date: '2026-10-06' }, { id: 'next', title: '交報告', date: '2026-10-07', category: null }];
+    expect(upcomingItems('2026-10-04', [], todos).map((entry) => entry.key)).toEqual(['todo-next']);
+  });
+
   test('shows one date for a single-day event and a span otherwise', () => {
     expect(formatDateRange('2026-10-04', '2026-10-04')).toBe('2026/10/4');
     expect(formatDateRange('2026-12-31', '2027-01-02')).toBe('2026/12/31 – 2027/1/2');
@@ -76,6 +84,16 @@ describe('month calendar cells', () => {
     expect(day.accessibilityLabel).toBe('2026年10月4日 星期日，1 個活動、1 個待辦');
     // Multi-day events mark every day they cover.
     expect(cells.find((cell) => cell.key === '2026-10-06')!.indicators).toHaveLength(1);
+  });
+
+  test('a todo checked off keeps its day in the list but gives up its square', () => {
+    const today = new Date(2026, 9, 4);
+    const day = calendarCells(2026, 9, [], [done], TINT, today).find((cell) => cell.key === '2026-10-04')!;
+    expect(day.indicators).toEqual([]);
+    expect(day.accessibilityLabel).toBe('今天，2026年10月4日 星期日，1 個待辦');
+    // An open todo on the same day brings the square back.
+    const withOpen = calendarCells(2026, 9, [], [done, homework], TINT, today).find((cell) => cell.key === '2026-10-04')!;
+    expect(withOpen.indicators).toEqual([{ key: 'todo', color: TINT, shape: 'square' }]);
   });
 
   test('marks today and days outside the month, and speaks empty days', () => {
@@ -167,6 +185,15 @@ describe('todo list', () => {
     ]);
   });
 
+  test('counts only what is left to do, still offering a category only a done todo carries', () => {
+    const doneElsewhere: Todo = { ...done, category: { name: '社團' } };
+    expect(todoFilterOptions([homework, done, doneElsewhere], [{ name: '作業' }])).toEqual([
+      { label: '所有待辦 (1)', value: ALL_TODOS },
+      { label: '作業 (1)', value: '作業' },
+      { label: '社團 (0)', value: '社團' },
+    ]);
+  });
+
   test('filters by category and falls back to every todo for a vanished one', () => {
     expect(filterTodos(todos, '作業')).toEqual([homework]);
     expect(filterTodos(todos, ALL_TODOS)).toHaveLength(3);
@@ -181,6 +208,11 @@ describe('todo list', () => {
       { key: '2026-10-04', title: '10月4日 星期日 · 今天', overdue: false },
       { key: 'undated', title: '無日期', overdue: false },
     ]);
+  });
+
+  test('lists a date\'s open todos before those checked off', () => {
+    const sections = todoSections([done, homework, { ...done, id: 'done-2' }], new Date(2026, 9, 4, 9));
+    expect(sections.map((section) => section.todos.map((todo) => todo.id))).toEqual([['hw', 'done', 'done-2']]);
   });
 });
 
@@ -225,5 +257,20 @@ describe('day marks and the grade filter', () => {
     // 健康檢查, 說明會 and 模擬考 fall in October; the X光 is in November.
     expect(hidden).toBe(3);
     expect(eventsForGrade(school, 2, { year: 2026, month: 10 }).hidden).toBe(1);
+  });
+
+  test('the footer is the filter\'s one control, shown only while the month has events it concerns', () => {
+    expect(gradeFilterFooter(2, true, 3)).toEqual({
+      text: '已隱藏 3 則只給高一、高三的活動。',
+      action: { label: '全部顯示', gradeOnly: false },
+    });
+    expect(gradeFilterFooter(2, false, 3)).toEqual({
+      text: '顯示所有年級的活動。',
+      action: { label: '只顯示和高二有關的', gradeOnly: true },
+    });
+    expect(gradeFilterFooter(2, true, 0)).toBeNull();
+    expect(gradeFilterFooter(2, false, 0)).toBeNull();
+    // Without a known grade there is nothing to filter by.
+    expect(gradeFilterFooter(null, false, 3)).toBeNull();
   });
 });

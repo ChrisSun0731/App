@@ -21,6 +21,12 @@ describe('calendar dates and items', () => {
     expect(itemsForDay('2027-01-03', [event], [todo])).toEqual([]);
   });
 
+  test('lists a day\'s open todos before those checked off', () => {
+    const done: Todo = { id: 'done', title: '交作業', date: '2027-01-02', category: null, completedAt: new Date(2027, 0, 2, 8).toISOString() };
+    const todo: Todo = { id: 'todo', title: '複習', date: '2027-01-02', category: null };
+    expect(itemsForDay('2027-01-02', [], [done, todo]).map((item) => item.key)).toEqual(['todo-todo', 'todo-done']);
+  });
+
   test('sorts across different years and keeps undated todos last', () => {
     const todos: Todo[] = [
       { id: '1', title: 'a', date: null, category: null },

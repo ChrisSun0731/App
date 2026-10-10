@@ -9,6 +9,7 @@ import { Alert, useWindowDimensions } from 'react-native';
 import { HeaderActions, type HeaderItem } from '@/components/header-actions';
 import { icons } from '@/components/icons';
 import { useNow } from '@/features/home/use-now';
+import { clock, minutesOfDay } from '@/lib/dates';
 import { useFoodStore } from '@/store/food';
 import { usePalette } from '@/theme/palette';
 import { Embedded, EmptyState, FilterChips, ListScreen, Loading, Notice, Row, Section } from '@/ui';
@@ -39,8 +40,6 @@ const MIN_MAP_HEIGHT = 220;
 
 /** The favourite heart's colour (systemPink). */
 const HEART = '#FF2D55';
-
-const clock = (date: Date) => `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 
 /** `switcher`: the 美食 tab's 熱食部 / 附近 control, first in the navigation bar (see ./tab.tsx). */
 export default function FoodScreen({ switcher }: { switcher?: HeaderItem }) {
@@ -196,7 +195,7 @@ export default function FoodScreen({ switcher }: { switcher?: HeaderItem }) {
       />
       <HeaderActions right={header} />
       <ListScreen
-        subtitle={['附近', clock(now), openCount !== null ? `${openCount} 間營業中` : ''].filter(Boolean).join(' · ')}
+        subtitle={['附近', clock(minutesOfDay(now)), openCount !== null ? `${openCount} 間營業中` : ''].filter(Boolean).join(' · ')}
         onRefresh={refresh}>
         {/* Cached restaurants stay on screen when a refresh fails. */}
         {data && restaurants.isError ? (

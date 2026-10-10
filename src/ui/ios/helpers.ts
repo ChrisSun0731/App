@@ -112,17 +112,47 @@ export function pickerMinimum(value: string, minimumDate: string | undefined): s
   return value < minimumDate ? value : minimumDate;
 }
 
-// React Native's iOS font scale for UIContentSizeCategoryAccessibilityMedium
-// (1.786), the smallest of the accessibility text sizes.
-const ACCESSIBILITY_FONT_SCALE = 1.75;
+/**
+ * React Native's iOS font scale (RCTAccessibilityManager's multiplier) for
+ * each Dynamic Type size the kit's layouts turn at. Large, the default, is 1;
+ * accessibility1 (AccessibilityMedium) is the smallest accessibility size.
+ */
+export const FONT_SCALE = {
+  xxLarge: 1.235,
+  xxxLarge: 1.353,
+  accessibility1: 1.786,
+} as const;
+
+export type TextSize = keyof typeof FONT_SCALE;
 
 /**
- * Whether `fontScale` (useWindowDimensions) is one of the accessibility text
- * sizes, where SwiftUI's DynamicTypeSize.isAccessibilitySize is true and
- * horizontal layouts should stack.
+ * Whether `fontScale` (useWindowDimensions) is `size` or larger. The scales
+ * reach JavaScript as these same decimals, but a layout must not flip on
+ * float noise, so the comparison has some slack (well under a size step).
+ */
+export function reachesTextSize(fontScale: number, size: TextSize): boolean {
+  return fontScale >= FONT_SCALE[size] - 0.01;
+}
+
+/**
+ * Whether `fontScale` is one of the accessibility text sizes, where SwiftUI's
+ * DynamicTypeSize.isAccessibilitySize is true and horizontal layouts should
+ * stack.
  */
 export function isAccessibilityTextSize(fontScale: number): boolean {
-  return fontScale >= ACCESSIBILITY_FONT_SCALE;
+  return reachesTextSize(fontScale, 'accessibility1');
+}
+
+/**
+ * How much geometry drawn in points around text (a marker's frame, the
+ * rail's offsets, the day circle) grows with the text: `fontScale`, up to the
+ * scale of `cap`, the layout's dynamicTypeSize cap, past which its text stops
+ * growing too. Never below 1: the small text sizes keep the default geometry,
+ * as the smallest text styles do not shrink either.
+ */
+export function layoutScale(fontScale: number, cap: TextSize): number {
+  if (!(fontScale > 1)) return 1;
+  return Math.min(fontScale, FONT_SCALE[cap]);
 }
 
 /**

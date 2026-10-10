@@ -45,6 +45,8 @@ function renderItem(item: HeaderItem) {
           <Segmented item={item} />
         </Stack.Toolbar.View>
       );
+    case 'space':
+      return <Stack.Toolbar.Spacer key={item.key} width={item.width ?? 8} />;
     case 'menu':
       return (
         <Stack.Toolbar.Menu

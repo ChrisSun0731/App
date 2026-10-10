@@ -53,6 +53,14 @@ const rows = (subject: string): ScheduleRow[] => PERIOD_NAMES.map((name) => {
   return row;
 });
 
+/**
+ * Rows arriving without the user's doing, as useTimetableAutofill's resetRows
+ * does for a class with no rows yet. The class is left unset: there is no
+ * default class, so this is the fill alone, apart from a pick on 你是哪一班？
+ * (its own test below).
+ */
+const autofill = (app: ReturnType<typeof launch>) => app.schedule.getState().resetRows(rows('101 課'));
+
 const legacyStore = JSON.stringify({
   schedule: { userClass: '205', scheduleData: rows('舊課').map((row) => ({ ...row, Monday: { subject: '國文', note: '小考' } })) },
   todo: { todos: [{ id: 1759600000000, title: '交作業', date: null, completed: false, category: null }] },
@@ -98,8 +106,7 @@ describe('legacy import across launches', () => {
     let app = launch();
     app.startLegacyImport();
     app.finishLegacyImport({ kind: 'waiting' });
-    // The screens fill the empty timetable with the default class's.
-    app.schedule.getState().resetRows(rows('101 課'));
+    autofill(app);
     app.todo.getState().addTodo({ title: '新 app 的待辦', date: null, category: null });
 
     app = launch();
@@ -116,7 +123,7 @@ describe('legacy import across launches', () => {
     app.startLegacyImport();
     expect(app.isAttemptingLegacyImport()).toBe(true);
     // The splash went; the app shows while the reader carries on.
-    app.schedule.getState().resetRows(rows('101 課'));
+    autofill(app);
     app.todo.getState().addTodo({ title: '新 app 的待辦', date: null, category: null });
     app.finishLegacyImport(found);
     expect(app.isAttemptingLegacyImport()).toBe(false);
@@ -128,7 +135,7 @@ describe('legacy import across launches', () => {
   test('a reset while the reader is still running drops its late answer', () => {
     let app = launch();
     app.startLegacyImport();
-    app.schedule.getState().resetRows(rows('101 課'));
+    autofill(app);
     for (const store of [app.schedule, app.todo, app.news, app.food, app.transport, app.settings]) store.getState().reset();
     expect(app.isAttemptingLegacyImport()).toBe(false);
     app.finishLegacyImport(found);
@@ -143,7 +150,7 @@ describe('legacy import across launches', () => {
   test('if a write fails partway, edits made afterwards still protect the timetable', () => {
     let app = launch();
     app.startLegacyImport();
-    app.schedule.getState().resetRows(rows('101 課'));
+    autofill(app);
     mockFailing.add('ck.todo');
     app.finishLegacyImport(found);
     // The timetable landed, the todos did not: still owed.
@@ -165,16 +172,37 @@ describe('legacy import across launches', () => {
     let app = launch();
     app.startLegacyImport();
     app.finishLegacyImport({ kind: 'failed' });
-    app.schedule.getState().resetRows(rows('101 課'));
+    autofill(app);
     app.schedule.getState().updateCell('一', 'Monday', { subject: '自習', note: '', color: 'Default' });
     expect(status()).toMatchObject({ done: false, scheduleEdited: true });
 
     app = launch();
     app.startLegacyImport();
     app.finishLegacyImport(found);
-    expect(app.schedule.getState().userClass).toBe('101');
+    // Kept as a whole, class included: none was chosen here, and the import sets none.
+    expect(app.schedule.getState().userClass).toBe('');
     expect(app.schedule.getState().rows[0].Monday.subject).toBe('自習');
     expect(app.food.getState().favorites).toEqual(['南門市場']);
+  });
+
+  // A first pick over an empty, class-less timetable only answers the
+  // question (watchUser in session.ts), so it does not make the timetable the
+  // user's: the previous app's class and edits still land on the retry.
+  test('a class picked on 你是哪一班？ after a timeout does not cost the previous app\'s timetable', () => {
+    let app = launch();
+    app.startLegacyImport();
+    app.finishLegacyImport({ kind: 'waiting' });
+    // The reader timed out, so the question was asked and answered: a class
+    // and its bundled rows, nothing edited.
+    app.schedule.getState().setClass('101', rows('101 課'));
+
+    app = launch();
+    expect(app.startLegacyImport()).toBe(true);
+    app.finishLegacyImport(found);
+    // As when the reader is in time: the previous app's class and edited rows
+    // land, and the class can be changed in 設定 as usual.
+    expect(app.schedule.getState().userClass).toBe('205');
+    expect(app.schedule.getState().rows[0].Monday).toEqual({ subject: '國文', note: '小考' });
   });
 
   test('a build that already had data before the importer keeps its timetable', () => {
@@ -194,9 +222,9 @@ describe('legacy import across launches', () => {
     let app = launch();
     app.startLegacyImport();
     app.finishLegacyImport({ kind: 'waiting' });
-    app.schedule.getState().resetRows(rows('101 課'));
+    autofill(app);
     app.todo.getState().addTodo({ title: '新 app 的待辦', date: null, category: null });
-    // As clearData in src/app/settings.tsx does.
+    // As resetEverything in src/app/settings/index.tsx does.
     for (const store of [app.schedule, app.todo, app.news, app.food, app.transport, app.settings]) store.getState().reset();
     expect(status()).toMatchObject({ done: true, attempts: 1, outcome: 'reset' });
 

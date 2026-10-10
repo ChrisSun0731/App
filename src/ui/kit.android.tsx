@@ -10,6 +10,7 @@ import { DayStrip } from './android/day-strip';
 import { NowCard } from './android/now-card';
 import { ButtonRow, CheckRow, DateRow, Row, ToggleRow } from './android/rows';
 import { ListScreen, Section } from './android/screen';
+import { useAccessibilityTextSize } from './android/text-size';
 import { TimetableGrid } from './android/timetable-grid';
 import type { Kit } from './types';
 
@@ -37,6 +38,7 @@ export {
   TileGrid,
   TimetableGrid,
   ToggleRow,
+  useAccessibilityTextSize,
 };
 
 // Compile-time check that this file implements the whole contract.
@@ -64,4 +66,5 @@ export default {
   MetricPills,
   CrowdBar,
   Embedded,
+  useAccessibilityTextSize,
 } satisfies Kit;

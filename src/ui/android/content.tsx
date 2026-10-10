@@ -13,13 +13,14 @@ import {
   TextButton,
 } from '@expo/ui/jetpack-compose';
 import {
+  alpha,
   background,
   clip,
   combinedClickable,
   fillMaxSize,
   fillMaxWidth,
   height as heightModifier,
-  onSizeChanged,
+  onGloballyPositioned,
   padding,
   paddingAll,
   semantics,
@@ -28,11 +29,12 @@ import {
   weight,
 } from '@expo/ui/jetpack-compose/modifiers';
 import * as Clipboard from 'expo-clipboard';
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { Platform, ToastAndroid, useWindowDimensions, View } from 'react-native';
 
 import { icons } from '@/components/icons';
 
+import { fitHeight, useRestTop, ViewportContext } from '../fit';
 import type {
   ChoiceGridProps,
   CrowdBarProps,
@@ -45,7 +47,7 @@ import type {
   TileGridProps,
 } from '../types';
 import { chunk, joinLabel, labelWidth, withAlpha } from './helpers';
-import { CARD_RADIUS, iconSource, roundedShape, useContentWidth, useInCard, useM3 } from './theme';
+import { CARD_RADIUS, iconSource, roundedShape, TRANSPARENT, useContentWidth, useInCard, useM3 } from './theme';
 
 /** Copies `text`, confirming with a toast where the system does not (before Android 13). */
 function copyText(text: string) {
@@ -278,26 +280,42 @@ export function TileGrid({ tiles, columns = 3 }: TileGridProps) {
 /** Height of an Embedded view given neither `height` nor `aspectRatio`. */
 const DEFAULT_EMBEDDED_HEIGHT = 240;
 
-export function Embedded({ children, height, aspectRatio }: EmbeddedProps) {
+export function Embedded({
+  children,
+  height,
+  aspectRatio,
+  fit = 'width',
+  minHeight = 0,
+  maxHeight = Infinity,
+  onPress,
+  accessibilityLabel,
+}: EmbeddedProps) {
   const inCard = useInCard();
   const estimatedWidth = useContentWidth();
+  const viewport = useContext(ViewportContext);
+  const { top, ready, onPosition } = useRestTop(viewport);
   // The measured width replaces this estimate after the first layout.
   const [width, setWidth] = useState(estimatedWidth);
-  const resolvedHeight =
+  const naturalHeight =
     height ?? (aspectRatio && aspectRatio > 0 ? Math.round(width / aspectRatio) : DEFAULT_EMBEDDED_HEIGHT);
+  const room = top === null || viewport.bottom === null ? null : viewport.bottom - top;
+  const resolvedHeight = fit === 'screen' ? fitHeight(naturalHeight, room, minHeight, maxHeight) : naturalHeight;
+  const visible = fit !== 'screen' || ready;
 
   const modifiers = [
     fillMaxWidth(),
     heightModifier(resolvedHeight),
     // In a card the card's clip rounds the corners; on its own it rounds itself.
     ...(inCard ? [] : [clip(Shapes.RoundedCorner(CARD_RADIUS))]),
-    ...(height == null && aspectRatio
+    ...(fit === 'screen' || (height == null && aspectRatio)
       ? [
-          onSizeChanged((measured) => {
-            if (Math.abs(measured.width - width) > 0.5) setWidth(measured.width);
+          onGloballyPositioned(({ y, width: measuredWidth }) => {
+            setWidth((previous) => Math.abs(measuredWidth - previous) > 0.5 ? measuredWidth : previous);
+            if (fit === 'screen') onPosition(y);
           }),
         ]
       : []),
+    ...(visible ? [] : [alpha(0)]),
   ];
 
   return (
@@ -305,8 +323,25 @@ export function Embedded({ children, height, aspectRatio }: EmbeddedProps) {
       <RNHostView modifiers={[fillMaxSize()]}>
         {/* RNHostView sizes its one child to the Compose box; the flex view
             gives maps and images a sized parent to fill. */}
-        <View style={{ flex: 1 }}>{children}</View>
+        <View
+          style={{ flex: 1 }}
+          pointerEvents={onPress || !visible ? 'none' : undefined}
+          importantForAccessibility={onPress || !visible ? 'no-hide-descendants' : undefined}>
+          {children}
+        </View>
       </RNHostView>
+      {onPress && visible ? (
+        // A native Material button supplies the button role and ripple. It
+        // fills the measured box without contributing any content size.
+        <TextButton
+          onClick={onPress}
+          shape={roundedShape(0)}
+          colors={{ containerColor: TRANSPARENT }}
+          contentPadding={{ start: 0, top: 0, end: 0, bottom: 0 }}
+          modifiers={[fillMaxSize(), semantics({ contentDescription: accessibilityLabel })]}>
+          <Spacer />
+        </TextButton>
+      ) : null}
     </Box>
   );
 }

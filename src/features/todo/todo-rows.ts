@@ -1,5 +1,5 @@
-// Shared by 行事曆's day list and the 待辦 list: what a todo or event row
-// does when tapped, checked or swiped.
+// Shared by 今天's 今日, 行事曆's day list and the 待辦 list: what a todo or
+// event row says, and does when tapped, checked or swiped.
 import { router } from 'expo-router';
 
 import { icons } from '@/components/icons';
@@ -7,11 +7,13 @@ import { useTodoStore } from '@/store/todo';
 import type { RowAction } from '@/ui';
 
 import { confirmDeleteEvent, confirmDeleteTodo } from './confirm-delete';
+import { isCompleted } from './todo-state';
 import type { CalendarEvent, Todo } from './types';
 
-/** e.g. 待辦 · 作業 */
+/** e.g. 待辦 · 作業, or 已完成 · 作業 once checked off. */
 export function todoSubtitle(todo: Todo): string {
-  return todo.category ? `待辦 · ${todo.category.name}` : '待辦';
+  const state = isCompleted(todo) ? '已完成' : '待辦';
+  return todo.category ? `${state} · ${todo.category.name}` : state;
 }
 
 export function editTodo(todo: Todo) {
@@ -22,9 +24,12 @@ export function editEvent(event: CalendarEvent) {
   router.push({ pathname: '/event-editor', params: { id: event.id } });
 }
 
-export function completeTodo(todo: Todo, checked: boolean) {
-  // Checking a todo completes it, which removes it (as before).
-  if (checked) useTodoStore.getState().completeTodo(todo.id);
+/**
+ * Checks a todo off or back on. A checked todo stays listed, checked, until
+ * the day ends, so a mis-tap is undone by tapping again (todo-state.ts).
+ */
+export function toggleTodo(todo: Todo, checked: boolean) {
+  useTodoStore.getState().setTodoCompleted(todo.id, checked);
 }
 
 export function todoActions(todo: Todo): RowAction[] {

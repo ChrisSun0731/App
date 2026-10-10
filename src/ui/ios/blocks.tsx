@@ -5,7 +5,9 @@ import {
   HStack,
   Image,
   Label,
+  Overlay,
   ProgressView,
+  Rectangle,
   RNHostView,
   ScrollView,
   Spacer,
@@ -16,6 +18,7 @@ import {
 import {
   accessibilityAddTraits,
   accessibilityElement,
+  accessibilityHint,
   accessibilityHidden,
   accessibilityLabel,
   aspectRatio,
@@ -24,20 +27,25 @@ import {
   buttonStyle,
   contentShape,
   controlSize,
+  disabled,
   font,
   foregroundStyle,
   frame,
   monospacedDigit,
   multilineTextAlignment,
+  onGeometryChange,
+  opacity,
   padding,
   shapes,
   textSelection,
   type ModifierConfig,
 } from '@expo/ui/swift-ui/modifiers';
+import { useContext, useState } from 'react';
 import { Platform, View } from 'react-native';
 
 import { usePalette } from '@/theme/palette';
 
+import { fitHeight, useRestTop, ViewportContext } from '../fit';
 import type {
   ChoiceGridProps,
   EmbeddedProps,
@@ -286,23 +294,78 @@ export function TileGrid({ tiles, columns = 3 }: TileGridProps) {
 
 /**
  * React Native content (a map, an image) inside a row, edge to edge in the
- * card. A fixed `height`, or the row width divided by `aspectRatio`: SwiftUI's
- * aspectRatio modifier derives the height from the width the List proposes.
+ * card. SwiftUI proposes the row width; screen fitting caps the natural
+ * height at the room above the tab bar once its position is known.
  */
-export function Embedded({ children, height, aspectRatio: ratio }: EmbeddedProps) {
+export function Embedded({
+  children,
+  height,
+  aspectRatio: ratio,
+  fit = 'width',
+  minHeight = 0,
+  maxHeight = Infinity,
+  onPress,
+  accessibilityLabel: spoken,
+  accessibilityHint: hint,
+}: EmbeddedProps) {
   const chrome = useRowChrome();
-  const size: ModifierConfig[] = height != null
-    ? [frame({ height })]
-    : [frame({ maxWidth: Infinity }), aspectRatio({ ratio: ratio && ratio > 0 ? ratio : 16 / 9, contentMode: 'fit' })];
-  return (
-    <ZStack modifiers={[...size, ...chrome, NO_INSETS]}>
+  const viewport = useContext(ViewportContext);
+  const { top, ready, onPosition } = useRestTop(viewport);
+  const [width, setWidth] = useState<number | null>(null);
+  const screenFit = fit === 'screen';
+  const naturalRatio = ratio && ratio > 0 ? ratio : 16 / 9;
+  const natural = height ?? (width === null ? null : width / naturalRatio);
+  const room = top === null || viewport.bottom === null ? null : viewport.bottom - top;
+  const fitted = screenFit && natural !== null ? fitHeight(natural, room, minHeight, maxHeight) : height;
+  const visible = !screenFit || ready;
+  const size: ModifierConfig[] = fitted != null
+    ? [frame({ height: fitted })]
+    : [frame({ maxWidth: Infinity }), aspectRatio({ ratio: naturalRatio, contentMode: 'fit' })];
+  const modifiers = [
+    ...size,
+    ...(screenFit ? [onGeometryChange(({ y, width: measuredWidth }) => {
+      if (measuredWidth > 0) setWidth((previous) => previous === measuredWidth ? previous : measuredWidth);
+      onPosition(y);
+    }), opacity(visible ? 1 : 0), accessibilityHidden(!visible)] : []),
+    ...chrome,
+    NO_INSETS,
+  ];
+  const content = (
+    <RNHostView>
       {/* RNHostView sizes its single native child to the SwiftUI frame; the
           wrapper (never flattened away) makes the content fill it. */}
-      <RNHostView>
-        <View collapsable={false} style={{ flex: 1 }}>
-          {children}
-        </View>
-      </RNHostView>
+      <View
+        collapsable={false}
+        style={{ flex: 1 }}
+        pointerEvents={onPress || !visible ? 'none' : 'auto'}
+        accessibilityElementsHidden={!!onPress}
+        importantForAccessibility={onPress ? 'no-hide-descendants' : 'auto'}>
+        {children}
+      </View>
+    </RNHostView>
+  );
+  return (
+    // Keep one concrete List-row container. Overlay's native base is a
+    // ForEach, whose row preferences do not remove the List's default insets.
+    <ZStack modifiers={modifiers}>
+      {onPress ? (
+        <Overlay>
+          <ZStack modifiers={[accessibilityHidden(true)]}>{content}</ZStack>
+          <Overlay.Content>
+            <Button
+              onPress={onPress}
+              modifiers={[
+                buttonStyle('plain'),
+                accessibilityLabel(spoken ?? ''),
+                accessibilityAddTraits(['isImage']),
+                ...(hint ? [accessibilityHint(hint)] : []),
+                disabled(!visible),
+              ]}>
+              <Rectangle modifiers={[foregroundStyle('clear'), contentShape(shapes.rectangle()), frame({ maxWidth: Infinity, maxHeight: Infinity })]} />
+            </Button>
+          </Overlay.Content>
+        </Overlay>
+      ) : content}
     </ZStack>
   );
 }

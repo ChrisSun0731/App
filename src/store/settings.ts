@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { persistStorage } from '@/lib/storage';
+import { hadStoredStateAtLaunch, persistStorage } from '@/lib/storage';
 
 /** The sections 今天 shows under its 現在 card (which is always there). */
 export interface HomeWidgets {
@@ -38,6 +38,18 @@ const initialState = () => ({
 // Older saved settings also hold a `toolbar` (the tabs, before they were
 // fixed) and `homeWidgets.schedule` (目前課程, now the always-shown 現在
 // card); merge ignores both and the next save drops them.
+//
+// Nor do they hold `welcomed`. With no flag saved, merge asks whether any
+// store had saved state before this launch: if so the install predates
+// 你是哪一班？ (an upgrade) and the question is skipped, since answering it
+// would hand the user's edited timetable to setClass; if not, this is a fresh
+// install and it is asked. The sign is hadStoredStateAtLaunch(), not this
+// store's own key: a user who never changed a setting has no ck.settings
+// (persist writes only on set) but does have the ck.schedule the timetable
+// autofill saved, and the legacy import tells fresh from upgrade the same
+// way. The welcome screen saves welcomed=false as soon as it shows
+// (src/features/welcome/screen.tsx), so flag-less storage is never an
+// install that was killed while the question was still up.
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
@@ -66,7 +78,8 @@ export const useSettingsStore = create<SettingsState>()(
           if (typeof value === 'boolean') homeWidgets[key] = value;
         }
         const calendarGradeOnly = typeof stored.calendarGradeOnly === 'boolean' ? stored.calendarGradeOnly : current.calendarGradeOnly;
-        const welcomed = typeof stored.welcomed === 'boolean' ? stored.welcomed : current.welcomed;
+        // No flag saved (nothing saved at all on a fresh install): see the note above the store.
+        const welcomed = typeof stored.welcomed === 'boolean' ? stored.welcomed : hadStoredStateAtLaunch();
         return { ...current, homeWidgets, calendarGradeOnly, welcomed };
       },
     },

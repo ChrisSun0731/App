@@ -26,5 +26,6 @@ export {
   TileGrid,
   TimetableGrid,
   ToggleRow,
+  useAccessibilityTextSize,
 } from './kit';
 export type * from './types';

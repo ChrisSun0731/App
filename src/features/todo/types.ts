@@ -31,6 +31,12 @@ export interface Todo {
   /** Local date "YYYY-MM-DD", or null for an undated todo. */
   date: string | null;
   category: TodoCategory | null;
+  /**
+   * When it was checked off, as an ISO timestamp. It stays listed and checked
+   * until the end of that local day (so a mis-tap can be undone), then is
+   * hidden and pruned (todo-state.ts).
+   */
+  completedAt?: string;
 }
 
 export type TodoView = 'calendar' | 'todoList';

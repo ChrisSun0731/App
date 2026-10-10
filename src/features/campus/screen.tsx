@@ -43,9 +43,10 @@ export default function CampusScreen() {
   if (query.isError && !query.data) newsFooter = '校網目前無法讀取。';
   else if (partialFailure) newsFooter = `「${partialFailure.feeds.join('、')}」暫時無法更新，先顯示上次的內容。`;
 
-  const lines = commute.cardLines.length ? commute.cardLines : commute.lines.slice(0, 2);
-  const transportSummary = lines.length
-    ? lines.map((line) => `${line.name} ${line.value}`).join(' · ')
+  // The first followed station of each kind, as on the 現在 card, or the
+  // counts while there is no line to show.
+  const transportSummary = commute.cardLines.length
+    ? commute.cardLines.map((line) => `${line.name} ${line.value}`).join(' · ')
     : `${youbikeCount} 個 YouBike 站點 · ${metroCount} 個捷運車站`;
 
   return (

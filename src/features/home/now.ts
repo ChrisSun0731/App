@@ -16,7 +16,7 @@ import {
   type ExamDay,
   type SchoolCalendarContext,
 } from '@/features/todo/school-days';
-import { addDays, formatMonthDayZh, isSameDay, minutesOfDay, pad2, parseClockTime, WEEKDAY_ZH } from '@/lib/dates';
+import { addDays, clock, formatMonthDayZh, isSameDay, minutesOfDay, parseClockTime, WEEKDAY_ZH } from '@/lib/dates';
 import type { NowCardProps, NowRail, NowRailSegment } from '@/ui/types';
 
 /** A gap between periods at least this long (minutes) is lunch, not a 下課. */
@@ -49,14 +49,19 @@ export type NowState =
   | { kind: 'after-school'; upcoming: UpcomingClass | null }
   | { kind: 'exam'; exam: ExamDay }
   | { kind: 'day-off'; name: string; upcoming: UpcomingClass | null }
-  /** The timetables loaded but the user's has no rows (an unknown class). */
-  | { kind: 'no-timetable' };
+  /**
+   * The timetables loaded but the user's has no rows: no class chosen yet
+   * (`hasClass` false), or a class the data does not have.
+   */
+  | { kind: 'no-timetable'; hasClass: boolean };
 
 export interface NowInput extends SchoolCalendarContext {
   now: Date;
   periods: readonly Period[];
   rows: readonly ScheduleRow[];
   semesterStart: string | null;
+  /** The user's class, '' until chosen; left out by callers that do not know it (the widget timeline). */
+  userClass?: string;
 }
 
 /** A slot worth pointing at: it has a subject, or at least a note. */
@@ -94,7 +99,9 @@ function upcomingClass(input: NowInput): UpcomingClass | null {
 
 /** What is happening at `input.now`. */
 export function nowState(input: NowInput): NowState {
-  if (input.rows.length === 0) return { kind: 'no-timetable' };
+  if (input.rows.length === 0) {
+    return { kind: 'no-timetable', hasClass: input.userClass === undefined || input.userClass.trim() !== '' };
+  }
   const day = schoolDayOf(input.now, input);
   if (day.kind === 'off') return { kind: 'day-off', name: day.name, upcoming: upcomingClass(input) };
   if (day.exam) return { kind: 'exam', exam: day.exam };
@@ -177,11 +184,6 @@ export function railOf(now: Date, slots: readonly Slot[]): NowRail | null {
   const start = slots[0].start;
   const end = slots[slots.length - 1].end;
   return { start, end, now: time >= start && time <= end ? time : null, segments };
-}
-
-/** "08:10" for minutes since midnight. */
-export function clock(minutes: number): string {
-  return `${pad2(Math.floor(minutes / 60))}:${pad2(minutes % 60)}`;
 }
 
 /** 明天, or e.g. 10/12 星期一 for a later day. */
@@ -278,11 +280,10 @@ export function nowCard(state: NowState, now: Date, rail: NowRail | null): NowCa
       break;
     }
     case 'no-timetable':
-      content = {
-        eyebrow: '現在',
-        title: '還沒有課表',
-        subtitle: '到設定選擇班級，這裡就會顯示現在的課。',
-      };
+      // Tapping the card opens 設定 either way (the screen's cardTarget).
+      content = state.hasClass
+        ? { eyebrow: '現在', title: '還沒有課表', subtitle: '找不到這個班級的課表，可在設定換一班。' }
+        : { eyebrow: '現在', title: '選擇班級', subtitle: '選好班級，就能看到現在的課。' };
       break;
   }
   const spoken = [

@@ -1,9 +1,10 @@
-// 課表: the user's class timetable, one weekday at a time (上午 and 下午, a
-// 連堂 as one row) or the whole week as a grid, with the period in session
-// marked, each slot opening 編輯課程, plus class switching and re-importing
-// from the header menu. Layout per docs/design/native-ui.md, "課表 (Schedule)".
+// 課表: the user's class timetable as one table for the whole week (a
+// coloured cell per period, every subject in its own colour), with the period
+// in session marked, each cell opening 編輯課程, plus class switching and
+// re-importing from the header menu. At the accessibility text sizes the same
+// week is a list, a Section per weekday. Layout per docs/design/native-ui.md,
+// "課表 (Schedule)".
 import { router } from 'expo-router';
-import { useState, type ReactElement } from 'react';
 import { Alert } from 'react-native';
 
 import { HeaderActions, type HeaderMenuEntry } from '@/components/header-actions';
@@ -13,23 +14,20 @@ import { useTimetableAutofill } from '@/features/home/use-timetable-autofill';
 import { gradeOfClass, schoolDayOf, type SchoolCalendarContext } from '@/features/todo/school-days';
 import { useSchoolEvents } from '@/features/todo/use-school-events';
 import { confirmPickerChange } from '@/hooks/use-confirmed-picker';
-import { addDays, formatMonthDayZh, isSameDay } from '@/lib/dates';
 import { useScheduleStore } from '@/store/schedule';
 import { usePalette } from '@/theme/palette';
-import { DayStrip, EmptyState, ListScreen, Loading, Notice, Row, Section, TextBlock, TimetableGrid, type ChoiceOption } from '@/ui';
+import { EmptyState, ListScreen, Loading, Notice, Row, Section, TimetableGrid, useAccessibilityTextSize } from '@/ui';
 
 import {
   classOptions,
   classTimetable,
-  defaultDay,
-  describeDayParts,
   describeWeek,
-  displayedWeek,
   scheduleLoadState,
   scheduleSubtitle,
   type ScheduleLoadState,
+  type WeekModel,
 } from './schedule-view';
-import { WEEKDAY_LABELS, WEEKDAY_SHORT_LABELS, WEEKDAYS, type Timetables, type Weekday } from './timetable';
+import type { ScheduleRow, Timetables, Weekday } from './timetable';
 import { useTimetables } from './use-timetables';
 
 /** The 現在 mark is minute-resolution; the clock only ticks while 課表 is focused. */
@@ -37,31 +35,27 @@ const CLOCK_INTERVAL_MS = 30_000;
 
 const LOADING_LABEL = '正在載入課表…';
 
-const EDIT_HINT = '點選課程可修改科目、單雙週輪替、備註與顏色。';
-
-type ScheduleView = 'day' | 'week';
-
-const VIEW_OPTIONS: readonly ChoiceOption<ScheduleView>[] = [
-  { label: '日', value: 'day' },
-  { label: '週', value: 'week' },
-];
+const EDIT_HINT = '點一格可修改科目、單雙週輪替、備註與顏色。';
+const LIST_EDIT_HINT = '點選一節可修改科目、單雙週輪替、備註與顏色。';
 
 export default function ScheduleScreen() {
   const timetable = useTimetables();
   const data = timetable.data;
   const userClass = useScheduleStore((state) => state.userClass);
-  // Only whether there are rows: editing a slot re-renders the day rows, not this.
+  // Only whether there are rows: editing a slot re-renders the table, not this.
   const hasRows = useScheduleStore((state) => state.rows.length > 0);
   const setClass = useScheduleStore((state) => state.setClass);
   const resetRows = useScheduleStore((state) => state.resetRows);
   const school = useSchoolEvents();
-  const [view, setView] = useState<ScheduleView>('day');
   const calendar: SchoolCalendarContext = { events: school.events, term: school.term, grade: gradeOfClass(userClass) };
 
   useTimetableAutofill(data?.byClass);
 
   const original = classTimetable(data, userClass);
   const options = classOptions(data?.classIds ?? [], userClass);
+  // None chosen yet, whether or not the timetables loaded: the empty state asks
+  // for one either way, and 設定's picker shows its own error and 重新載入.
+  const noClass = userClass === '';
   const load = scheduleLoadState({
     hasRows,
     isPending: timetable.isPending,
@@ -80,6 +74,13 @@ export default function ScheduleScreen() {
     // Nothing to switch to. PickerRow always shows `value`, so leaving
     // userClass alone puts the picker back on it.
     if (!nextRows) return;
+    // With no timetable there are no edits to lose, so nothing to confirm. The
+    // rows decide, not the class: an import whose class could not be read
+    // still brings the previous app's edited rows, which a first pick replaces.
+    if (!hasRows) {
+      setClass(next, nextRows);
+      return;
+    }
     confirmPickerChange(
       '更改班級',
       `改為 ${next} 班會清除目前課表的修改。`,
@@ -121,10 +122,7 @@ export default function ScheduleScreen() {
   return (
     <>
       <HeaderActions
-        right={[
-          { kind: 'segmented', key: 'view', label: '檢視', options: VIEW_OPTIONS, value: view, onChange: (next) => setView(next as ScheduleView) },
-          ...(menu.length > 0 ? [{ kind: 'menu' as const, key: 'schedule', label: '課表選項', icon: icons.more, actions: menu }] : []),
-        ]}
+        right={menu.length > 0 ? [{ kind: 'menu', key: 'schedule', label: '課表選項', icon: icons.more, actions: menu }] : []}
       />
       <ListScreen subtitle={scheduleSubtitle(userClass, data?.semesterStart ?? null, new Date())} onRefresh={refresh}>
         {load.banner !== 'none' ? (
@@ -142,37 +140,39 @@ export default function ScheduleScreen() {
           </Section>
         ) : null}
 
-        {view === 'day' ? (
-          <DaySections
-            timetables={data}
-            calendar={calendar}
-            state={load.day}
-            // While the error notice above offers 重試, a second button would repeat it.
-            onReload={load.banner === 'error' ? undefined : () => void refresh()}
-          />
-        ) : (
-          <WeekSection
-            timetables={data}
-            calendar={calendar}
-            state={load.day}
-            onReload={load.banner === 'error' ? undefined : () => void refresh()}
-          />
-        )}
+        <WeekSection
+          timetables={data}
+          base={original}
+          calendar={calendar}
+          state={load.table}
+          noClass={noClass}
+          // While the error notice above offers 重試, a second button would repeat it.
+          onReload={load.banner === 'error' ? undefined : () => void refresh()}
+        />
       </ListScreen>
     </>
   );
 }
 
-/** The empty state when the class's timetable has not loaded (shared by both views). */
-function NotLoaded({ onReload }: { onReload?: () => void }) {
+/** No class chosen yet, or the class's timetable has not loaded. */
+function NotLoaded({ noClass, onReload }: { noClass: boolean; onReload?: () => void }) {
   return (
     <Section plain>
-      <EmptyState
-        icon={icons.book}
-        title="此班級課表尚未載入"
-        description="請選擇班級或重新整理。"
-        action={onReload ? { label: '重新整理', onPress: onReload } : undefined}
-      />
+      {noClass ? (
+        <EmptyState
+          icon={icons.school}
+          title="還沒有選班級"
+          description="選好班級，就能看到課表。"
+          action={{ label: '選擇班級', onPress: () => router.push('/settings') }}
+        />
+      ) : (
+        <EmptyState
+          icon={icons.book}
+          title="此班級課表尚未載入"
+          description="請選擇班級或重新整理。"
+          action={onReload ? { label: '重新整理', onPress: onReload } : undefined}
+        />
+      )}
     </Section>
   );
 }
@@ -186,126 +186,25 @@ function offReason(date: Date, calendar: SchoolCalendarContext): string | null {
 }
 
 /**
- * The week strip and the chosen day's periods, as 上午 and 下午 with a 連堂
- * as one row (it opens its first period; its menu opens each). The minute
- * clock and the chosen day live here, so a tick or a day switch re-renders
- * only these rows, not the header's 80-odd classes.
+ * The displayed week as one table; days off (from the 行事曆) are dimmed and
+ * say 放假. The minute clock lives here, so a tick re-renders only the table,
+ * not the header's 80-odd classes.
  */
-function DaySections({ timetables, calendar, state, onReload }: {
+function WeekSection({ timetables, base, calendar, state, noClass, onReload }: {
   timetables: Timetables | undefined;
+  /** The class's own timetable, which anchors the subjects' colours. */
+  base: readonly ScheduleRow[] | undefined;
   calendar: SchoolCalendarContext;
-  state: ScheduleLoadState['day'];
+  state: ScheduleLoadState['table'];
+  /** The empty state asks for a class instead of a reload. */
+  noClass: boolean;
   /** The empty state's 重新整理; left out to hide it. */
   onReload?: () => void;
 }) {
   const now = useNow(CLOCK_INTERVAL_MS);
   const { scheme } = usePalette();
   const rows = useScheduleStore((store) => store.rows);
-  const [day, setDay] = useState<Weekday>(() => defaultDay(new Date()));
-  const monday = displayedWeek(now);
-  const dates = WEEKDAYS.map((weekday, index) => ({ weekday, date: addDays(monday, index) }));
-  const chosen = dates.find((entry) => entry.weekday === day) ?? dates[0];
-  const off = offReason(chosen.date, calendar);
-
-  let daySections: ReactElement;
-  if (state === 'rows') {
-    const parts = describeDayParts({
-      rows,
-      day,
-      periods: timetables?.periods ?? [],
-      semesterStart: timetables?.semesterStart ?? null,
-      now,
-      scheme,
-    });
-    daySections = (
-      <>
-        {parts.map((part, index) => (
-          <Section
-            key={part.key}
-            title={part.title || undefined}
-            detail={part.detail || undefined}
-            footer={index === parts.length - 1 ? EDIT_HINT : undefined}>
-            {part.rows.map((row) => {
-              const time = [row.time, row.periods.length > 1 ? '連堂' : '', row.untilBell !== null ? `${row.untilBell} 分鐘後下課` : '']
-                .filter(Boolean)
-                .join(' · ');
-              return (
-                <Row
-                  key={row.periods.join()}
-                  title={row.title}
-                  subtitle={time || undefined}
-                  note={row.subtitle}
-                  mark={{ kind: 'period', lines: row.periods, fill: row.fill, ink: row.ink, empty: row.title === '空堂' }}
-                  emphasized={row.current}
-                  accessibilityLabel={row.accessibilityLabel}
-                  onPress={() => openEditor(row.periods[0], day)}
-                  actions={
-                    row.periods.length > 1
-                      ? row.periods.map((period) => ({
-                          key: period,
-                          label: `編輯第${period}節`,
-                          icon: icons.edit,
-                          onPress: () => openEditor(period, day),
-                        }))
-                      : undefined
-                  }
-                />
-              );
-            })}
-          </Section>
-        ))}
-      </>
-    );
-  } else if (state === 'loading') {
-    daySections = (
-      <Section>
-        <Loading label={LOADING_LABEL} />
-      </Section>
-    );
-  } else {
-    daySections = <NotLoaded onReload={onReload} />;
-  }
-
-  return (
-    <>
-      <Section plain>
-        <DayStrip
-          days={dates.map(({ weekday, date }) => {
-            const reason = offReason(date, calendar);
-            const today = isSameDay(date, now);
-            return {
-              key: weekday,
-              weekday: WEEKDAY_SHORT_LABELS[weekday],
-              day: String(date.getDate()),
-              isToday: today,
-              holiday: reason ? '放假' : undefined,
-              accessibilityLabel: [`${WEEKDAY_LABELS[weekday]} ${formatMonthDayZh(date)}`, today ? '今天' : '', reason ?? ''].filter(Boolean).join('，'),
-            };
-          })}
-          selectedKey={day}
-          onSelect={(key) => setDay(key as Weekday)}
-        />
-      </Section>
-      {off ? (
-        <Section plain>
-          <TextBlock text={`${formatMonthDayZh(chosen.date)}${off}，不用上課。`} secondary />
-        </Section>
-      ) : null}
-      {daySections}
-    </>
-  );
-}
-
-/** The displayed week as a grid; days off (from the 行事曆) are dimmed and say 放假. */
-function WeekSection({ timetables, calendar, state, onReload }: {
-  timetables: Timetables | undefined;
-  calendar: SchoolCalendarContext;
-  state: ScheduleLoadState['day'];
-  onReload?: () => void;
-}) {
-  const now = useNow(CLOCK_INTERVAL_MS);
-  const { scheme } = usePalette();
-  const rows = useScheduleStore((store) => store.rows);
+  const largeText = useAccessibilityTextSize();
 
   if (state === 'loading') {
     return (
@@ -314,18 +213,20 @@ function WeekSection({ timetables, calendar, state, onReload }: {
       </Section>
     );
   }
-  if (state === 'empty') return <NotLoaded onReload={onReload} />;
+  if (state === 'empty') return <NotLoaded noClass={noClass} onReload={onReload} />;
 
   const week = describeWeek({
     rows,
+    base,
     periods: timetables?.periods ?? [],
     semesterStart: timetables?.semesterStart ?? null,
     now,
     scheme,
     offDay: (date) => offReason(date, calendar),
   });
+  if (largeText) return <WeekList week={week} />;
   return (
-    <Section plain footer={EDIT_HINT.replace('點選課程', '點一格')}>
+    <Section plain footer={EDIT_HINT}>
       <TimetableGrid
         columns={week.columns.map((column) => ({
           key: column.key,
@@ -338,10 +239,48 @@ function WeekSection({ timetables, calendar, state, onReload }: {
         rows={week.rows}
         cells={week.cells}
         breakAfter={
-          week.lunchAfter !== null ? { index: week.lunchAfter, label: week.lunchTime ? `午餐 ${week.lunchTime}` : '午餐' } : undefined
+          week.lunchAfter !== null ? { index: week.lunchAfter, label: week.lunchTime ? `午休 ${week.lunchTime}` : '午休' } : undefined
         }
         onPress={(row, column) => openEditor(week.rows[row].key, week.columns[column].key)}
       />
     </Section>
+  );
+}
+
+/**
+ * The same week as a list, for the accessibility text sizes, where five
+ * columns cannot hold the text at the size chosen: a Section per weekday
+ * (its date, 今天 or why there is no school), a row per period with its
+ * badge in the subject's colour, the bell times, and the rotation and note.
+ */
+function WeekList({ week }: { week: WeekModel }) {
+  return (
+    <>
+      {week.columns.map((column, columnIndex) => (
+        <Section
+          key={column.key}
+          title={`星期${column.label}`}
+          detail={[column.detail, column.today ? '今天' : '', column.off ?? ''].filter(Boolean).join(' · ')}
+          footer={columnIndex === week.columns.length - 1 ? LIST_EDIT_HINT : undefined}>
+          {week.rows.map((row, rowIndex) => {
+            const cell = week.cells[rowIndex]?.[columnIndex];
+            if (!cell) return null;
+            return (
+              <Row
+                key={cell.key}
+                title={cell.subject || '空堂'}
+                subtitle={row.time || undefined}
+                note={cell.details}
+                mark={{ kind: 'period', lines: [row.label], fill: cell.color, ink: cell.ink, empty: cell.subject === '' }}
+                badge={cell.current ? '現在' : undefined}
+                emphasized={cell.current}
+                accessibilityLabel={cell.accessibilityLabel}
+                onPress={() => openEditor(row.key, column.key)}
+              />
+            );
+          })}
+        </Section>
+      ))}
+    </>
   );
 }

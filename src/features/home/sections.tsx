@@ -6,7 +6,10 @@ import { router } from 'expo-router';
 import { icons } from '@/components/icons';
 import { openNearSchool, shortName } from '@/features/food/food-view';
 import { useRestaurants } from '@/features/food/use-restaurants';
-import { nextSchoolDay, schoolDayOf, upcomingExam, type SchoolCalendarContext, type UpcomingExam } from '@/features/todo/school-days';
+import { formatShortRange } from '@/features/todo/calendar-view';
+import { nextSchoolDay, schoolDayOf, upcomingExam, type SchoolCalendarContext } from '@/features/todo/school-days';
+import { editTodo, todoSubtitle, toggleTodo } from '@/features/todo/todo-rows';
+import { isCompleted, visibleTodos } from '@/features/todo/todo-state';
 import { formatMonthDayZh, fromDateKey, isSameDay, minutesOfDay, toDateKey } from '@/lib/dates';
 import { openWebsite } from '@/lib/open-link';
 import { useNewsStore } from '@/store/news';
@@ -23,20 +26,12 @@ const EXAM_HORIZON_DAYS = 21;
 const openCalendar = () => router.navigate('/(tabs)/todo');
 const openTransport = () => router.navigate('/(tabs)/campus/transport');
 
-/** e.g. 10月13日–14日, or 10月30日–11月2日 across months. */
-function examDates(exam: UpcomingExam): string {
-  const start = fromDateKey(exam.startDate);
-  const end = fromDateKey(exam.endDate);
-  if (exam.startDate === exam.endDate) return formatMonthDayZh(start);
-  return `${formatMonthDayZh(start)}–${start.getMonth() === end.getMonth() ? `${end.getDate()}日` : formatMonthDayZh(end)}`;
-}
-
 /** 今日: today's todos, the day's events and the next exam, counted down. */
 export function AgendaSection({ now, calendar }: { now: Date; calendar: SchoolCalendarContext }) {
   const todos = useTodoStore((state) => state.todos);
   const ownEvents = useTodoStore((state) => state.events);
-  const completeTodo = useTodoStore((state) => state.completeTodo);
-  const todayTodos = todosDueOn(todos, now);
+  // A todo checked off stays, checked, until the day ends (todo-state.ts).
+  const todayTodos = todosDueOn(visibleTodos(todos, now), now);
   const events = agendaEvents(now, calendar.events, ownEvents, calendar.grade);
   const exam = upcomingExam(now, calendar);
   const showExam = exam !== null && exam.daysUntil > 0 && exam.daysUntil <= EXAM_HORIZON_DAYS;
@@ -44,16 +39,13 @@ export function AgendaSection({ now, calendar }: { now: Date; calendar: SchoolCa
   return (
     <Section title="今日" prominent>
       {todayTodos.map((todo) => (
-        // Checking a todo completes it, which removes it (as on 行事曆).
         <CheckRow
           key={todo.id}
           title={todo.title}
-          subtitle={todo.category ? `待辦 · ${todo.category.name}` : '待辦'}
-          checked={false}
-          onCheckedChange={(checked) => {
-            if (checked) completeTodo(todo.id);
-          }}
-          onPress={() => router.push({ pathname: '/todo-editor', params: { id: todo.id } })}
+          subtitle={todoSubtitle(todo)}
+          checked={isCompleted(todo)}
+          onCheckedChange={(checked) => toggleTodo(todo, checked)}
+          onPress={() => editTodo(todo)}
         />
       ))}
       {events.map((event) => (
@@ -67,9 +59,10 @@ export function AgendaSection({ now, calendar }: { now: Date; calendar: SchoolCa
         />
       ))}
       {exam && showExam ? (
+        // A one-day exam is just its date; formatShortRange would print 10月13日–13日.
         <Row
           title={exam.title}
-          subtitle={examDates(exam)}
+          subtitle={exam.startDate === exam.endDate ? formatMonthDayZh(fromDateKey(exam.startDate)) : formatShortRange(exam.startDate, exam.endDate)}
           detail={`還有 ${exam.daysUntil} 天`}
           detailProminent
           mark={{ kind: 'glyph', text: '考' }}

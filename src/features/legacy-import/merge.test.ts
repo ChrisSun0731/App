@@ -15,9 +15,9 @@ const DEFAULT_CATEGORY = { name: 'Default', color: '#ADADAD' };
 const BIKE_SCHOOL = { sna: 'YouBike2.0_泉州寧波西街口', nickname: '建中東側門', city: '臺北市' as const };
 const BIKE_GARDEN = { sna: 'YouBike2.0_植物園', nickname: '台北植物園', city: '臺北市' as const };
 
-/** Each store's defaults, as in src/store. */
+/** Each store's defaults, as in src/store (no class until one is chosen). */
 const initial: StoresData = {
-  schedule: { userClass: '101', rows: [] },
+  schedule: { userClass: '', rows: [] },
   todo: { events: [], eventCategories: [DEFAULT_CATEGORY], todos: [], todoCategories: [], view: 'calendar' },
   news: { pinned: [], lastClearedTime: null },
   food: { favorites: [] },

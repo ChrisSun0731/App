@@ -44,6 +44,11 @@ export function minutesOfDay(date: Date): number {
   return date.getHours() * 60 + date.getMinutes();
 }
 
+/** "08:10" for minutes since midnight. Hours past 23 are not wrapped: 1590 is "26:30". */
+export function clock(minutes: number): string {
+  return `${pad2(Math.floor(minutes / 60))}:${pad2(minutes % 60)}`;
+}
+
 /** Parses "HH:MM" into minutes since midnight. Hours may exceed 23. */
 export function parseClockTime(value: string): number | null {
   const match = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(value);

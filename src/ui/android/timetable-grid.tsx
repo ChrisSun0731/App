@@ -1,10 +1,9 @@
-import { Box, Column, Row, Text } from '@expo/ui/jetpack-compose';
+import { Box, Column, Icon, Row, Surface, Text } from '@expo/ui/jetpack-compose';
 import {
   alpha,
-  background,
-  border,
   clickable,
   clip,
+  fillMaxSize,
   fillMaxWidth,
   height,
   padding,
@@ -13,24 +12,37 @@ import {
   weight,
   width,
 } from '@expo/ui/jetpack-compose/modifiers';
+import { useWindowDimensions } from 'react-native';
+
+import { icons } from '@/components/icons';
 
 import type { TimetableGridCell, TimetableGridColumn, TimetableGridProps } from '../types';
-import { useM3 } from './theme';
+import { iconSource, roundedShape, TRANSPARENT, useM3 } from './theme';
 
-const CELL_HEIGHT = 52;
-const GAP = 4;
+/** A cell's height at the default font scale (dp); it grows with the text. */
+const CELL_HEIGHT = 56;
+const GAP = 6;
 const ROW_HEADER_WIDTH = 40;
-const CELL_SHAPE = Shapes.RoundedCorner(12);
+const CELL_RADIUS = 12;
+const CELL_SHAPE = Shapes.RoundedCorner(CELL_RADIUS);
 
 /**
  * The week on the screen background: weekday columns (today's under the
  * 倒三角, a day off red and dimmed), period rows with their numeral and start
- * time, and a labelled gap for lunch. Each column is a stack of cells, so a
- * 連堂 is one tall cell (`span`); spans never cross the gap. Cells are
- * clickable, in the subject's colours, a 空堂 outlined.
+ * time, and a labelled gap for lunch. One clickable cell per period, filled in
+ * the lesson's colour with the subject's full name (a note marked under it; a
+ * free period's note in the plain fill) and the period in session ringed in
+ * primary; a 空堂 draws nothing but still takes a tap. A name longer than three
+ * lines (two over a note mark) ends in an ellipsis: on phones narrower than
+ * about 405dp from a font scale of 1.15 to 1.3 (課表 lists the week from 1.5).
  */
 export function TimetableGrid({ columns, rows, cells, breakAfter, onPress }: TimetableGridProps) {
   const m = useM3();
+  // A fixed 56dp holds two bodySmall lines over a note mark only at the
+  // default font scale, so the cells (and the row labels, to keep rows level)
+  // grow with the text; the default already clears the 48dp touch target, so
+  // the small scales keep it.
+  const cellHeight = Math.round(CELL_HEIGHT * Math.max(1, useWindowDimensions().fontScale));
   const blocks: [number, number][] = breakAfter
     ? [
         [0, breakAfter.index + 1],
@@ -51,7 +63,7 @@ export function TimetableGrid({ columns, rows, cells, breakAfter, onPress }: Tim
           <Row key={`block-${from}`} horizontalArrangement={{ spacedBy: GAP }} modifiers={[fillMaxWidth()]}>
             <Column verticalArrangement={{ spacedBy: GAP }} modifiers={[width(ROW_HEADER_WIDTH)]}>
               {rows.slice(from, to).map((row) => (
-                <Column key={row.key} horizontalAlignment="center" modifiers={[height(CELL_HEIGHT)]}>
+                <Column key={row.key} horizontalAlignment="center" modifiers={[height(cellHeight)]}>
                   <Text color={row.highlighted ? m.primary : m.onSurface} style={{ typography: 'titleSmall', fontWeight: '700' }}>
                     {row.label}
                   </Text>
@@ -65,20 +77,19 @@ export function TimetableGrid({ columns, rows, cells, breakAfter, onPress }: Tim
             </Column>
             {columns.map((column, columnIndex) => (
               <Column key={column.key} verticalArrangement={{ spacedBy: GAP }} modifiers={[weight(1)]}>
-                {rows.slice(from, to).flatMap((row, offset) => {
+                {rows.slice(from, to).map((row, offset) => {
                   const rowIndex = from + offset;
                   const cell = cells[rowIndex]?.[columnIndex];
-                  if (!cell || cell.span === 0) return [];
-                  const span = Math.max(1, Math.min(cell.span ?? 1, to - rowIndex));
-                  return [
+                  if (!cell) return null;
+                  return (
                     <Cell
                       key={cell.key}
                       cell={cell}
-                      cellHeight={span * CELL_HEIGHT + (span - 1) * GAP}
+                      height={cellHeight}
                       dimmed={column.holiday !== undefined}
                       onPress={onPress ? () => onPress(rowIndex, columnIndex) : undefined}
-                    />,
-                  ];
+                    />
+                  );
                 })}
               </Column>
             ))}
@@ -90,8 +101,8 @@ export function TimetableGrid({ columns, rows, cells, breakAfter, onPress }: Tim
             key="break"
             color={m.onSurfaceVariant}
             style={{ typography: 'labelSmall', textAlign: 'center' }}
-            modifiers={[fillMaxWidth(), padding(ROW_HEADER_WIDTH, 2, 0, 2)]}>
-            {`· · · ${breakAfter.label} · · ·`}
+            modifiers={[fillMaxWidth(), padding(ROW_HEADER_WIDTH, 4, 0, 4)]}>
+            {breakAfter.label}
           </Text>,
           block,
         ];
@@ -129,31 +140,46 @@ function ColumnHeader({ column }: { column: TimetableGridColumn }) {
   );
 }
 
-function Cell({ cell, cellHeight, dimmed, onPress }: {
+function Cell({ cell, height: cellHeight, dimmed, onPress }: {
   cell: TimetableGridCell;
-  cellHeight: number;
+  height: number;
   dimmed: boolean;
   onPress?: () => void;
 }) {
   const m = useM3();
-  const modifiers = [
-    fillMaxWidth(),
-    height(cellHeight),
-    clip(CELL_SHAPE),
-    ...(cell.empty ? [border(1.5, m.outlineVariant)] : [background(cell.color ?? m.surfaceContainerLowest)]),
-    ...(dimmed ? [alpha(0.5)] : []),
-    ...(onPress ? [clickable(onPress)] : []),
-    semantics({ contentDescription: cell.accessibilityLabel }),
-  ];
+  const ink = dimmed ? m.onSurfaceVariant : (cell.ink ?? m.onSurface);
+  // A Surface, so the 現在 ring follows the rounded corners (a border modifier
+  // strokes a rectangle, which the clip would cut at each corner).
   return (
-    <Box contentAlignment="center" modifiers={modifiers}>
-      <Text
-        color={dimmed ? m.onSurfaceVariant : (cell.ink ?? m.onSurface)}
-        maxLines={3}
-        style={{ typography: 'bodyMedium', textAlign: 'center', fontWeight: '500' }}
-        modifiers={[padding(2, 0, 2, 0)]}>
-        {cell.text}
-      </Text>
-    </Box>
+    <Surface
+      color={cell.empty ? TRANSPARENT : (cell.color ?? m.surfaceContainerLowest)}
+      contentColor={ink}
+      shape={roundedShape(CELL_RADIUS)}
+      border={cell.current ? { width: 2, color: m.primary } : undefined}
+      modifiers={[
+        fillMaxWidth(),
+        height(cellHeight),
+        // The ripple keeps to the shape too.
+        clip(CELL_SHAPE),
+        ...(dimmed ? [alpha(0.5)] : []),
+        ...(onPress ? [clickable(onPress)] : []),
+        semantics({ contentDescription: cell.accessibilityLabel }),
+      ]}>
+      <Box contentAlignment="center" modifiers={[fillMaxSize()]}>
+        {cell.empty ? null : (
+          <Column horizontalAlignment="center" modifiers={[padding(3, 3, 3, 3)]}>
+            {/* With a note mark under it, the name keeps to two lines so the mark keeps its room. */}
+            <Text
+              color={ink}
+              maxLines={cell.note ? 2 : 3}
+              overflow="ellipsis"
+              style={{ typography: 'bodySmall', textAlign: 'center', fontWeight: '500' }}>
+              {cell.text}
+            </Text>
+            {cell.note ? <Icon source={iconSource(icons.note)} size={12} tint={ink} /> : null}
+          </Column>
+        )}
+      </Box>
+    </Surface>
   );
 }

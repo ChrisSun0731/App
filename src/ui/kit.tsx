@@ -20,6 +20,7 @@ import {
   Switch,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
   type ColorValue,
 } from 'react-native';
@@ -324,6 +325,7 @@ export function PickerRow<T extends string>({ label, value, options, onChange, v
               // The control renders `value` only, so an ignored change leaves it as it was.
               onPress={() => (selected ? undefined : onChange(option.value))}
               style={[styles.chip, { borderColor: palette.separator }, selected ? { backgroundColor: palette.tintContainer } : null]}>
+              {option.dot ? <View style={[styles.dot, { backgroundColor: option.dot }]} /> : null}
               <Text style={[styles.label, { color: selected ? palette.onTintContainer : palette.text }]}>{option.label}</Text>
             </Pressable>
           );
@@ -582,9 +584,13 @@ export function CrowdBar({ levels, accessibilityLabel }: CrowdBarProps) {
   );
 }
 
-export function Embedded({ children, height, aspectRatio }: EmbeddedProps) {
+export function Embedded({ children, height, aspectRatio, onPress, accessibilityLabel, accessibilityHint }: EmbeddedProps) {
+  const style = [styles.embedded, height != null ? { height } : { aspectRatio: aspectRatio ?? 4 / 3 }];
+  if (!onPress) return <View style={style}>{children}</View>;
   return (
-    <View style={[styles.embedded, height != null ? { height } : { aspectRatio: aspectRatio ?? 4 / 3 }]}>{children}</View>
+    <Pressable style={style} onPress={onPress} accessibilityRole="imagebutton" accessibilityLabel={accessibilityLabel} accessibilityHint={accessibilityHint}>
+      <View style={{ flex: 1 }} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">{children}</View>
+    </Pressable>
   );
 }
 
@@ -656,27 +662,29 @@ export function TimetableGrid({ columns, rows, cells, breakAfter, onPress }: Tim
               <Text style={[styles.label, styles.center, { color: row.highlighted ? palette.tint : palette.text }]}>{row.label}</Text>
               {row.detail ? <Text style={[styles.overline, styles.center, { color: palette.textSecondary }]}>{row.detail}</Text> : null}
             </View>
-            {(cells[rowIndex] ?? []).map((cell, columnIndex) =>
-              // A covered cell (span 0) keeps its column's place, without its own content.
-              cell.span === 0 ? (
-                <View key={cell.key} style={[styles.weekCell, styles.weekSlot]} />
-              ) : (
-                <Pressable
-                  key={cell.key}
-                  accessibilityRole="button"
-                  accessibilityLabel={cell.accessibilityLabel}
-                  disabled={!onPress}
-                  onPress={() => onPress?.(rowIndex, columnIndex)}
-                  style={[
-                    styles.weekCell,
-                    styles.weekSlot,
-                    cell.empty ? [styles.weekEmpty, { borderColor: palette.separator }] : { backgroundColor: cell.color ?? palette.surface },
-                    columns[columnIndex]?.holiday ? styles.disabled : null,
-                  ]}>
-                  <Text numberOfLines={2} style={[styles.overline, styles.center, { color: cell.ink ?? palette.text }]}>{cell.text}</Text>
-                </Pressable>
-              ),
-            )}
+            {(cells[rowIndex] ?? []).map((cell, columnIndex) => (
+              <Pressable
+                key={cell.key}
+                accessibilityRole="button"
+                accessibilityLabel={cell.accessibilityLabel}
+                disabled={!onPress}
+                onPress={() => onPress?.(rowIndex, columnIndex)}
+                style={[
+                  styles.weekCell,
+                  styles.weekSlot,
+                  cell.empty ? null : { backgroundColor: cell.color ?? palette.surface },
+                  // 現在 by shape as well as colour: a ring round the cell, a free one too.
+                  cell.current ? { borderWidth: 2, borderColor: palette.tint } : null,
+                  columns[columnIndex]?.holiday ? styles.disabled : null,
+                ]}>
+                {cell.empty ? null : (
+                  <Text numberOfLines={3} style={[styles.overline, styles.center, { color: cell.ink ?? palette.text }]}>
+                    {cell.text}
+                  </Text>
+                )}
+                {cell.note && !cell.empty ? <Text style={[styles.markText, styles.center, { color: cell.ink ?? palette.text }]}>✎</Text> : null}
+              </Pressable>
+            ))}
           </View>
           {breakAfter?.index === rowIndex ? (
             <Text style={[styles.overline, styles.center, { color: palette.textSecondary }]}>{breakAfter.label}</Text>
@@ -685,6 +693,11 @@ export function TimetableGrid({ columns, rows, cells, breakAfter, onPress }: Tim
       ))}
     </View>
   );
+}
+
+/** A font scale of 1.5 or more, as on Android (see ./android/text-size.ts). */
+export function useAccessibilityTextSize(): boolean {
+  return useWindowDimensions().fontScale >= 1.49;
 }
 
 export function DayStrip({ days, selectedKey, onSelect }: DayStripProps) {
@@ -811,7 +824,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   field: { paddingHorizontal: 16, paddingVertical: 10, gap: 6 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
   input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16 },
   multiline: { minHeight: 96, textAlignVertical: 'top' },
   prominent: { justifyContent: 'center', borderRadius: 24, margin: 12 },
@@ -853,12 +866,11 @@ const styles = StyleSheet.create({
   nowFree: { borderWidth: 1 },
   nowLunch: { height: 1, marginVertical: 2.5 },
   nowDetail: { paddingTop: 10 },
-  week: { padding: 8, gap: 4 },
-  weekRow: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  week: { padding: 8, gap: 6 },
+  weekRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
   weekHeader: { width: 34, alignItems: 'center' },
   weekCell: { flex: 1, alignItems: 'center' },
-  weekSlot: { minHeight: 50, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 2 },
-  weekEmpty: { borderWidth: 1, borderStyle: 'dashed' },
+  weekSlot: { minHeight: 54, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 2 },
 });
 
 // Compile-time check that this file implements the whole contract.
@@ -886,4 +898,5 @@ export default {
   Embedded,
   NowCard,
   TimetableGrid,
+  useAccessibilityTextSize,
 } satisfies Kit;

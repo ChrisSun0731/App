@@ -90,10 +90,12 @@ function Action({ item }: { item: HeaderItem }) {
       return <HeaderMenu item={item} />;
     case 'segmented':
       return <HeaderSegmented item={item} />;
+    case 'space':
+      return <Box modifiers={[size(item.width ?? 8, 1)]} />;
   }
 }
 
-/** Material segmented buttons sized to their labels, e.g. 日 / 週. */
+/** Material segmented buttons sized to their labels, e.g. 熱食部 / 附近. */
 function HeaderSegmented({ item }: { item: Extract<HeaderItem, { kind: 'segmented' }> }) {
   return (
     // SegmentedButton derives its corner shapes from its index among the

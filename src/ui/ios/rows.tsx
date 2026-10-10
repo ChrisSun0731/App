@@ -506,7 +506,7 @@ function Mark({ mark, dimmed }: { mark: RowMark; dimmed: boolean }) {
               <Text
                 key={`${index}-${line}`}
                 modifiers={[
-                  font({ size: 17, weight: 'bold' }),
+                  font({ textStyle: 'body', weight: 'bold' }),
                   mark.empty ? tertiaryLabelText : mark.ink ? foregroundStyle(mark.ink) : secondaryLabelText,
                   dynamicTypeSize({ max: 'xLarge' }),
                 ]}>
