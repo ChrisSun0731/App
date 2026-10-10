@@ -1,10 +1,12 @@
 import Constants from 'expo-constants';
 
+import pkg from '../../../package.json';
+
 import { icons } from '@/components/icons';
 import { openEmail, openWebsite } from '@/lib/open-link';
 import { ListScreen, Row, Section, TextBlock, type IconValue } from '@/ui';
 
-const VERSION = Constants.expoConfig?.version ?? '5.0.0';
+const VERSION = Constants.expoConfig?.version ?? pkg.version;
 
 const CONTACTS: readonly { title: string; subtitle: string; icon: IconValue; open: () => Promise<void> }[] = [
   { title: 'CK APP 電子郵件', subtitle: 'ckappofficial@gmail.com', icon: icons.mail, open: () => openEmail('ckappofficial@gmail.com') },
