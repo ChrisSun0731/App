@@ -1,7 +1,6 @@
-// 校慶紀念品: the souvenir shop is a website, so it stays in a WebView (the one
-// screen of React Native content outside the kit), with 在瀏覽器開啟 in the
-// header and the kit's empty state when the shop cannot load. Layout per
-// docs/design/native-ui.md, "紀念品 (Souvenir)".
+// 建中舞會門票: the ticket shop is a website, so it stays in a WebView,
+// with 在瀏覽器開啟 in the header and the kit's empty state when the shop
+// cannot load.
 import { useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
@@ -12,11 +11,11 @@ import { openWebsite } from "@/lib/open-link";
 import { usePalette } from "@/theme/palette";
 import { EmptyState, ListScreen, Section } from "@/ui";
 
-const STORE_URL = "https://souvenir.cksc.tw/auth";
+const STORE_URL = "https://tickets.cksc.tw/auth";
 
 const isWebUrl = (url: string) => /^https?:\/\//i.test(url);
 
-export default function SouvenirScreen() {
+export default function TicketsScreen() {
   const palette = usePalette();
   const [failed, setFailed] = useState(false);
   // Bumped by 重試 to remount the WebView, which starts over at the shop.
@@ -53,7 +52,7 @@ export default function SouvenirScreen() {
           <Section plain>
             <EmptyState
               icon={icons.error}
-              title="目前無法載入紀念品商店"
+              title="目前無法載入購票系統。"
               action={{ label: "重試", onPress: retry }}
               secondaryAction={{
                 label: "在瀏覽器開啟",
