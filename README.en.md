@@ -1,183 +1,155 @@
-# CK APP — Campus Mobile App
+# CK APP
 
-**Language / 語言:** [中文](README.md) ｜ English (this page)
+**Language / 語言:** [中文](README.md)｜English (this page)
 
-> Current version: **3.1** (the `versionName` in `src-capacitor/android/app/build.gradle`)　|　Docs last updated: 2026-07
->
-> ⚠️ Note: the `version` field in `package.json` is still `3.0.1`, which is out of sync with the real version. The source of truth for the version is Android's `build.gradle` and iOS's `project.pbxproj` (see [Development](#development)).
+CK APP was created in 2024 by CK students Kimi and Diego to help students manage schedules and tasks, check transport, and find nearby food.
 
-## Table of Contents
-1. [What is CK APP?](#what-is-ck-app)
-2. [Architecture](#architecture)
-3. [Pages / Features](#pages--features)
-4. [Store & other infrastructure](#store--other-infrastructure)
-5. [Known issues & TODO](#known-issues--todo)
-6. [Development](#development)
-7. [Contributing](#contributing)
+The app now uses **React Native, TypeScript, and Expo SDK 57**. Android interactive controls use Material 3 / Jetpack Compose; iOS uses SwiftUI controls and native navigation. Screen logic and layout are shared through React Native. The current package version is **4.0.0**; `app.config.ts` resolves the app version and build number.
 
-## What is CK APP?
-CK APP is an app built by Diego Peng and Kimi Yang, 77th-cohort students of Chien Kuo High School (建中), during the summer of 2024. Its goal is to help every CK student deal with the everyday problems of school life. Since launching on both iOS and Android in September 2024, CK APP accumulated 2,080 downloads by September 2025. We hope CK APP can keep helping all future CK students.
+The interface follows the school bell: the emblem's inverted triangle only ever points at "now", and the full CK navy is reserved for the 現在 card at the top of Today. On iOS the tabs use the system large title with one line under it (the date, class or week), and view switches (日 / 週, 熱食部 / 附近) sit in the navigation bar. See the [design spec](docs/design/native-ui.md) for each screen's layout and the component mapping.
 
-## Architecture
-CK APP's main code and data both live on GitHub, across two repos — `CK_app` and `Data` (there's actually a third repo, `Proxy`, but it's deprecated — it was the old Heroku code). This repo (`CK_app`) *is* the Quasar project root — `package.json`, `src/`, etc. all live directly at the repo root, so there's no extra folder to `cd` into after cloning.
+## Features
 
-### Data
-`Data` holds data that needs to change dynamically so CK APP can read it directly. The only thing still actively used from it is:
-- `menus`: folder holding the cafeteria (熱食部) menus (see [MenuPage](#menupage) below)
+There are five fixed tabs:
 
-> Class schedule data (the old `ClassesSchedule.json`) used to live here too, but the school stopped providing that source for a while over privacy concerns, which broke this mechanism. After obtaining fresh class-schedule data, we switched to bundling it directly inside the `CK_app` repo itself (`src/data/schedules/`), so it no longer depends on the `Data` repo or a network request at all — see [SchedulePage](#schedulepage) below for details.
+| Tab               | Behavior                                                                                                                                                                                       |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Today (今天)      | The 現在 card (bell rail, countdown to the bell, days off and exam days), today's tasks and events, lunch, the commute, and pinned school news; the class button opens Settings                |
+| Timetable (課表)  | Day view (a dated week strip, morning/afternoon, colored period badges, double periods merged) and week view (the grid); custom subjects, odd/even-week rotation, notes, colors, and re-import |
+| Calendar (行事曆) | Month grid (days-off and exam marks, grade filter), the day's events and tasks, what comes next, and the full task list with categories                                                        |
+| Food (美食)       | Cafeteria (熱食部): the weekly menu image with a dated week strip and days off. Nearby (附近): map, open-now / favorites filters, nicknames and distances, favorites, and a random pick        |
+| Campus (校園)     | School news (unread, tags, pins, search), transport (YouBike and Metro), partner shops, souvenirs, and the decision helper                                                                     |
 
-### CK_app
-`CK_app` is the main CK APP codebase, written with the Quasar Framework — essentially HTML, CSS, and JavaScript. We chose Quasar because it can output both Android and iOS apps from one codebase, so we don't have to write two separate versions.
+| Other        | Behavior                                                                                                                                           |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| First launch | 你是哪一班？ ("Which class are you in?"): pick a class by grade, or look around first                                                              |
+| Settings     | Class, what Today shows, the calendar's grade filter, local data reset, and About                                                                  |
+| Widget (iOS) | The 現在 widget: small and medium Home Screen sizes (bell rail, countdown, the rest of the day) and the Lock Screen; built with `ENABLE_WIDGETS=1` |
 
-Commonly used files / folders:
-- **public**
-	- `food`: icons for FoodPage
-	- `metro`: icons for each MRT line in TransportPage
-	- `promo`: the PromoPage logo
-- **src**
-	- **boot**: initialization code loaded when the app starts
-		- `axios.js`: configures axios (HTTP requests)
-		- `i18n.js`: initializes internationalization (vue-i18n)
-	- **data**
-		- `metroData.js`: Taipei MRT station and line info
-		- `restaurantData.json`: FoodPage restaurant data (we considered moving it to `Data` for dynamic updates, but for some reason the Android build couldn't read it `==`)
-		- `schedules/`: class schedules for the whole school (three raw grade JSON files plus an `index.js` that converts them into the shape the pages need) — see [SchedulePage](#schedulepage)
-	- **i18n**: localization strings (currently only `en-US`, not yet fully used)
-	- **pages**: the heart of CK APP — most development happens here (12 pages total, see [Pages / Features](#pages--features))
-	- **components / layouts**: shared components (e.g. `EssentialLink.vue`) and layouts (`MainLayout.vue`)
-	- **router**
-		- `routes.js`: register any new page here so other pages can link to it
-	- **services**
-		- `newsService.js`: auto-refreshes NewsPage data every 2 minutes
-	- **store**: pages mutate local data through here — very important (see the [Store section](#store--other-infrastructure))
-	- **utils**
-		- `xmlUtils.js`: helper for parsing the school website's XML
-- **tools** (lives at the repo root, alongside `src/` — not part of the Vite project)
-	- `Convert_xlsx_to_json.py`: converts the academic-office schedule file (.xls) into JSON; usage notes are inside the file (⚠️ its output format no longer matches what `src/data/schedules/` uses — see [Known issues](#known-issues--todo))
-	- `menu_scraper.py`: (see the MenuPage section)
-	- `menu_visualizer.py`: auto-converts the cafeteria menu into image files
+## Architecture and data
 
-Besides GitHub, we also have the [official website](https://ckapp-tw.web.app/) (built & maintained by Ian Wen of the 78th cohort), the official Gmail (ckappofficial@gmail.com), and the [official Instagram account](https://www.instagram.com/ckappofficial/). (We used to store logged-in users' data in Firebase, but the login feature and Firebase have both been fully removed — see [Known issues & TODO](#known-issues--todo).)
+| Path                            | Purpose                                                                                            |
+| ------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `src/app/`                      | Expo Router routes, native stacks, and feature tabs                                                |
+| `src/features/`                 | Feature screens, data transforms, and hooks                                                        |
+| `src/features/registry.ts`      | The five fixed tabs and the screens inside Campus                                                  |
+| `src/ui/`                       | The native UI kit: one contract (`types.ts`), implemented in SwiftUI on iOS and Compose on Android |
+| `src/components/`               | Navigation-bar buttons, the tab bar, and the icon table                                            |
+| `src/widgets/`                  | The iOS 現在 widget's layout and timeline                                                          |
+| `src/theme/`, `src/navigation/` | Platform colors, dark mode, and native navigation                                                  |
+| `src/store/`                    | Zustand state persisted through Expo SQLite                                                        |
+| `src/lib/`                      | HTTP timeouts, validated remote data/cache, date and storage helpers                               |
+| `assets/`                       | App icons, splash images, and other static assets                                                  |
+| `app.config.ts`, `plugins/`     | App identity, versions, native configuration, environment inputs, and config plugins               |
+| `.github/workflows/`            | Native builds, signing, and testing-track uploads                                                  |
+| `tools/`, `docs/`               | Data utilities, the design spec, and historical decision records                                   |
 
-## Pages / Features
-CK APP currently has **12 pages** (all registered in `src/router/routes.js`), all written with the Quasar Framework. A Quasar `.vue` file has three parts — `<template>`, `<script>`, `<style>` — i.e. HTML, JavaScript, and CSS.
+Timetables, restaurants, the school calendar, and cafeteria menus come from the [Data repository](https://github.com/CKApp-Dev/Data). JSON is validated before caching; failed refreshes keep the last saved content. Menu filenames use the local Monday and weekday, such as `menus/2026-10-05_4.png`.
 
-### HomePage
-Besides the six page buttons, the home page shows three dynamic pieces of info: the current class, today's to-dos, and pinned school-website content.
+Native apps request upstream services directly. School news refreshes every two minutes; news and transport polling pause according to screen focus / app foreground state. The tabs are fixed: Today, Timetable, Calendar, Food and Campus. The cafeteria menu is inside Food; school news, transport, partner shops, souvenirs and the helper are inside Campus. A new install opens on 你是哪一班？ first; an import from the previous app that brings a class skips it.
 
-### SchedulePage
-Chien Kuo's class schedules (grades 1-3, 81 classes total, 8 periods a day) are bundled as three JSON files in `src/data/schedules/` (`gaoyi_schedules.json`, `gaoer_schedules.json`, `gaosan_schedules.json`). An `index.js` in the same folder converts them into the shape the page needs, and also exports the class list (`CLASS_OPTIONS`) and a "which period is it right now" helper (`getCurrentPeriodName`) that checks the real start/end time of each period, including the lunch gap.
+Classes, breaks and days off are worked out from the timetable's bell times and the school calendar (`src/features/home/now.ts`, `src/features/todo/school-days.ts`): a period ends at its bell, and days off and exam days listed in the calendar replace that day's lessons. The cafeteria publishes its menu as an image; the app does not read the dishes out of it.
 
-The "set class" and refresh buttons on the page just switch/reload this local data — no network connection needed. Any subjects/colors/notes the user has customized still live in `localStorage` (see [Store](#store--other-infrastructure)) and won't be overwritten by the bundled data unless the user taps refresh.
+The settings reset restores personal stores/settings and clears in-memory query data. It retains remote JSON caches, cached menu images, and souvenir website data.
 
-> This mechanism was disabled in October 2025 over school privacy concerns (replaced with a "please enter it yourself" message), and was restored in July 2026. For the full reasoning and decision process, see [`docs/decisions/feature-schedule-data-import/`](docs/decisions/feature-schedule-data-import/restore-schedule-data-import.md).
+`ios/` and `android/` are generated, ignored directories. Make persistent native changes in `app.config.ts` or a config plugin, then regenerate. See [Expo Continuous Native Generation](https://docs.expo.dev/workflow/continuous-native-generation/).
 
-### TodoPage
-Split into two parts: a monthly calendar & a to-do list. How it works is a bit complicated, but you shouldn't need to touch it, so we won't explain it :D
-
-### TransportPage
-This is CK APP's largest page, split into a YouBike part and a Taipei MRT part.
-
-For YouBike, we read the [Taipei City](https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json) and [New Taipei City](https://data.ntpc.gov.tw/openapi/swagger-ui/index.html?configUrl=%2Fapi%2Fv1%2Fopenapi%2Fswagger%2Fconfig&urls.primaryName=%E6%96%B0%E5%8C%97%E5%B8%82%E6%94%BF%E5%BA%9C%E4%BA%A4%E9%80%9A%E5%B1%80%2863%29#/) YouBike APIs separately. The New Taipei API is a bit nastier — the data is split across two pages, so we need two API calls.\
-Also, adding a station has a feature to find the user's nine nearest stations. We originally wanted to detect the user's location directly, but that requires the user to grant permission, and it was a bit hard to write, so we gave up on it for now.
-
-For the MRT, we had to apply to Taipei Metro to get their API. Their terms of use actually include these two clauses:
-- Members must proactively notify the company of their application results after development is complete, and provide value-added application content, user counts, and other statistics that help assess the value-added results, as a reference for the company's API development management.
-- If a member does not use the company's API service for more than three months, the company reserves the right to terminate the member account and cancel membership.
-
-…but we just ignored that.
-
-### MenuPage
-The cafeteria usually uploads next month's menu to [the cloud](https://drive.google.com/drive/folders/1jZTQNkQVCoDVmMPQaG2Ov_Zwu4o4cmQQ) at the end of each month. So at the end of every month we need to download the xlsx files from the cloud (4 of them, one per week). Then, open a folder and put `menu_scraper` and `menu_visualizer` in it. Next, one by one, rename each menu file to `menu.xlsx`, put it in that folder, and run `menu_visualizer`. A folder (`menu_visualizations`) should appear containing the converted daily-menu PNG files. Finally, put those images into the `menus` folder of the `Data` repo and push — CK APP will then be able to read them.
-
-Filename convention: a menu image is named after that week's Monday date plus the day of the week. For example, 2025/9/11 is a Thursday; that week's Monday is 9/8, so the menu file for 9/11 is `2025-09-08_4.png`. However, due to a bug, the currently shipped version of MenuPage sometimes counts the Monday date one day too early. We work around this with `menu_visualizer`: for the 9/11 example, it actually also outputs `2025-09-07_4.png`.
-
-### FoodPage
-Our map uses the Leaflet plugin, and restaurant data comes from `restaurantData.json`. Some shops show closing times past 24:00 — that's so the marker colors display correctly (otherwise after 23:30 the marker would turn light green, because the code thinks it's closing at midnight, when the shop might actually stay open until 2 AM). This can be fixed later.\
-As mentioned, we wanted to move `restaurantData.json` to the `Data` repo for easier dynamic updates, but on Android there's some bug where it can fetch the GitHub data yet fails to render the markers. Worth another try.
-
-### NewsPage
-The school-website page's data comes from the Wi-Fi-symbol-looking buttons in the "important announcements" and "latest news" sections of the [CK school website](https://www.ck.tp.edu.tw/nss/p/index); clicking them yields an XML file we can read.\
-As mentioned, `newsService.js` fetches the school-website data in the background every two minutes.
-
-### PromoPage
-A directory page for the "Joint Partner Shops of the Four Schools (建北中成)". It contains the partner-shop usage rules and area buttons (CK, Zhongshan, Chenggong, Taipei Main Station, Ximen, Gongguan, Guting, etc.) linking to the external site [`promo.cksc.tw`](https://promo.cksc.tw).
-
-### SouvenirPage
-Embeds the external souvenir store [`souvenir.cksc.tw/auth`](https://souvenir.cksc.tw/auth) in an iframe. It has almost no logic of its own; it mainly serves as an in-app entry point.
-
-### HelpPage (Decision Helper)
-A small utility page: the user enters one option per line, and on button press it randomly picks one for you. Pure front-end, no external data.
-
-### SettingsPage
-Pretty self-explanatory. Lets you switch class (which feeds SchedulePage), toggle which sections show on the home page, and customize the toolbar.
-
-### AboutPage
-Shows version info (currently 3.1). Remember to bump the version (see [Development](#development)). We should add developer bios later.
-
-> There's also `ErrorNotFound.vue` as the 404 page for unmatched routes (not counted among the 12 feature pages).
-
-## Store & other infrastructure
-
-### Store (Vuex)
-`src/store/` is the app's local-state hub and is **very important**. Pages read and write through it, and `localStoragePlugin.js` automatically syncs it to the browser's / device's `localStorage`, so data persists across app restarts.
-
-There are currently 7 modules (`src/store/modules/`):
-
-| Module | Feature |
-| --- | --- |
-| `youbike` | YouBike station data and favorite stations (TransportPage) |
-| `metro` | Taipei MRT station/line state (TransportPage) |
-| `news` | School-website announcement cache (refreshed every 2 min by newsService, NewsPage) |
-| `schedule` | Class schedule and the currently set class (SchedulePage) |
-| `todo` | Calendar and to-do items (TodoPage) |
-| `food` | FoodPage restaurant-related state |
-| `settings` | App settings (SettingsPage) |
-
-Also:
-- `localStoragePlugin.js`: persists the store to `localStorage`.
-- `clearALL` action / `CLEAR_DATA` mutation: clears all local data and resets every module to its default state.
-
-### i18n
-The project has an internationalization scaffold via `vue-i18n` (`src/boot/i18n.js`, `src/i18n/`), with `en-US` as the default locale. In practice, though, there's only one `en-US` string set and most of the UI text is still hard-coded in Chinese, so i18n isn't really in use yet — this is the starting point if anyone wants to add a Chinese/English toggle later.
-
-## Known issues & TODO
-The TODOs / known bugs scattered across the page descriptions, collected here so whoever takes over can see them at a glance:
-
-- [ ] **Version out of sync**: `package.json` says `3.0.1` while the shipped version is `3.1`. Consider unifying the source of truth.
-- [ ] **Schedule conversion tool doesn't match the new data format**: `tools/Convert_xlsx_to_json.py` still outputs the old format (a single `ProcessedClassesSchedule.json`, originally meant to be pasted into the `Data` repo by hand), but SchedulePage now reads three per-grade JSON files with a different shape from `src/data/schedules/`. Next time the schedule needs updating for a new semester, this tool needs to be updated (or rewritten) to produce the new format directly.
-- [ ] **MenuPage date off-by-one**: MenuPage sometimes counts the Monday date one day early; currently worked around by having `menu_visualizer` output an extra filename. Root cause unfixed.
-- [ ] **FoodPage hours hack**: to keep marker colors correct, some shops' hours are written as past 24:00; overnight hours should be handled properly later.
-- [ ] **restaurantData can't be made dynamic**: we wanted to move it to the `Data` repo for dynamic updates, but the Android build fetches the data yet fails to draw markers. Needs investigation.
-- [ ] **TransportPage geolocation**: auto-detecting the user's location for nearest stations was shelved due to permission and implementation cost.
-- [ ] **i18n not realized**: the scaffold exists but most UI text is hard-coded Chinese.
-- [ ] **AboutPage**: could add developer bios.
-
-> The login feature and Firebase were fully removed as part of the [Phase 3 refactor](docs/decisions/phase-3-remove-login/), so they're no longer on this list. For more on past refactoring (including security fixes and cleanup), see [`docs/refactoring-plan.md`](docs/refactoring-plan.md) and the per-task write-ups under [`docs/decisions/`](docs/decisions/).
+`expo-build-properties` enables `ios.enableSceneSupport` so generated projects adopt the scene lifecycle for Xcode 27 / iOS 27. Regenerate and rebuild after changing it; see [Expo's scene lifecycle guidance](https://github.com/expo/fyi/blob/main/ios-scene-lifecycle.md).
 
 ## Development
-### Simulating in a browser on your computer
-1. Install Node.js (https://nodejs.org/en/download/)
-2. Install Git (https://git-scm.com/downloads)
-3. Open a terminal and run `git clone https://github.com/CK-APP-Org/CK_app.git`
-4. Enter the folder: `cd CK_app`
-5. Install the Quasar CLI: `npm install -g @quasar/cli`
-6. Install dependencies: `yarn install`
-7. Start the dev server: `quasar dev`
-8. Open `http://localhost:9000` in your browser
 
-### Publishing (Android)
-[![Build (& Deploy to Google Play) Android APP](https://github.com/CK-APP-Org/CK_app/actions/workflows/build_android.yml/badge.svg)](https://github.com/CK-APP-Org/CK_app/actions/workflows/build_android.yml)
-1. Bump the version in `src-capacitor\android\app\build.gradle` (`versionCode` & `versionName`)
-2. (a) Run the GitHub Action "Deploy Android APP to Google Play"; or (b) prefix the commit message with `[deploy] ` to automatically attempt upload & release
+Install Node.js 22+ and Yarn Classic. Android needs Android Studio / SDK and Java 21. iOS needs macOS, Xcode, and CocoaPods. Current SDK 57 native defaults are Android API 24+ and iOS 16.4+.
 
-### Publishing (iOS)
-[![Build (& Deploy to TestFlight) iOS APP](https://github.com/CK-APP-Org/CK_app/actions/workflows/build_ios.yml/badge.svg)](https://github.com/CK-APP-Org/CK_app/actions/workflows/build_ios.yml)
-1. Bump the version in `src-capacitor\ios\App\App.xcodeproj\project.pbxproj` (`CURRENT_PROJECT_VERSION` & `MARKETING_VERSION`) (both debug & release)
-2. (a) Run the GitHub Action "Deploy iOS App to TestFlight"; or (b) prefix the commit message with `[deploy] ` to automatically attempt upload & release
+```bash
+git clone https://github.com/CK-APP-Org/CK_app.git
+cd CK_app
+yarn install --frozen-lockfile
+cp .env.example .env.local
+```
 
-> ⚠️ Both of these GitHub Actions automatically **build** on every push to `main` that touches the code (but that alone doesn't publish anything). Actually triggering a **release** (uploading to Google Play / TestFlight) needs one of: manually clicking "Run workflow" on the Actions tab, or having the commit that lands on `main` (e.g. a PR's merge commit) start its message with `[deploy] `. GitHub's default merge-commit title doesn't do that, so a normal PR merge won't accidentally trigger a release.
+Fill in `.env.local`, then run from the repository root:
 
-## Contributing
-Contributions and handoffs are welcome! Please read the [Contributing Guide (CONTRIBUTING.en.md)](CONTRIBUTING.en.md) before opening a PR.
+```bash
+yarn android --device # Select an emulator/device, build, and launch Android
+yarn ios --device     # Select a simulator/device, build, and launch iOS
+yarn start         # Start Metro for an installed development build
+```
+
+After changing native dependencies or app configuration, regenerate with `npx expo prebuild --clean`. This overwrites manual changes inside generated native directories. Verify maps and native controls in the native app.
+
+### Android Studio on macOS
+
+The command is `yarn android` (spelled **android**). In Android Studio's Device Manager, create and start an emulator, then run `yarn android --device` from the repository root. A connected Android phone with USB debugging enabled also works. Check that `adb devices` lists the device before building. See [Expo's Android Studio setup](https://docs.expo.dev/workflow/android-studio-emulator/).
+
+Android debug builds install as **CK APP Dev** (`org.capacitor.quasar.ckapp.dev`) alongside the store app, with separate data. This avoids `INSTALL_FAILED_UPDATE_INCOMPATIBLE` when the installed store app and local debug APK have different signing keys. If `android/` already exists, apply this configuration once before rebuilding:
+
+```bash
+npx expo prebuild --platform android --no-install
+yarn android --device
+```
+
+Release builds keep `org.capacitor.quasar.ckapp`; iOS keeps its existing identity. To build Android release locally, use `npx expo run:android --variant release` so Expo launches the release application ID. Upgrading the original app and testing legacy data import still require a build signed with its original key. See [Expo's variant launch options](https://docs.expo.dev/guides/local-app-development/#local-builds-with-android-product-flavors).
+
+If the Android Maps key restricts package names and signing certificates, also allow the Dev package and its debug certificate. See [Expo's app variant configuration](https://docs.expo.dev/build-reference/variants/).
+
+If the terminal cannot find the SDK, add these settings to `~/.zshrc` using the SDK path shown in Android Studio, then open a new terminal:
+
+```bash
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+```
+
+To build in Android Studio itself, run `npx expo prebuild --platform android`, open the generated `android/` folder in Android Studio, select JDK 21 as the Gradle JDK, and run the `app` configuration. Keep `yarn start` running in another terminal for the debug app's JavaScript. Regenerate and rebuild when native dependencies or app configuration change.
+
+### iOS prerequisites and CocoaPods
+
+Android Studio supplies Android tooling; iOS builds use Xcode. Open Xcode once to complete setup, select its Command Line Tools under **Settings → Locations**, and install an iOS simulator runtime under **Settings → Components**. Then use `yarn ios --device` to choose a simulator or connected iPhone. See [Expo's iOS Simulator setup](https://docs.expo.dev/workflow/ios-simulator/).
+
+Check `pod --version` before building. If CocoaPods is already installed as a user gem but `pod` is missing from `PATH`, add its executable directory to `~/.zshrc` and open a new terminal:
+
+```bash
+export PATH="$(ruby -r rubygems -e 'puts Gem.user_dir')/bin:$PATH"
+```
+
+If CocoaPods is not installed, follow [CocoaPods setup](https://guides.cocoapods.org/using/getting-started.html), or use `brew install cocoapods` when [Homebrew](https://formulae.brew.sh/formula/cocoapods) is available. A `spawn brew ENOENT` error means Expo's fallback installer could not find Homebrew; first check the existing CocoaPods installation and `PATH`.
+
+`yarn start` starts Metro and does not compile native modules. After adding a native dependency, build the app again; an installed binary that lacks that module cannot gain it through JavaScript reloads. See [Expo's local build workflow](https://docs.expo.dev/guides/local-app-development/).
+
+| Environment variable               | Purpose                                                                                                                                                                                                  |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `METRO_API_USER`, `METRO_API_PASS` | Taipei Metro API credentials; ask a maintainer                                                                                                                                                           |
+| `GOOGLE_MAPS_API_KEY`              | Maps SDK for Android key; without it the app shows a notice while restaurant/station lists remain available. iOS uses Apple Maps                                                                         |
+| `ENABLE_WIDGETS`                   | Optional; `1` adds the iOS 現在 widget (an extension target and an App Group) at prebuild. Store builds first need the App Group and the extension's provisioning profile in the Apple Developer account |
+| `APP_VERSION`                      | Optional override of the package version; CI derives it from the tag/package                                                                                                                             |
+| `BUILD_NUMBER`                     | Optional local override, default `1`; CI uses the workflow run number                                                                                                                                    |
+
+Do not commit `.env.local`. Metro credentials and the Maps key are bundled into the app and are not server-side secrets. Protecting credentials requires a backend.
+
+## Validation
+
+```bash
+yarn typecheck
+yarn test --runInBand
+yarn lint
+```
+
+Jest covers pure date, timetable, 現在 card state, calendar, restaurant-hours, RSS, transport, and widget-timeline behavior. Also verify input, tab navigation, sheets, maps, offline caching, light and dark mode, and persistence after restarting on both platforms. Check interface changes once on the iOS simulator and once on the Android emulator; every kit component needs both a SwiftUI and a Compose implementation (see the [design spec](docs/design/native-ui.md)).
+
+## Releases and signing
+
+The [Android workflow](.github/workflows/build_android.yml) and [iOS workflow](.github/workflows/build_ios.yml) run on `vX.Y.Z` tags or manual dispatch. They check lint/types/tests, generate native projects, build, and sign. **Both triggers upload to Google Play internal or TestFlight.** Tags additionally attach artifacts to a GitHub Release. Ordinary branch pushes and a `[deploy]` commit prefix do not trigger these workflows.
+
+Tag versions must be numeric `major.minor.patch`. Manual runs use `package.json`. Each workflow's run number becomes `BUILD_NUMBER`; maintainers must ensure it exceeds the existing store build. The app identity remains `org.capacitor.quasar.ckapp`.
+
+Gradle signs APK/AAB files with the existing `PLAY_SIGNING_KEY`, `PLAY_SIGNING_KEY_ALIAS`, `PLAY_SIGNING_KEY_STORE_PASSWORD`, and `PLAY_SIGNING_KEY_PASSWORD` secrets. `SERVICE_ACCOUNT_JSON` uploads to Play. iOS uses `BUILD_CERTIFICATE_BASE64`, `P12_PASSWORD`, `BUILD_PROVISION_PROFILE_BASE64`, and `KEYCHAIN_PASSWORD`, retaining profile `Github Actions` and team `FJX3SGU9AL`. TestFlight retains secret `APPSTORE_API_PRIVATE_KEY` and variables `APPSTORE_ISSUER_ID` / `APPSTORE_API_KEY_ID`. Builds also require the API configuration above. See [Expo release builds](https://docs.expo.dev/guides/local-app-production/) for native signing guidance.
+
+## Required before shipping updates
+
+**The legacy data import needs on-device validation.** New Zustand state uses Expo SQLite, separate from the previous Capacitor WebView's localStorage. On first launch, `src/features/legacy-import` reads the previous app's tasks, events, timetable edits, class, favorites, pins, followed stations, and settings through a hidden WebView, converts them, and merges them in without overwriting data created in the new app (see [docs/native-rewrite-progress.md](docs/native-rewrite-progress.md)). Before shipping to existing users, install a real previous release (for example 3.4.0) on Android and iOS, create data, upgrade, and confirm everything arrives.
+
+First-time requests without connectivity or a saved cache show an error/empty state. Store signing, the legacy data import, and native device behavior still require full release validation.
+
+## Contributing and contact
+
+Read the [Contributing Guide](CONTRIBUTING.en.md). Official email: ckappofficial@gmail.com; [Instagram](https://www.instagram.com/ckappofficial/); [website](https://ckapp-tw.web.app/).

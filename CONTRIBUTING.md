@@ -1,112 +1,88 @@
-# 貢獻指南 Contributing
+# 貢獻指南
 
-**語言 / Language：** 中文（本頁） ｜ [English](CONTRIBUTING.en.md)
+**語言 / Language：** 中文（本頁）｜[English](CONTRIBUTING.en.md)
 
-歡迎接手與貢獻 CK APP！這份文件說明如何在本專案開發、提交變更與上架。第一次接觸的人請先讀 [README.md](README.md) 了解整體架構。
+先閱讀 [README](README.md) 了解 React Native 架構、設定與目前發布限制。
 
-## 目錄
-1. [開發環境設定](#開發環境設定)
-2. [專案結構速查](#專案結構速查)
-3. [分支與 commit 規範](#分支與-commit-規範)
-4. [新增一個頁面](#新增一個頁面)
-5. [程式風格](#程式風格)
-6. [資料的修改](#資料的修改)
-7. [改版本號](#改版本號)
-8. [測試](#測試)
-9. [送出 Pull Request](#送出-pull-request)
-10. [聯絡方式](#聯絡方式)
+## 本機開發
 
-## 開發環境設定
-完整步驟請見 [README 的「開發說明」](README.md#開發說明)。簡述：
+使用 Node.js 22+ 與 Yarn Classic，從 repo 根目錄執行：
 
 ```bash
-git clone https://github.com/CK-APP-Org/CK_app.git
-cd CK_app
-npm install -g @quasar/cli
-yarn install
-quasar dev        # 開啟 http://localhost:9000
+yarn install --frozen-lockfile
+cp .env.example .env.local
+yarn android --device
+# macOS 裝有 Xcode 與 CocoaPods 時，也可執行 yarn ios --device
 ```
 
-> 請在 repo 根目錄執行指令（`package.json` 在這裡；這個repo本身就是Quasar專案根目錄，不需要再往下一層資料夾）。
+Android Studio、SDK／JDK 設定與 macOS CocoaPods 疑難排解請見 [README 開發說明](README.md#開發)。`yarn start` 提供 JavaScript 給已安裝的原生 debug App；新增原生依賴後須重新編譯。
 
-## 專案結構速查
-| 路徑 | 用途 |
-| --- | --- |
-| `src/pages/` | 各頁面（.vue），主要開發區（共 12 個功能頁面） |
-| `src/router/routes.js` | 路由登記處；新增頁面必改 |
-| `src/store/` | Vuex 本機狀態（7 個模組），會持久化到 localStorage |
-| `src/services/` | 背景服務，如 `newsService.js` |
-| `src/data/` | 靜態資料（`metroData.js`、`restaurantData.json`、`schedules/`） |
-| `src/boot/` | 啟動初始化（axios、i18n） |
-| `tools/` | Python 工具（課表/菜單轉檔），位於 repo 根目錄，避免被 Vite 掃到 |
-| `src-capacitor/` | Android / iOS 原生包裝與版本設定 |
-| `docs/decisions/` | 過去每個重構/功能任務的「改了什麼、為什麼」說明文件，接手前建議先掃過相關的 |
+Android debug 版本以 **CK APP Dev**（`org.capacitor.quasar.ckapp.dev`）安裝，與商店版的資料各自獨立。若已有生成的 `android/`，先執行一次 `npx expo prebuild --platform android --no-install` 套用 debug 身分。Release 與 iOS 的 App 身分維持不變。
 
-詳細說明見 [README](README.md)。
+修改依賴或 App 原生設定後，以 `npx expo prebuild --clean` 重新生成原生專案。`ios/` 與 `android/` 不提交；需要長期保留的變更應寫入 `app.config.ts` 或 config plugin。
 
-## 分支與 commit 規範
-- **不要直接 push 到 `main`**，請開新分支（例如 `fix/menu-date`、`feat/help-page`）再發 PR。
-- Commit message 請簡潔說明「做了什麼」。
-- ⚠️ **重要：commit message 開頭的 `[deploy] ` 會觸發自動上架！**
-  - 加上 `[deploy] ` 前綴的 commit 會啟動 GitHub Action，自動嘗試 build 並上傳到 Google Play / TestFlight。
-  - **一般開發 commit 請勿加 `[deploy] `**，以免誤觸發部署。確定要發版時才加（並記得先改版本號，見下）。
-  - 這個檢查看的是「實際 push 到 `main` 的那個 commit」的訊息。用GitHub網頁介面合併PR時，預設的merge commit標題是「Merge pull request #...」，不會誤觸發；只有你自己手動把merge commit標題改成`[deploy] `開頭，或是直接commit到main且訊息以`[deploy] `開頭，才會觸發上架。
+## 修改功能
 
-## 新增一個頁面
-1. 在 `src/pages/` 新增 `XxxPage.vue`（含 `<template>`、`<script>`、`<style>`）。
-2. 到 `src/router/routes.js` 登記路由，否則其他頁面無法連過去：
-   ```js
-   {
-     path: "/xxx",
-     component: () => import("layouts/MainLayout.vue"),
-     children: [{ path: "", component: () => import("pages/XxxPage.vue") }],
-   },
-   ```
-3. 若需要從首頁或選單進入，記得在對應的頁面 / `MainLayout.vue` 加上按鈕或連結。
-4. 若頁面需要持久化資料，考慮在 `src/store/modules/` 新增模組並註冊到 `src/store/index.js`。
+1. 在 `src/features/<feature>/` 維護畫面、hooks 與純邏輯。時間、狀態這類規則寫成畫面外的純函式，才能測試。
+2. 路由放在 `src/app/`。分頁固定為五個（`src/features/registry.ts` 的 `TABS`）。
+3. 新功能放進既有分頁：每天用的放在對應分頁裡，其他的加到校園（`src/app/(tabs)/campus/` 與 `CAMPUS_SCREENS`）。
+4. 持久狀態使用 `src/store/` 的 Zustand store 與 `src/lib/storage.ts`。不要在畫面中直接改動陣列；使用 store action。
+5. 畫面只用 `@/ui` 的元件：`ListScreen` 裡只有 `Section`，`Section` 裡是列與區塊。不要在其中直接放 React Native 或 `@expo/ui` 的元件；地圖、圖片等 React Native 內容用 `Embedded`。需要新元件或新屬性時，先在 `src/ui/types.ts` 定義，再分別實作 `src/ui/ios/`（SwiftUI）、`src/ui/android/`（Compose）與 `src/ui/kit.tsx`（網頁與 Jest 用），並更新 [設計規格](docs/design/native-ui.md) 的對照表。
+6. 導覽列按鈕、選單與切換檢視（例如日／週）用 `src/components/header-actions` 的 `HeaderActions`；圖示加在 `src/components/icons.ts`，同時給 SF Symbol 與 Material Symbol。分頁標題下方的一行用 `ListScreen` 的 `subtitle`。
 
-## 程式風格
-專案已設定 ESLint + Prettier（`.eslintrc.cjs`、`.editorconfig`）。送 PR 前請執行：
+### 設計原則
+
+介面依 [設計規格](docs/design/native-ui.md)。改畫面時：
+
+- 倒三角只代表「現在」；滿版建中藍只給「今天」的「現在」卡片。
+- 文字、背景與分隔線用系統語意色，跟著淺色／深色模式與「增加對比」。課表顏色只用 `src/features/schedule/cell-colors.ts` 的色票（文字與底色對比至少 4.5:1）。
+- 狀態一定有文字，不只靠顏色，例如「營業中」旁的圓點。
+- 時間、價格與數量用等寬數字。
+- 位置固定，只有內容跟著時間變。
+- 可點的元件都要有無障礙標籤，選取狀態要讓 VoiceOver／TalkBack 念出來。
+
+### 「現在」卡片與小工具
+
+上課、下課與放假的判斷在 `src/features/home/now.ts`；iOS 小工具的時間軸（`src/widgets/now-timeline.ts`）用同一份狀態，改其中一邊時兩邊的測試都要跟著更新。小工具版面（`src/widgets/now-widget.tsx`）是 `'widget'` 函式，只能使用 `@expo/ui` 的 SwiftUI 元件、修飾符與函式參數。擴充程式不支援的修飾符（例如 `fixedSize`）會讓小工具變成空白，而且不會顯示錯誤，所以改版面後要以 `ENABLE_WIDGETS=1` 建置，把小工具加到模擬器主畫面確認。
+
+日期鍵使用當地 `YYYY-MM-DD`，透過 `src/lib/dates.ts` 處理；不要以 `toISOString()` 產生日曆日期或菜單週一。遠端資料應有驗證器、錯誤狀態與快取策略；輪詢須在不需要時暫停。
+
+## 修改資料
+
+| 資料               | 修改位置                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| 班級課表           | Data repo 的 `schedules/gaoyi_schedules.json`、`gaoer_schedules.json`、`gaosan_schedules.json`                              |
+| 餐廳               | Data repo 的 `restaurantData.json`，含名稱、座標與營業時間                                                                  |
+| 校方行事曆         | Data repo 的 `calendar/<學期>.json`，目前為 `calendar/115-1.json`；來源與格式以 `src/features/todo/school-calendar.ts` 為準 |
+| 菜單               | Data repo 的 `menus/<週一日期>_<1至5>.png`                                                                                  |
+| 北捷靜態站點／路線 | `src/features/transport/metro-lines.ts`                                                                                     |
+
+資料來源是 [CKApp-Dev/Data](https://github.com/CKApp-Dev/Data)。更新資料時先對照功能內的驗證器；`tools/` 的歷史轉檔工具不保證符合目前格式，使用前須檢查輸出。
+
+## 檢查與 PR
+
+在新分支開發並發 PR。提交前執行：
 
 ```bash
-yarn lint      # 檢查
-yarn format    # 自動排版
+yarn typecheck
+yarn test --runInBand
+yarn lint
 ```
 
-- 沿用周邊程式的命名與縮排習慣。
-- 盡量重用既有的 store / components，不要重造輪子。
+與日期、資料解析或狀態規則有關的變更，應以有意義的回歸測試覆蓋。純邏輯測試放在對應功能附近的 `*.test.ts`；使用 `@jest/globals`，目前 Jest 不需要啟動原生 UI。
 
-## 資料的修改
-- **餐廳資料**：改 `src/data/restaurantData.json`（FoodPage）。
-- **北捷資料**：改 `src/data/metroData.js`（TransportPage）。
-- **課表資料**：改 `src/data/schedules/` 底下依年級分開的三個 JSON（`gaoyi_schedules.json`、`gaoer_schedules.json`、`gaosan_schedules.json`），格式是「每個班一個 `id` + 一份 `schedule`（週一到週五，每天 8 節課的科目陣列）」，同資料夾的 `index.js` 會自動轉成頁面要的格式，不需要手動改 `index.js`。**這份資料現在直接放在這個repo裡，不再放 Data repo**，也不需要網路請求。
-  - ⚠️ `tools/Convert_xlsx_to_json.py` 目前輸出的格式跟這裡不一樣（見 [README 已知問題](README.md#已知問題與待辦)），還不能直接拿來產生這些檔案，要嘛手動比照現有檔案格式整理，要嘛先更新這個工具。
-- **菜單資料**：屬於動態資料，放在 **Data** repo（`menus/` 資料夾）。流程見 README 的 [MenuPage](README.md#menupage-熱食部) 說明，可用 `tools/` 的 `menu_scraper.py`、`menu_visualizer.py` 轉檔。
+在 Android 與 iOS 驗證受影響流程，特別是原生輸入、sheet／dialog、工具列、地圖、離線與重啟後持久資料。改介面時在 iOS 模擬器與 Android 模擬器各看一次，並檢查深色模式與較大的文字大小；版面改變時一併更新設計規格。PR 描述請寫清楚問題、結果、驗證方式及尚未測試的限制，介面改動附上兩個平台的截圖。
 
-## 改版本號
-發版前要同步更新版本（目前為 **3.1**）：
-- Android：`src-capacitor/android/app/build.gradle` 的 `versionCode` 與 `versionName`
-- iOS：`src-capacitor/ios/App/App.xcodeproj/project.pbxproj` 的 `CURRENT_PROJECT_VERSION` 與 `MARKETING_VERSION`（debug & release 都要）
-- 顯示用：`src/pages/AboutPage.vue` 內的版本字串
-- （建議一併更新 `package.json` 的 `version`，目前它落後實際版本）
+## 版本與發布
 
-## 測試
-專案目前**沒有自動化測試**（`yarn test` 只是個 placeholder，會直接回傳成功）。請以手動方式驗證：
-1. `quasar dev` 在瀏覽器測試。
-2. 變動到原生功能時，盡量在實機或模擬器上確認 Android / iOS 行為。
+本機版本來自 `package.json`。`app.config.ts` 接受 `APP_VERSION` 與 `BUILD_NUMBER`；不要手動改生成的 Gradle 或 Xcode 版本。
 
-## 送出 Pull Request
-PR 前自我檢查：
-- [ ] 已跑過 `yarn lint` 與 `yarn format`，沒有 lint 錯誤。
-- [ ] 已在 `quasar dev` 手動測試過受影響的頁面。
-- [ ] 新頁面已在 `routes.js` 登記。
-- [ ] commit message **沒有**誤加 `[deploy] `（除非你真的要發版）。
-- [ ] 若有發版，版本號已在所有該改的地方更新。
-- [ ] PR 描述清楚說明改了什麼、為什麼。
+`vX.Y.Z` tag 與手動執行 build workflow 都會建置、簽署並上傳至 Google Play internal／TestFlight。Tag 必須是數字型 `major.minor.patch`；手動版本來自套件版本，build number 是 workflow run number。一般分支 push 或 `[deploy]` commit 前綴不會觸發發布。
 
-## 聯絡方式
-- 官方 Gmail：ckappofficial@gmail.com
-- 官方 IG：[@ckappofficial](https://www.instagram.com/ckappofficial/)
-- 官方網站：[ckapp-tw.web.app](https://ckapp-tw.web.app/)
+簽署帳密／金鑰存放 GitHub Secrets；本機 API 設定放 `.env.local`。不要提交私鑰、provisioning profile 或真正的 API 帳密。
 
-謝謝你幫助 CK APP 繼續服務未來的建中生！🎒
+**舊版 Capacitor WebView localStorage 由 `src/features/legacy-import` 在首次啟動時匯入。** 修改 store 結構或預設值時，請一併更新該資料夾的轉換／合併邏輯與測試。發布前必須在 Android 與 iOS 上以實際舊版升級驗證匯入結果。
+
+## 聯絡
+
+ckappofficial@gmail.com｜[Instagram](https://www.instagram.com/ckappofficial/)｜[官方網站](https://ckapp-tw.web.app/)

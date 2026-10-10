@@ -1,190 +1,155 @@
 # CK APP 校園行動應用程式
 
-**語言 / Language：** 中文（本頁） ｜ [English](README.en.md)
+**語言 / Language：** 中文（本頁）｜[English](README.en.md)
 
-> 當前版本：**3.1**（`src-capacitor/android/app/build.gradle` 的 `versionName`）　｜　文件最後更新：2026-07
->
-> ⚠️ 注意：`package.json` 的 `version` 欄位目前仍是 `3.0.1`，與實際版本不同步。版本的真正來源是 Android 的 `build.gradle` 與 iOS 的 `project.pbxproj`（見[開發說明](#開發說明)）。
+CK APP 是建中第 77 屆學生彭可翰和楊晨諺於 2024 年開發的校園應用程式，協助學生查看課表、安排待辦、查詢交通與探索附近美食。
 
-## 目錄
-1. [CK APP是什麼？](#ck-app是什麼)
-2. [CK APP架構介紹](#ck-app架構介紹)
-3. [頁面/功能介紹](#頁面功能介紹)
-4. [Store 與其他基礎建設](#store-與其他基礎建設)
-5. [已知問題與待辦](#已知問題與待辦)
-6. [開發說明](#開發說明)
-7. [貢獻](#貢獻)
+目前程式已改為 **React Native + TypeScript + Expo SDK 57**。Android 互動控制項使用 Material 3 / Jetpack Compose，iOS 使用 SwiftUI 控制項與原生導覽；跨平台畫面邏輯仍共用 React Native。`package.json` 的版本目前是 **4.0.0**，正式版本與建置編號由 `app.config.ts` 決定。
 
-## CK APP是什麼？
-CK APP是建中第77屆學生彭可翰和楊晨諺於2024年暑假所開發的應用程式，目的是幫助所有建中生解決生活中遇到的大小困難。CK APP自從2024年9月在iOS和Android雙平台上架至2025年9月共累積2080次下載。我們期許CK APP能夠持續幫助未來的所有建中生。
+介面跟著上課鐘聲設計：校徽的倒三角只用來指出「現在」，滿版的建中藍只給「今天」最上方的「現在」卡片。iOS 分頁使用系統大標題，標題下方一行顯示日期、班級或週次；切換檢視（日／週、熱食部／附近）放在導覽列。各畫面的版面與元件對照見 [設計規格](docs/design/native-ui.md)。
 
-## CK APP架構介紹
-CK APP的主要程式和資料皆位於GitHub，其共有兩個repo——CK_app和Data (其實有第三個repo Proxy，但他現在是廢棄狀態，為過去Heroku之程式)。這個repo（`CK_app`）本身就是Quasar專案的根目錄——`package.json`、`src/`等都直接在repo根目錄下，clone下來後不需要再往下一層資料夾。
+## 功能
 
-### Data
-Data為存放需動態改動之資料，讓CK APP可以直接讀取。目前實際使用中的只剩：
-- menus: 存放熱食部菜單的資料夾（見下方 [MenuPage](#menupage-熱食部) 說明）
+分頁固定為五個：
 
-> 課表資料（原本的 `ClassesSchedule.json`）過去也放在這裡，但校方一度基於隱私權停止提供資料來源，導致這個機制停擺了一段時間。後來取得新的班級課表資料後，我們改成直接把資料打包進 `CK_app` 這個repo本身（`src/data/schedules/`），不再依賴 Data repo或外部網路請求——細節見下方 [SchedulePage](#schedulepage-課表) 說明。
+| 分頁   | 內容                                                                                                                 |
+| ------ | -------------------------------------------------------------------------------------------------------------------- |
+| 今天   | 「現在」卡片（鐘聲軌、上下課倒數、放假與考試日），今日待辦與活動、午餐、回家、釘選的校網消息；右上角班級按鈕開啟設定 |
+| 課表   | 日檢視（附日期的週列、上午／下午、節次色塊、連堂合併）與週檢視（課表格）；自訂科目、單雙週輪替、備註、顏色與重新匯入 |
+| 行事曆 | 月曆（「假」「考」標記、年級篩選）、當日活動與待辦、接下來、所有待辦與分類管理                                       |
+| 美食   | 熱食部：每週菜單圖片、日期週列與放假標示。附近：地圖、營業中／我的最愛篩選、綽號與距離、收藏與隨機選店               |
+| 校園   | 校網（未讀、標籤、釘選、搜尋）、交通（YouBike 與北捷）、建北特約、校慶紀念品、選擇障礙小幫手                         |
 
-### CK_app
-CK_app為CK APP的主體程式，語言是Quasar Framework，本質上為HTML、CSS和JavaScript。當初選用Quasar是因為可以輸出成Android和iOS的app，不需寫兩個不同版本。
+| 其他          | 內容                                                                                                 |
+| ------------- | ---------------------------------------------------------------------------------------------------- |
+| 首次開啟      | 「你是哪一班？」：依年級選班級，或先看看之後再選                                                     |
+| 設定          | 班級、「今天」顯示項目、行事曆年級篩選、重設本機資料、關於                                           |
+| 小工具（iOS） | 「現在」小工具：主畫面小／中尺寸（鐘聲軌、倒數、接下來的課）與鎖定畫面；須以 `ENABLE_WIDGETS=1` 建置 |
 
-以下列出常用檔案/資料夾說明
-- **public**
-	- food: FoodPage的圖標
-	- metro: TransportPage中各路線的圖標
-	- promo: PromoPage 的 logo
-- **src**
-	- **boot**: App 啟動時載入的初始化程式
-		- axios.js: 設定 axios（HTTP 請求）
-		- i18n.js: 初始化多語系（vue-i18n）
-	- **data**
-		- metroData.js: 北捷站點和路線資訊
-		- restaurantData.json: FoodPage餐廳資料 (有想過丟到Data，才可以動態改動，但這樣Android版不知道為什麼無法讀取資料\==)
-		- schedules/: 全校班級課表（高一/高二/高三三個原始 JSON + 一個 `index.js` 把它們轉成頁面要的格式），見 [SchedulePage](#schedulepage-課表)
-	- **i18n**: 多語系字串（目前僅有 `en-US`，尚未真正全面使用）
-	- **pages**: CK APP的核心，大部分的開發工作會在這裡進行（共 12 個頁面，見[頁面/功能介紹](#頁面功能介紹)）
-	- **components / layouts**: 共用元件（如 `EssentialLink.vue`）與版型（`MainLayout.vue`）
-	- **router**
-		- routes.js: 如果有新增頁面要去這裡登記，才可以從其他頁面連結過去
-	- **services**
-		- newsService.js: 讓NewsPage每隔2分鐘自動刷新資料
-	- **store**: 頁面會透過這裡更動本機資料，非常重要（見 [Store 章節](#store-與其他基礎建設)）
-	- **utils**
-		- xmlUtils.js: 解析校網 XML 的工具
-- **tools**（位於 repo 根目錄，與 `src/` 同層，非 Vite 專案的一部分）
-	- Convert_xlsx_to_json.py: 把教務處課表檔(.xls)轉成json，使用說明在檔案裡（⚠️ 輸出格式目前跟 `src/data/schedules/` 用的格式不一致，見[已知問題](#已知問題與待辦)）
-	- menu_scraper.py / menu_visualizer.py: 舊版手動菜單轉圖工具，現已由 Data repo 的 Action 取代（見 MenuPage 說明）
+## 架構與資料
 
-除了GitHub外，我們也有[官方網站](https://ckapp-tw.web.app/) (由 78屆的Ian Wen開發管理)、官方gmail(ckappofficial@gmail.com)和[官方IG帳號](https://www.instagram.com/ckappofficial/)。（過去也曾用Firebase儲存登入使用者的資料，但登入功能與Firebase已完全移除，見[已知問題與待辦](#已知問題與待辦)。）
+| 路徑                            | 用途                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------- |
+| `src/app/`                      | Expo Router 路由、原生 Stack 與功能分頁                                         |
+| `src/features/`                 | 每項功能的畫面、資料轉換與 hooks                                                |
+| `src/features/registry.ts`      | 固定的五個分頁與校園裡的功能                                                    |
+| `src/ui/`                       | 原生 UI 元件：同一份介面（`types.ts`），iOS 以 SwiftUI、Android 以 Compose 實作 |
+| `src/components/`               | 導覽列按鈕、分頁列與圖示對照                                                    |
+| `src/widgets/`                  | iOS「現在」小工具的版面與時間軸                                                 |
+| `src/theme/`、`src/navigation/` | 平台色彩、原生導覽與深色模式                                                    |
+| `src/store/`                    | Zustand 狀態，透過 Expo SQLite 儲存                                             |
+| `src/lib/`                      | HTTP timeout、遠端資料驗證／快取、日期與儲存工具                                |
+| `assets/`                       | App 圖示、啟動畫面與其他靜態圖檔                                                |
+| `app.config.ts`、`plugins/`     | App 身分、版本、原生設定、環境變數與 config plugin                              |
+| `.github/workflows/`            | Android／iOS 建置、簽署與測試通路上傳                                           |
+| `tools/`、`docs/`               | 資料處理工具、設計規格與歷史決策紀錄                                            |
 
-## 頁面/功能介紹
-CK APP目前共有 **12 個頁面**（皆於 `src/router/routes.js` 登記），皆由Quasar Framework寫成。Quasar的檔案(.vue)分為三個部分——\<template>、\<script>、\<style>，即HTML、Javascript和CSS。
+課表、餐廳、校方行事曆與菜單來自 [Data repo](https://github.com/CKApp-Dev/Data)。JSON 資料經過格式驗證後儲存快取，更新失敗時可先顯示上次內容。菜單圖片檔名使用當地日期的週一加上星期序號，例如 `menus/2026-10-05_4.png`。
 
-### HomePage (首頁)
-除了六個頁面的按鈕外，首頁還包含三個動態資訊：目前課程、今日待辦事項、釘選校網內容。
+遠端請求直接由原生 App 發出。校網每 2 分鐘更新；校網與交通輪詢會依畫面焦點／前景狀態暫停。分頁固定為今天、課表、行事曆、美食、校園：熱食部在美食裡，校網、交通、特約、紀念品與小幫手在校園裡。新安裝先顯示「你是哪一班？」；從舊版匯入時若已有班級則略過。
 
-### SchedulePage (課表)
-建中的課表（含高一、高二、高三共81個班級、每天8節課）打包成三個 JSON 檔放在 `src/data/schedules/`（`gaoyi_schedules.json`、`gaoer_schedules.json`、`gaosan_schedules.json`），由同資料夾的 `index.js` 轉成頁面要的格式，並提供班級清單（`CLASS_OPTIONS`）與「目前是第幾節課」的判斷（`getCurrentPeriodName`，會對照各節課真實的上下課時間，包含午休空檔）。
+上課、下課與放假都由課表的鐘聲時間與校方行事曆推算（`src/features/home/now.ts`、`src/features/todo/school-days.ts`）：一節課在鐘響時結束，行事曆列出的放假日與考試日會取代當天的課。熱食部菜單是學校公布的圖片，App 不另外解析菜色。
 
-頁面上「設定班級」和重新整理按鈕會直接切換/重讀本機資料，不需要網路連線。使用者自訂的科目、顏色、備註仍會存在 `localStorage`（見 [Store 章節](#store-與其他基礎建設)），不會被內建課表資料覆蓋，除非手動點重新整理。
+設定中的資料重設會還原個人 store 與設定，並清空記憶體查詢資料。遠端 JSON 快取、菜單圖片磁碟快取與紀念品網站資料不會一併刪除。
 
-> 這個機制在2025年10月一度因校方隱私考量而停用（改成「請自行輸入」），2026年7月才恢復——詳細原因與決策過程見 [`docs/decisions/feature-schedule-data-import/`](docs/decisions/feature-schedule-data-import/restore-schedule-data-import.md)。
+`ios/` 與 `android/` 是 Expo 生成且不提交的專案。持久的原生設定應修改 `app.config.ts` 或 config plugin，再重新生成。參考 [Expo 原生專案生成說明](https://docs.expo.dev/workflow/continuous-native-generation/)。
 
-### TodoPage (行事曆)
-行事曆頁面分為兩個部分：月曆&待辦。詳細運作方式有點複雜，但應該不用改所以就不解釋了:D
+`expo-build-properties` 已啟用 `ios.enableSceneSupport`，讓生成專案採用 iOS scene lifecycle，支援 Xcode 27／iOS 27。變更後須重新生成與編譯，參考 [Expo scene lifecycle 說明](https://github.com/expo/fyi/blob/main/ios-scene-lifecycle.md)。
 
-### TransportPage (交通)
-這是CK APP最龐大的頁面，程式分為YouBike和北捷兩部分。
+## 開發
 
-YouBike部分，我們分別讀取[台北市](https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json)和[新北市](https://data.ntpc.gov.tw/openapi/swagger-ui/index.html?configUrl=%2Fapi%2Fv1%2Fopenapi%2Fswagger%2Fconfig&urls.primaryName=%E6%96%B0%E5%8C%97%E5%B8%82%E6%94%BF%E5%BA%9C%E4%BA%A4%E9%80%9A%E5%B1%80%2863%29#/)YouBike的API。新北市的API比較毒瘤一點，資料分成兩個頁面，所以需要分兩次API call。\
-另外，新增站點有一個搜尋離使用者最近的九個站點的功能。我們本來想直接偵測使用者位置，但這會需要使用者開啟權限才行，然後這東西有點難寫，所以我們暫時放棄。
+需要 Node.js 22+ 與 Yarn Classic。Android 需要 Android Studio／SDK 與 Java 21；iOS 需要 macOS、Xcode 與 CocoaPods。SDK 57 目前原生預設為 Android API 24+、iOS 16.4+。
 
-北捷部分，我們有向北捷公司申請才能拿到他們的API。然後其實使用條款包含下列兩項：
-- 會員需於開發完成後主動通知本公司應用成果資訊,並依本公司需求回饋加值應用內容、用戶數及其他可了解加值應用成效之統計數字作為本公司 API 發展管理之參考。
-- 會員用戶若您超過三個月未使用本公司 API 服務,本公司將有權終止會員帳號,取消會員資格。
+```bash
+git clone https://github.com/CK-APP-Org/CK_app.git
+cd CK_app
+yarn install --frozen-lockfile
+cp .env.example .env.local
+```
 
-但我們沒有鳥他就是了。
+依 `.env.example` 設定後，從 repo 根目錄執行：
 
-### MenuPage (熱食部)
-熱食部通常會在月底把下個月的菜單放到[雲端](https://drive.google.com/drive/folders/1jZTQNkQVCoDVmMPQaG2Ov_Zwu4o4cmQQ)（依學期分資料夾，例如 `115-1`，每週一個 xlsx 檔）。
+```bash
+yarn android --device # 選擇模擬器／裝置，編譯並啟動 Android
+yarn ios --device     # 選擇模擬器／裝置，編譯並啟動 iOS
+yarn start         # 啟動 Metro，供已安裝的開發版本使用
+```
 
-**菜單現在由 Data repo 的 GitHub Action 自動更新**（`.github/workflows/update-menu.yml`）：每天台灣時間 02:00，Action 會透過 Google Drive API 讀取最新兩個學期資料夾內的 xlsx，用 `scripts/` 裡的 scraper/visualizer 產生本週及之後的每日菜單 png，有變更才 commit 到 `menus/`。平日若本週菜單仍缺檔，workflow 會失敗並寄信通知。
-- 需要的設定：在 GCP 啟用 Google Drive API 並建立 API key，存成 Data repo 的 secret `GOOGLE_DRIVE_API_KEY`。
-- 想立刻更新：到 Data repo 的 Actions → Update cafeteria menu → Run workflow。
-- 本機手動執行：`pip install -r scripts/requirements.txt` 後 `GOOGLE_DRIVE_API_KEY=... python scripts/update_menu.py`（可加 `--dry-run` 只解析不輸出）。
-- xlsx 的日期是從表格裡的「週一日期」讀取，不看檔名，所以檔名亂取也沒關係。
+原生依賴或 App 設定改動後，可執行 `npx expo prebuild --clean` 重新生成；這會覆寫生成資料夾中的手動變更。地圖與原生控制項須在原生 App 驗證。
 
-`tools/` 裡的 `menu_scraper.py`、`menu_visualizer.py` 是舊版手動流程，正式版本在 Data repo 的 `scripts/`。
+### 在 macOS 使用 Android Studio
 
-圖片檔名說明：菜單的圖片的檔名命名準則為當週週一之日期以及星期幾。例如2025/9/11為該週之星期四，該週週一為9/8，故9/11的菜單檔名為```2025-09-08_4.png```。然而因為程式有bug，所以目前上架版本中，有時候MenuPage會把週一的日期往前算一天（`toISOString()` 轉成 UTC，台灣時間 08:00 前會變成前一天）。所以 visualizer 同時會輸出一份週日日期的檔名，以9/11的例子就是```2025-09-07_4.png```。
+指令是 `yarn android`（拼字為 **android**）。先在 Android Studio 的 Device Manager 建立並啟動模擬器，再從 repo 根目錄執行 `yarn android --device`。也可連接已啟用 USB 偵錯的 Android 手機；建置前以 `adb devices` 確認裝置已列出。參考 [Expo Android Studio 設定](https://docs.expo.dev/workflow/android-studio-emulator/)。
 
-### FoodPage (美食)
-我們的地圖是用leaflet插件，餐廳資料來源是restaurantData.json。有些店家的營業時間會顯示超過24點，那是因為我們為了讓圖標顏色顯示正常(否則23:30後圖標會變淺綠色，因為程式會以為24點就要關門了，但實際上店家營業時間可能到凌晨2點)。以後可以修正。\
-前面有講過我們有想把restaurantData.json丟到Data repo，方便動態修正資料，但Android版不知道是什麼bug，抓得到GitHub的資料但創建圖標的時候就會顯示不出來。可以再試試看。
+Android debug 版本以 **CK APP Dev**（`org.capacitor.quasar.ckapp.dev`）安裝，可與商店版並存，資料各自獨立。這可避免商店版與本機 debug APK 簽署金鑰不同時的 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。若 `android/` 已存在，先套用一次設定再重新編譯：
 
-### NewsPage (校網)
-校網頁面的資料來源是[建中校網](https://www.ck.tp.edu.tw/nss/p/index)重要公告和最新消息的欄位中長得像Wi-Fi符號的按鈕，點下去會有XML檔可以讀。\
-前面提過，newsService.js每隔兩分鐘會在背景自動抓校網資料。
+```bash
+npx expo prebuild --platform android --no-install
+yarn android --device
+```
 
-### PromoPage (建北特約)
-「建北特約」目錄頁。內含特約使用準則，並以分區按鈕（建中、北車、西門、其他）連結到外部網站 [`cktfgpromo.cksc.tw`](https://cktfgpromo.cksc.tw)。
+Release 版本維持 `org.capacitor.quasar.ckapp`；iOS 維持既有 App 身分。若要本機建置 Android release，使用 `npx expo run:android --variant release`，讓 Expo 啟動 release 的 application ID。更新原本 App 與驗證舊版資料匯入，仍須使用原本的金鑰簽署。參考 [Expo 版本啟動選項](https://docs.expo.dev/guides/local-app-development/#local-builds-with-android-product-flavors)。
 
-### SouvenirPage (紀念品)
-以 iframe 內嵌外部紀念品商店 [`souvenir.cksc.tw/auth`](https://souvenir.cksc.tw/auth)，本身幾乎沒有自己的邏輯，主要當作 App 內的入口。
+若 Android Maps 金鑰限制了套件名稱與簽署憑證，也須允許 Dev 套件及其 debug 憑證。參考 [Expo App 版本設定](https://docs.expo.dev/build-reference/variants/)。
 
-### HelpPage (選擇障礙小幫手)
-小工具頁：使用者每行輸入一個選項，按下按鈕後隨機幫你選一個。純前端、無外部資料。
+若終端機找不到 SDK，將以下設定加入 `~/.zshrc`，路徑依 Android Studio 顯示的 SDK 位置調整，再開啟新的終端機：
 
-### SettingsPage
-滿直觀的。可以切換班級（會連動 SchedulePage）、調整首頁要顯示哪些區塊、自訂工具列。
+```bash
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+```
 
-### AboutPage
-顯示版本資訊（目前為 3.1）。版本要記得改（見[開發說明](#開發說明)）。之後應該要增加開發者介紹。
+若要直接用 Android Studio 建置，先執行 `npx expo prebuild --platform android`，再用 Android Studio 開啟生成的 `android/` 資料夾，將 Gradle JDK 設為 JDK 21，執行 `app` configuration。另開終端機保持 `yarn start` 運行，提供 debug App 的 JavaScript。原生依賴或 App 設定改動後須重新生成與編譯。
 
-> 另外還有 `ErrorNotFound.vue` 作為找不到路由時的 404 頁（不算在 12 個功能頁面內）。
+### iOS 前置設定與 CocoaPods
 
-## Store 與其他基礎建設
+Android Studio 提供 Android 工具；iOS 建置使用 Xcode。先開啟 Xcode 完成初始設定，在 **Settings → Locations** 選擇其 Command Line Tools，並在 **Settings → Components** 安裝 iOS 模擬器 runtime，再執行 `yarn ios --device` 選擇模擬器或已連接的 iPhone。參考 [Expo iOS 模擬器設定](https://docs.expo.dev/workflow/ios-simulator/)。
 
-### Store（Vuex）
-`src/store/` 是 App 的本機狀態中心，**非常重要**。各頁面透過它讀寫資料，並由 `localStoragePlugin.js` 自動同步到瀏覽器 / 裝置的 `localStorage`，所以資料在重開 App 後仍會保留。
+建置前確認 `pod --version` 可執行。若 CocoaPods 已安裝為使用者 gem，但 `PATH` 找不到 `pod`，將其執行檔目錄加入 `~/.zshrc`，再開啟新的終端機：
 
-目前共有 7 個模組（`src/store/modules/`）：
+```bash
+export PATH="$(ruby -r rubygems -e 'puts Gem.user_dir')/bin:$PATH"
+```
 
-| 模組 | 對應功能 |
-| --- | --- |
-| `youbike` | YouBike 站點資料與我的最愛站點（TransportPage） |
-| `metro` | 北捷站點/路線狀態（TransportPage） |
-| `news` | 校網公告快取（搭配 newsService 每 2 分鐘更新，NewsPage） |
-| `schedule` | 班級課表與目前設定的班級（SchedulePage） |
-| `todo` | 行事曆與待辦事項（TodoPage） |
-| `food` | FoodPage 餐廳相關狀態 |
-| `settings` | App 設定（SettingsPage） |
+尚未安裝 CocoaPods 時，依 [CocoaPods 安裝說明](https://guides.cocoapods.org/using/getting-started.html) 設定；已有 [Homebrew](https://formulae.brew.sh/formula/cocoapods) 時也可使用 `brew install cocoapods`。`spawn brew ENOENT` 代表 Expo 的備援安裝流程找不到 Homebrew；請先檢查現有的 CocoaPods 安裝與 `PATH`。
 
-其他：
-- `localStoragePlugin.js`：把 store 內容持久化到 `localStorage`。
-- `clearALL` action / `CLEAR_DATA` mutation：清除所有本機資料、把各模組重設為預設值。
+`yarn start` 只啟動 Metro，不會編譯原生模組。新增原生依賴後須重新編譯 App；JavaScript 重新載入無法替已安裝的 App 加入缺少的原生模組。參考 [Expo 本機建置流程](https://docs.expo.dev/guides/local-app-development/)。
 
-### i18n（多語系）
-專案有用 `vue-i18n` 搭好多語系骨架（`src/boot/i18n.js`、`src/i18n/`），預設語系為 `en-US`。但目前實際上只有 `en-US` 一份字串、且大部分介面文字仍直接寫死成中文，所以多語系還沒真正派上用場——未來若要做中英切換，這裡是起點。
+| 環境變數                           | 用途                                                                                                                                      |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `METRO_API_USER`、`METRO_API_PASS` | 北捷 API 帳密，向維護者索取                                                                                                               |
+| `GOOGLE_MAPS_API_KEY`              | Android Maps SDK 金鑰；未設定時顯示提示，仍可使用餐廳／站點列表，iOS 使用 Apple Maps                                                      |
+| `ENABLE_WIDGETS`                   | 選填；設為 `1` 時在 prebuild 加入 iOS「現在」小工具（擴充目標與 App Group）。商店版本須先在 Apple Developer 註冊 App Group 與擴充的描述檔 |
+| `APP_VERSION`                      | 選填；覆寫 `package.json` 版本，CI 由 tag／套件版本設定                                                                                   |
+| `BUILD_NUMBER`                     | 選填；本機預設 `1`，CI 使用 workflow run number                                                                                           |
 
-## 已知問題與待辦
-把散落在各頁說明裡的 TODO / 已知 bug 集中如下，方便接手的人一眼看到：
+`.env.local` 不提交。北捷帳密與 Maps 金鑰會隨 App 打包，不能視為伺服器端秘密；若需保護帳密，必須另建後端。
 
-- [ ] **版本號不同步**：`package.json` 為 `3.0.1`，實際上架版本為 `3.1`。可考慮統一來源。
-- [ ] **課表轉檔工具與新資料格式不一致**：`tools/Convert_xlsx_to_json.py` 輸出的是舊格式（單一 `ProcessedClassesSchedule.json`，原本是要手動貼到 Data repo），但 SchedulePage 現在讀的是 `src/data/schedules/` 底下三份依年級分開、形狀也不同的 JSON。未來要換學期課表時，這個工具需要先更新（或重寫）才能直接產生新格式的檔案。
-- [ ] **MenuPage 日期 off-by-one**：MenuPage 有時把週一日期往前算一天；目前靠 `menu_visualizer` 多輸出一份檔名迴避，根因尚未修。
-- [ ] **FoodPage 營業時間 hack**：為了圖標顏色正常，部分店家時間寫成超過 24 點，未來應正規化處理跨夜營業。
-- [ ] **restaurantData 無法動態化**：想搬到 Data repo 動態更新，但 Android 版抓得到資料卻畫不出圖標，待查。
-- [ ] **TransportPage 定位功能**：原本想自動偵測使用者位置找最近站點，因權限與實作成本暫時放棄。
-- [ ] **i18n 尚未落實**：骨架已有但介面文字多為寫死中文。
-- [ ] **AboutPage**：可加入開發者介紹。
+## 驗證
 
-> 登入功能與 Firebase 已經在 [Phase 3 重構](docs/decisions/phase-3-remove-login/) 中整個移除了，不再是待辦事項。想了解過去重構的細節（含安全性修正、程式碼整理），可以看 [`docs/refactoring-plan.md`](docs/refactoring-plan.md) 與 [`docs/decisions/`](docs/decisions/) 底下各任務的說明文件。
+```bash
+yarn typecheck
+yarn test --runInBand
+yarn lint
+```
 
-## 開發說明
-### 在電腦以網頁模擬
-1. 下載Node.js (https://nodejs.org/en/download/)
-2. 下載Git (https://git-scm.com/downloads)
-3. 開啟終端機(Terminal)並輸入 `git clone https://github.com/CK-APP-Org/CK_app.git`
-4. 進入資料夾 `cd CK_app`
-5. 安裝Quasar CLI `npm install -g @quasar/cli`
-6. 安裝套件 `yarn install`
-7. 啟動網頁模擬 `quasar dev`
-8. 在瀏覽器開啟 `http://localhost:9000`
+Jest 檢查日期、課表、「現在」卡片狀態、行事曆、營業時間、RSS、交通與小工具時間軸等純邏輯。測試不取代原生操作驗證：請確認雙平台的輸入、分頁、sheet、地圖、離線快取、淺色／深色模式與 App 重啟後的資料保存。介面改動以 iOS 模擬器與 Android 模擬器各看一次，元件須同時有 SwiftUI 與 Compose 實作（見 [設計規格](docs/design/native-ui.md)）。
 
-### 上架 (Android)
-[![Build (& Deploy to Google Play) Android APP](https://github.com/CK-APP-Org/CK_app/actions/workflows/build_android.yml/badge.svg)](https://github.com/CK-APP-Org/CK_app/actions/workflows/build_android.yml)
-1. 在 `src-capacitor\android\app\build.gradle` 改版本 (`versionCode` & `versionName`)
-2. (a) 執行 Github Action - Deploy Android APP to Google Play；或 (b) 在commit時commit message前加入`[deploy] `，將自動嘗試上傳&上架
+## 發版與簽署
 
-### 上架 (iOS)
-[![Build (& Deploy to TestFlight) iOS APP](https://github.com/CK-APP-Org/CK_app/actions/workflows/build_ios.yml/badge.svg)](https://github.com/CK-APP-Org/CK_app/actions/workflows/build_ios.yml)
-1. 在 `src-capacitor\ios\App\App.xcodeproj\project.pbxproj` 改版本 (`CURRENT_PROJECT_VERSION` & `MARKETING_VERSION`) (debug & release 都要)
-2. (a) 執行 Github Action - Deploy iOS App to TestFlight；或 (b) 在commit時commit message前加入`[deploy] `，將自動嘗試上傳&上架
+[Android workflow](.github/workflows/build_android.yml) 與 [iOS workflow](.github/workflows/build_ios.yml) 在推送 `vX.Y.Z` tag 或手動執行時，會先跑 lint／型別／測試，再生成原生專案並建置。**兩種方式都會上傳到 Google Play internal 或 TestFlight**；tag 另會附加檔案到 GitHub Release。一般分支 push 與 `[deploy]` commit 前綴不會觸發這兩個 workflow。
 
-> ⚠️ 這兩個 GitHub Action 都會在push到 `main` 且改到程式碼時自動**build**（但不會上架）。真正觸發**上架**（送到 Google Play / TestFlight）需要滿足其中一個條件：手動在 GitHub Actions 頁面點「Run workflow」，或是讓push到 `main` 的那個commit（例如merge PR時的merge commit）訊息開頭是`[deploy] `。合併PR時GitHub預設不會這樣命名merge commit，所以一般merge PR不會不小心觸發上架。
+Tag 版本必須是數字型 `major.minor.patch`；手動執行採 `package.json` 版本。`BUILD_NUMBER` 使用各 workflow 的 run number，維護者須確認高於既有商店 build。App 身分維持 `org.capacitor.quasar.ckapp`。
 
-## 貢獻
-歡迎接手與貢獻！提交 PR 前請先閱讀 [貢獻指南 (CONTRIBUTING.md)](CONTRIBUTING.md)。
+Android 由 Gradle 使用既有 `PLAY_SIGNING_KEY`、`PLAY_SIGNING_KEY_ALIAS`、`PLAY_SIGNING_KEY_STORE_PASSWORD`、`PLAY_SIGNING_KEY_PASSWORD` 簽署 APK／AAB；`SERVICE_ACCOUNT_JSON` 負責 Play 上傳。iOS 使用 `BUILD_CERTIFICATE_BASE64`、`P12_PASSWORD`、`BUILD_PROVISION_PROFILE_BASE64`、`KEYCHAIN_PASSWORD`，保留 `Github Actions` profile 與 team `FJX3SGU9AL`。TestFlight 使用既有 `APPSTORE_API_PRIVATE_KEY` secret、`APPSTORE_ISSUER_ID` 與 `APPSTORE_API_KEY_ID` variables。建置也需要前述 API 設定。原生簽署流程可參考 [Expo release build 文件](https://docs.expo.dev/guides/local-app-production/)。
+
+## 發布更新前必須完成的項目
+
+**舊版資料匯入需要實機驗證。** 新版 Zustand 使用 Expo SQLite，與舊版 Capacitor WebView 的 localStorage 分開。`src/features/legacy-import` 會在首次啟動時以隱藏 WebView 讀取舊版的待辦、活動、課表修改、班級、最愛、釘選、追蹤車站與設定，轉換後合併到新版（不覆蓋新版已建立的資料），詳見 [docs/native-rewrite-progress.md](docs/native-rewrite-progress.md)。正式提供既有使用者更新前，必須在 Android 與 iOS 上以實際的舊版（例如 3.4.0）安裝、建立資料後升級，確認資料完整匯入。
+
+網路來源首次讀取失敗且沒有快取時，功能會顯示錯誤／空白狀態。商店簽署、舊版資料匯入與雙平台實機操作仍需要完整發布驗證。
+
+## 貢獻與聯絡
+
+請先閱讀 [貢獻指南](CONTRIBUTING.md)。官方 Gmail：ckappofficial@gmail.com；[Instagram](https://www.instagram.com/ckappofficial/)；[官方網站](https://ckapp-tw.web.app/)。
