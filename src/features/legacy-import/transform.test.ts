@@ -1,14 +1,8 @@
-import { describe, expect, jest, test } from '@jest/globals';
+import { describe, expect, test } from '@jest/globals';
 
 import { toDateKey } from '@/lib/dates';
-import { defaultToolbar } from '@/store/settings';
 
 import { hasLegacyData, toHexColor, transformLegacyStore } from './transform';
-
-// normalizeToolbar lives in the settings store, which persists through SQLite.
-jest.mock('@/lib/storage', () => ({
-  persistStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
-}));
 
 /** Calendar day in Taipei, where the previous app's users saved these dates. */
 const taipeiDay = (date: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(date);
@@ -189,7 +183,7 @@ describe('legacy store transform', () => {
     expect(local.todo?.todos?.map((todo) => todo.date)).toEqual([toDateKey(new Date('2026-10-03T16:00:00.000Z')), '2026-10-09']);
   });
 
-  test('keeps pins, favourites, stations, toolbar and widgets, dropping junk and duplicates', () => {
+  test('keeps pins, favourites, stations and widgets, dropping junk and duplicates', () => {
     expect(result.news).toEqual({
       pinned: [
         { title: '段考公告', link: 'https://www.ck.tp.edu.tw/nss/p/1', pubDate: '2026-09-30T02:00:00.000Z' },
@@ -206,36 +200,10 @@ describe('legacy store transform', () => {
       ],
       metro: ['中正紀念堂', '台北車站'],
     });
-    expect(result.settings).toEqual({
-      toolbar: [
-        { id: 'food', visible: true },
-        { id: 'promo', visible: false },
-        { id: 'souvenir', visible: false },
-        { id: 'schedule', visible: true },
-        { id: 'todo', visible: true },
-        { id: 'transport', visible: true },
-        // Only four tabs fit next to 首頁.
-        { id: 'menu', visible: false },
-        { id: 'news', visible: false },
-      ],
-      homeWidgets: { schedule: true, news: false },
-    });
+    // The old toolbar (settings.menuItems) stays behind: the tab bar is fixed.
+    // displayScheduleWidget is dropped too: 今天's 現在 card is always shown.
+    expect(result.settings).toEqual({ homeWidgets: { news: false } });
     expect(hasLegacyData(result)).toBe(true);
-  });
-
-  test('maps toolbar entries by link, then label, and fills in features the old app lacked', () => {
-    const toolbar = (menuItems: unknown) => transformLegacyStore({ settings: { menuItems } }).settings?.toolbar;
-    expect(toolbar([
-      { label: '首頁', link: '/', visible: true, fixed: true },
-      { label: '校網', link: '#/news', visible: true },
-      { label: '建北特約', link: '/old-promo', visible: true },
-      { label: '?', link: 5, visible: true },
-    ])?.slice(0, 3)).toEqual([{ id: 'news', visible: true }, { id: 'promo', visible: true }, { id: 'souvenir', visible: false }]);
-    // The old default showed every entry; the first four fit.
-    expect(toolbar(['promo', 'souvenir', 'schedule', 'todo', 'transport', 'menu', 'food', 'news']
-      .map((id) => ({ link: `/${id}`, visible: true })))).toEqual(defaultToolbar());
-    expect(toolbar([{ label: '首頁', link: '/' }])).toBeUndefined();
-    expect(toolbar('menu')).toBeUndefined();
   });
 
   test('imports what is valid from missing, partial or junk state without throwing', () => {

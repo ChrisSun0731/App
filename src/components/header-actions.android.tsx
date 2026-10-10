@@ -6,10 +6,12 @@ import {
   Icon,
   IconButton,
   Row,
+  SegmentedButton,
+  SingleChoiceSegmentedButtonRow,
   Text,
   TextButton,
 } from '@expo/ui/jetpack-compose';
-import { size } from '@expo/ui/jetpack-compose/modifiers';
+import { padding, semantics, size, width } from '@expo/ui/jetpack-compose/modifiers';
 import { Stack } from 'expo-router';
 import { useState } from 'react';
 import type { ImageSourcePropType } from 'react-native';
@@ -36,11 +38,14 @@ type MenuItem = Extract<HeaderItem, { kind: 'menu' }>;
  * components: icon buttons, text buttons and an overflow dropdown menu.
  */
 export function HeaderActions({ left, right }: HeaderActionsProps) {
+  // Both sides are always set, so a side left empty clears what an earlier
+  // view on the same screen put there (美食's 熱食部 ‹ 本週 › when 附近 shows);
+  // undefined is the default (the back button on a pushed screen).
   return (
     <Stack.Screen
       options={{
-        ...(left?.length ? { headerLeft: () => <ActionRow items={left} /> } : null),
-        ...(right?.length ? { headerRight: () => <ActionRow items={right} /> } : null),
+        headerLeft: left?.length ? () => <ActionRow items={left} /> : undefined,
+        headerRight: right?.length ? () => <ActionRow items={right} /> : undefined,
       }}
     />
   );
@@ -74,13 +79,49 @@ function Action({ item }: { item: HeaderItem }) {
       return <HeaderIconButton item={item} />;
     case 'text':
       return (
-        <TextButton onClick={item.onPress} enabled={!item.disabled}>
+        <TextButton
+          onClick={item.onPress}
+          enabled={!item.disabled}
+          modifiers={item.accessibilityLabel ? [semantics({ contentDescription: item.accessibilityLabel })] : undefined}>
           <Text>{item.label}</Text>
         </TextButton>
       );
     case 'menu':
       return <HeaderMenu item={item} />;
+    case 'segmented':
+      return <HeaderSegmented item={item} />;
+    case 'space':
+      return <Box modifiers={[size(item.width ?? 8, 1)]} />;
   }
+}
+
+/** Material segmented buttons sized to their labels, e.g. 熱食部 / 附近. */
+function HeaderSegmented({ item }: { item: Extract<HeaderItem, { kind: 'segmented' }> }) {
+  return (
+    // SegmentedButton derives its corner shapes from its index among the
+    // row's native children, so the buttons must be direct children.
+    // The buttons share the row's width equally and the selected one adds a
+    // check, so the row is sized for the longest label with its check.
+    <SingleChoiceSegmentedButtonRow
+      modifiers={[
+        padding(4, 0, 4, 0),
+        width(item.options.length * (Math.max(...item.options.map((option) => option.label.length)) * 16 + 56)),
+      ]}>
+      {item.options.map((option) => (
+        <SegmentedButton
+          key={option.value}
+          selected={option.value === item.value}
+          onClick={() => item.onChange(option.value)}
+          modifiers={[semantics({ contentDescription: `${item.label}：${option.label}` })]}>
+          <SegmentedButton.Label>
+            <Text maxLines={1} style={{ typography: 'labelLarge' }}>
+              {option.label}
+            </Text>
+          </SegmentedButton.Label>
+        </SegmentedButton>
+      ))}
+    </SingleChoiceSegmentedButtonRow>
+  );
 }
 
 function HeaderIconButton({ item }: { item: Extract<HeaderItem, { kind: 'icon' }> }) {

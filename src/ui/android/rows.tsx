@@ -18,10 +18,12 @@ import {
   type MaterialColors,
 } from '@expo/ui/jetpack-compose';
 import {
+  border,
   clickable,
   clip,
   combinedClickable,
   fillMaxWidth,
+  height,
   padding,
   semantics,
   Shapes,
@@ -43,6 +45,7 @@ import type {
   DateRowProps,
   RowAccessory,
   RowAction,
+  RowMark,
   RowProps,
   ToggleRowProps,
 } from '../types';
@@ -92,6 +95,14 @@ export function Row({
   icon,
   iconColor,
   dotColor,
+  dotShape = 'dot',
+  mark,
+  titleAside,
+  subtitleDotColor,
+  note,
+  tags,
+  strong = false,
+  detailProminent = false,
   background,
   badge,
   emphasized = false,
@@ -113,7 +124,7 @@ export function Row({
   // ListItem merges its descendants into one accessibility node. An explicit
   // description wins over the merged texts, so it lists everything the row
   // shows; inline footer elements add their own descriptions to it.
-  const label = accessibilityLabel ?? joinLabel([title, overline, subtitle, detail, badge]);
+  const label = accessibilityLabel ?? joinLabel([...(tags ?? []), title, titleAside, overline, subtitle, note, detail, badge]);
   const modifiers = [
     semantics({ contentDescription: label }),
     ...pressModifiers(disabled ? undefined : onPress, hasActions ? () => setMenuOpen(true) : undefined),
@@ -124,10 +135,15 @@ export function Row({
       color={titleColor}
       maxLines={titleLines}
       overflow="ellipsis"
-      style={{ typography: 'bodyLarge', fontWeight: emphasized ? '600' : undefined }}>
+      style={{ typography: 'bodyLarge', fontWeight: strong ? '700' : emphasized ? '600' : undefined }}>
       {title}
     </Text>
   );
+  const asideText = titleAside ? (
+    <Text color={m.onSurfaceVariant} maxLines={1} style={{ typography: 'bodyMedium' }}>
+      {titleAside}
+    </Text>
+  ) : null;
 
   // Every ListItem row below returns its Section-controlled leading divider
   // next to the item (see divider.tsx); both land in the card's column.
@@ -135,39 +151,58 @@ export function Row({
     <>
       <RowDivider />
       <ListItem colors={rowColors(m, disabled, background)} modifiers={modifiers}>
-        {overline ? (
+        {overline || tags?.length ? (
           <ListItem.OverlineContent>
-            <Text color={titleColor} style={{ typography: 'labelMedium' }}>
-              {overline}
-            </Text>
+            {tags?.length ? (
+              <FlowRow horizontalArrangement={{ spacedBy: 4 }} verticalArrangement={{ spacedBy: 4 }}>
+                {tags.map((tag) => (
+                  <Tag key={tag} text={tag} />
+                ))}
+              </FlowRow>
+            ) : (
+              <Text color={titleColor} style={{ typography: 'labelMedium' }}>
+                {overline}
+              </Text>
+            )}
           </ListItem.OverlineContent>
         ) : null}
         <ListItem.HeadlineContent>
-          {badge ? (
-            // A FlowRow puts the badge right after a short title and moves it
-            // under a long one instead of squeezing the title.
+          {badge || asideText ? (
+            // A FlowRow puts the badge or nickname right after a short title
+            // and moves it under a long one instead of squeezing the title.
             <FlowRow horizontalArrangement={{ spacedBy: 8 }} verticalArrangement={{ spacedBy: 4 }}>
               {titleText}
-              <Badge label={badge} />
+              {asideText}
+              {badge ? <Badge label={badge} /> : null}
             </FlowRow>
           ) : (
             titleText
           )}
         </ListItem.HeadlineContent>
-        {subtitle || footer ? (
+        {subtitle || note || footer ? (
           <ListItem.SupportingContent>
             <Column verticalArrangement={{ spacedBy: 6 }}>
-              {subtitle ? <Text style={{ typography: 'bodyMedium' }}>{subtitle}</Text> : null}
+              {subtitle ? (
+                <ComposeRow verticalAlignment="center" horizontalArrangement={{ spacedBy: 6 }}>
+                  {subtitleDotColor ? <Box modifiers={[size(8, 8), clip(Shapes.Circle), backgroundModifier(fade(subtitleDotColor))]} /> : null}
+                  <Text color={emphasized ? fade(m.primary) : undefined} style={{ typography: 'bodyMedium' }}>
+                    {subtitle}
+                  </Text>
+                </ComposeRow>
+              ) : null}
+              {note ? <Text style={{ typography: 'bodyMedium' }}>{note}</Text> : null}
               {footer}
             </Column>
           </ListItem.SupportingContent>
         ) : null}
-        {icon || dotColor ? (
+        {icon || dotColor || mark ? (
           <ListItem.LeadingContent>
             {icon ? (
               <Icon source={iconSource(icon)} size={24} tint={fade(iconColor ?? m.primary)} />
+            ) : mark ? (
+              <Mark mark={mark} fade={fade} />
             ) : (
-              <Dot color={fade(dotColor ?? m.primary)} />
+              <Dot color={fade(dotColor ?? m.primary)} square={dotShape === 'square'} />
             )}
           </ListItem.LeadingContent>
         ) : null}
@@ -175,7 +210,15 @@ export function Row({
           <ListItem.TrailingContent>
             <ComposeRow verticalAlignment="center" horizontalArrangement={{ spacedBy: 4 }}>
               {detail ? (
-                <Text maxLines={2} overflow="ellipsis" style={{ typography: 'bodyMedium', textAlign: 'end' }}>
+                <Text
+                  color={detailProminent ? fade(m.onSurface) : undefined}
+                  maxLines={2}
+                  overflow="ellipsis"
+                  style={
+                    detailProminent
+                      ? { typography: 'bodyLarge', fontWeight: '600', textAlign: 'end' }
+                      : { typography: 'bodyMedium', textAlign: 'end' }
+                  }>
                   {detail}
                 </Text>
               ) : null}
@@ -187,7 +230,7 @@ export function Row({
                   <Icon
                     source={iconSource(toggle.active ? toggle.activeIcon : toggle.icon)}
                     size={24}
-                    tint={toggle.active ? m.primary : m.onSurfaceVariant}
+                    tint={toggle.active ? (toggle.activeColor ?? m.primary) : m.onSurfaceVariant}
                     contentDescription={toggle.label}
                   />
                 </IconButton>
@@ -204,11 +247,80 @@ export function Row({
   );
 }
 
-/** Leading colour dot, centred in the 24dp slot an icon would take so titles line up. */
-function Dot({ color }: { color: string }) {
+/** Leading colour dot (or an event's small square), centred in the 24dp slot an icon would take so titles line up. */
+function Dot({ color, square = false }: { color: string; square?: boolean }) {
   return (
     <Box modifiers={[size(24, 24)]} contentAlignment="center">
-      <Box modifiers={[size(12, 12), clip(Shapes.Circle), backgroundModifier(color)]} />
+      <Box modifiers={[size(12, 12), clip(square ? Shapes.RoundedCorner(3) : Shapes.Circle), backgroundModifier(color)]} />
+    </Box>
+  );
+}
+
+/** A leading text mark: 考, a date (四 over 8), a list number or a period badge in the subject's colours. */
+function Mark({ mark, fade }: { mark: RowMark; fade: (color: string) => string }) {
+  const m = useM3();
+  switch (mark.kind) {
+    case 'glyph':
+      return (
+        <Box modifiers={[size(24, 24)]} contentAlignment="center">
+          <Text color={fade(m.onSurface)} style={{ typography: 'titleSmall', fontWeight: '700' }}>
+            {mark.text}
+          </Text>
+        </Box>
+      );
+    case 'index':
+      return (
+        <Box modifiers={[size(24, 24)]} contentAlignment="center">
+          <Text color={fade(m.onSurfaceVariant)} style={{ typography: 'bodyLarge' }}>
+            {mark.text}
+          </Text>
+        </Box>
+      );
+    case 'date':
+      return (
+        <Column modifiers={[width(40)]} horizontalAlignment="center">
+          <Text color={fade(m.onSurfaceVariant)} style={{ typography: 'labelSmall' }}>
+            {mark.weekday}
+          </Text>
+          <Text color={fade(m.onSurface)} style={{ typography: 'titleLarge', fontWeight: '600' }}>
+            {mark.day}
+          </Text>
+        </Column>
+      );
+    case 'period': {
+      const shape = [width(40), height(mark.lines.length > 1 ? 52 : 40), clip(Shapes.RoundedCorner(12))];
+      return (
+        <Box
+          contentAlignment="center"
+          modifiers={
+            mark.empty
+              ? [...shape, border(1.5, m.outlineVariant)]
+              : [...shape, backgroundModifier(mark.fill ?? m.surfaceContainerHighest)]
+          }>
+          <Column horizontalAlignment="center">
+            {mark.lines.map((line, index) => (
+              <Text
+                key={`${index}-${line}`}
+                color={fade(mark.empty ? m.outline : (mark.ink ?? m.onSurfaceVariant))}
+                style={{ typography: 'titleMedium', fontWeight: '700' }}>
+                {line}
+              </Text>
+            ))}
+          </Column>
+        </Box>
+      );
+    }
+  }
+}
+
+/** A small grey tag over a title, e.g. 116升學. */
+function Tag({ text }: { text: string }) {
+  const m = useM3();
+  return (
+    <Box modifiers={[clip(Shapes.RoundedCorner(6)), backgroundModifier(m.surfaceContainerHighest), padding(6, 2, 6, 2)]}>
+      <Text color={m.onSurfaceVariant} maxLines={1} style={{ typography: 'labelSmall', fontWeight: '600' }}>
+        {text}
+      </Text>
     </Box>
   );
 }

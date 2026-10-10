@@ -5,6 +5,8 @@ import {
   formatNewsTime,
   groupNews,
   lastUpdatedFooter,
+  newsSubtitle,
+  newsTags,
   partialFailureMessage,
   partialFailureTitle,
   searchNews,
@@ -75,5 +77,19 @@ describe('news texts', () => {
     const item = news('段考公告', '2026-10-04T01:00:00.000Z');
     expect(shareContent(item, 'ios')).toEqual({ message: '段考公告', url: item.link });
     expect(shareContent(item, 'android')).toEqual({ title: '段考公告', message: `段考公告\n${item.link}` });
+  });
+});
+
+describe('校園 rows', () => {
+  it('leading bracketed labels become tags', () => {
+    expect(newsTags('【轉知】【升學】臺大特殊選才')).toEqual({ tags: ['轉知', '升學'], title: '臺大特殊選才' });
+    expect(newsTags('115學年度班週會')).toEqual({ tags: [], title: '115學年度班週會' });
+    expect(newsTags('【轉知】')).toEqual({ tags: [], title: '【轉知】' });
+  });
+
+  it('the subtitle names the day and the feeds', () => {
+    const at = new Date(2026, 9, 8, 16, 44).toISOString();
+    expect(newsSubtitle({ title: 'a', link: '', pubDate: at, feeds: ['latest'] })).toBe('10月8日 · 最新消息');
+    expect(newsSubtitle({ title: 'a', link: '', pubDate: 'x' })).toBe('');
   });
 });

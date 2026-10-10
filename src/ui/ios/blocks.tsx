@@ -5,7 +5,9 @@ import {
   HStack,
   Image,
   Label,
+  Overlay,
   ProgressView,
+  Rectangle,
   RNHostView,
   ScrollView,
   Spacer,
@@ -16,6 +18,8 @@ import {
 import {
   accessibilityAddTraits,
   accessibilityElement,
+  accessibilityHint,
+  accessibilityHidden,
   accessibilityLabel,
   aspectRatio,
   background,
@@ -23,20 +27,27 @@ import {
   buttonStyle,
   contentShape,
   controlSize,
+  disabled,
   font,
   foregroundStyle,
   frame,
+  monospacedDigit,
   multilineTextAlignment,
+  onGeometryChange,
+  opacity,
   padding,
   shapes,
   textSelection,
   type ModifierConfig,
 } from '@expo/ui/swift-ui/modifiers';
+import { useContext, useState } from 'react';
 import { Platform, View } from 'react-native';
 
 import { usePalette } from '@/theme/palette';
 
+import { fitHeight, useRestTop, ViewportContext } from '../fit';
 import type {
+  ChoiceGridProps,
   EmbeddedProps,
   EmptyStateProps,
   FilterChipsProps,
@@ -48,20 +59,33 @@ import type {
 import { NO_INSETS, primaryText, QUIET_FILL, secondaryText, useRowChrome } from './chrome';
 import { chunk, iosMajorVersion, sf } from './helpers';
 
-/** Body text, or a large bold line (e.g. the help screen's pick). */
-export function TextBlock({ text, secondary = false, size = 'body', selectable = false }: TextBlockProps) {
+/**
+ * Body text, a large bold line (e.g. the help screen's pick) or a page title,
+ * optionally under the CK 倒三角.
+ */
+export function TextBlock({ text, secondary = false, size = 'body', brandMark = false, selectable = false }: TextBlockProps) {
+  const palette = usePalette();
   const chrome = useRowChrome();
-  const large = size === 'large';
-  return (
+  const textView = (extra: ModifierConfig[]) => (
     <Text
       modifiers={[
-        font({ textStyle: large ? 'title2' : 'body', weight: large ? 'bold' : 'regular' }),
+        size === 'title'
+          ? font({ textStyle: 'largeTitle', weight: 'bold' })
+          : font({ textStyle: size === 'large' ? 'title2' : 'body', weight: size === 'large' ? 'bold' : 'regular' }),
         secondary ? secondaryText : primaryText,
+        ...(size === 'title' ? [accessibilityAddTraits(['isHeader'])] : []),
         ...(selectable ? [textSelection(true)] : []),
-        ...chrome,
+        ...extra,
       ]}>
       {text}
     </Text>
+  );
+  if (!(brandMark && size === 'title')) return textView(chrome);
+  return (
+    <VStack alignment="leading" spacing={20} modifiers={[padding({ top: 24 }), ...chrome]}>
+      <Image systemName="arrowtriangle.down.fill" modifiers={[font({ size: 64 }), foregroundStyle(palette.tint), accessibilityHidden(true)]} />
+      {textView([])}
+    </VStack>
   );
 }
 
@@ -161,12 +185,14 @@ export function FilterChips({ options, onToggle }: FilterChipsProps) {
             label={option.label}
             // A checkmark marks selection when the chip has no symbol of its
             // own, so the state is not shown by colour alone.
-            systemImage={sf(option.icon) ?? (option.selected ? 'checkmark' : undefined)}
+            systemImage={sf(option.icon)}
             onPress={() => onToggle(option.key)}
             modifiers={[
+              // Selection is the fill (and spoken), not colour alone.
               buttonStyle(option.selected ? 'borderedProminent' : 'bordered'),
               buttonBorderShape('capsule'),
-              controlSize('small'),
+              controlSize('regular'),
+              font({ textStyle: 'subheadline', weight: 'semibold' }),
               ...(option.selected ? [accessibilityAddTraits(['isSelected'])] : []),
             ]}
           />
@@ -177,6 +203,55 @@ export function FilterChips({ options, onToggle }: FilterChipsProps) {
 }
 
 const TILE_SHAPE = shapes.roundedRectangle({ cornerRadius: 12, roundedCornerStyle: 'continuous' });
+
+/**
+ * One choice among many as a grid of 44pt buttons (the welcome screen's
+ * classes): the selected one filled with the tint, the rest on the quiet
+ * fill. Plain buttons, each its own tap target in the List row.
+ */
+export function ChoiceGrid({ options, value, onChange, columns = 5, accessibilityLabel: spoken }: ChoiceGridProps) {
+  const palette = usePalette();
+  const chrome = useRowChrome({ flushInPlain: true });
+  return (
+    <Grid horizontalSpacing={10} verticalSpacing={10} modifiers={[padding({ vertical: 4 }), ...chrome]}>
+      {chunk(options, columns).map((row) => (
+        <Grid.Row key={row[0].value}>
+          {row.map((option) => {
+            const selected = option.value === value;
+            return (
+              <Button
+                key={option.value}
+                onPress={() => onChange(option.value)}
+                modifiers={[
+                  buttonStyle('plain'),
+                  accessibilityLabel(spoken ? `${spoken} ${option.label}` : option.label),
+                  ...(selected ? [accessibilityAddTraits(['isSelected'])] : []),
+                ]}>
+                <Text
+                  modifiers={[
+                    font({ textStyle: 'body', weight: 'semibold' }),
+                    monospacedDigit(),
+                    selected ? foregroundStyle(palette.onTint) : primaryText,
+                    frame({ maxWidth: Infinity, minHeight: 44 }),
+                    background(selected ? palette.tint : QUIET_FILL, TILE_SHAPE),
+                    contentShape(TILE_SHAPE),
+                  ]}>
+                  {option.label}
+                </Text>
+              </Button>
+            );
+          })}
+          {/* Empty cells keep a short last row's buttons the width of the rest. */}
+          {Array.from({ length: columns - row.length }, (_, index) => (
+            <Text key={`pad-${index}`} modifiers={[frame({ maxWidth: Infinity }), accessibilityHidden(true)]}>
+              {' '}
+            </Text>
+          ))}
+        </Grid.Row>
+      ))}
+    </Grid>
+  );
+}
 
 /**
  * Feature tiles in a SwiftUI Grid. Every tile is flexible in both axes, so
@@ -219,23 +294,78 @@ export function TileGrid({ tiles, columns = 3 }: TileGridProps) {
 
 /**
  * React Native content (a map, an image) inside a row, edge to edge in the
- * card. A fixed `height`, or the row width divided by `aspectRatio`: SwiftUI's
- * aspectRatio modifier derives the height from the width the List proposes.
+ * card. SwiftUI proposes the row width; screen fitting caps the natural
+ * height at the room above the tab bar once its position is known.
  */
-export function Embedded({ children, height, aspectRatio: ratio }: EmbeddedProps) {
+export function Embedded({
+  children,
+  height,
+  aspectRatio: ratio,
+  fit = 'width',
+  minHeight = 0,
+  maxHeight = Infinity,
+  onPress,
+  accessibilityLabel: spoken,
+  accessibilityHint: hint,
+}: EmbeddedProps) {
   const chrome = useRowChrome();
-  const size: ModifierConfig[] = height != null
-    ? [frame({ height })]
-    : [frame({ maxWidth: Infinity }), aspectRatio({ ratio: ratio && ratio > 0 ? ratio : 16 / 9, contentMode: 'fit' })];
-  return (
-    <ZStack modifiers={[...size, ...chrome, NO_INSETS]}>
+  const viewport = useContext(ViewportContext);
+  const { top, ready, onPosition } = useRestTop(viewport);
+  const [width, setWidth] = useState<number | null>(null);
+  const screenFit = fit === 'screen';
+  const naturalRatio = ratio && ratio > 0 ? ratio : 16 / 9;
+  const natural = height ?? (width === null ? null : width / naturalRatio);
+  const room = top === null || viewport.bottom === null ? null : viewport.bottom - top;
+  const fitted = screenFit && natural !== null ? fitHeight(natural, room, minHeight, maxHeight) : height;
+  const visible = !screenFit || ready;
+  const size: ModifierConfig[] = fitted != null
+    ? [frame({ height: fitted })]
+    : [frame({ maxWidth: Infinity }), aspectRatio({ ratio: naturalRatio, contentMode: 'fit' })];
+  const modifiers = [
+    ...size,
+    ...(screenFit ? [onGeometryChange(({ y, width: measuredWidth }) => {
+      if (measuredWidth > 0) setWidth((previous) => previous === measuredWidth ? previous : measuredWidth);
+      onPosition(y);
+    }), opacity(visible ? 1 : 0), accessibilityHidden(!visible)] : []),
+    ...chrome,
+    NO_INSETS,
+  ];
+  const content = (
+    <RNHostView>
       {/* RNHostView sizes its single native child to the SwiftUI frame; the
           wrapper (never flattened away) makes the content fill it. */}
-      <RNHostView>
-        <View collapsable={false} style={{ flex: 1 }}>
-          {children}
-        </View>
-      </RNHostView>
+      <View
+        collapsable={false}
+        style={{ flex: 1 }}
+        pointerEvents={onPress || !visible ? 'none' : 'auto'}
+        accessibilityElementsHidden={!!onPress}
+        importantForAccessibility={onPress ? 'no-hide-descendants' : 'auto'}>
+        {children}
+      </View>
+    </RNHostView>
+  );
+  return (
+    // Keep one concrete List-row container. Overlay's native base is a
+    // ForEach, whose row preferences do not remove the List's default insets.
+    <ZStack modifiers={modifiers}>
+      {onPress ? (
+        <Overlay>
+          <ZStack modifiers={[accessibilityHidden(true)]}>{content}</ZStack>
+          <Overlay.Content>
+            <Button
+              onPress={onPress}
+              modifiers={[
+                buttonStyle('plain'),
+                accessibilityLabel(spoken ?? ''),
+                accessibilityAddTraits(['isImage']),
+                ...(hint ? [accessibilityHint(hint)] : []),
+                disabled(!visible),
+              ]}>
+              <Rectangle modifiers={[foregroundStyle('clear'), contentShape(shapes.rectangle()), frame({ maxWidth: Infinity, maxHeight: Infinity })]} />
+            </Button>
+          </Overlay.Content>
+        </Overlay>
+      ) : content}
     </ZStack>
   );
 }

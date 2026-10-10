@@ -13,13 +13,14 @@ import {
   TextButton,
 } from '@expo/ui/jetpack-compose';
 import {
+  alpha,
   background,
   clip,
   combinedClickable,
   fillMaxSize,
   fillMaxWidth,
   height as heightModifier,
-  onSizeChanged,
+  onGloballyPositioned,
   padding,
   paddingAll,
   semantics,
@@ -28,12 +29,14 @@ import {
   weight,
 } from '@expo/ui/jetpack-compose/modifiers';
 import * as Clipboard from 'expo-clipboard';
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { Platform, ToastAndroid, useWindowDimensions, View } from 'react-native';
 
 import { icons } from '@/components/icons';
 
+import { fitHeight, useRestTop, ViewportContext } from '../fit';
 import type {
+  ChoiceGridProps,
   CrowdBarProps,
   EmbeddedProps,
   EmptyStateProps,
@@ -44,7 +47,7 @@ import type {
   TileGridProps,
 } from '../types';
 import { chunk, joinLabel, labelWidth, withAlpha } from './helpers';
-import { CARD_RADIUS, iconSource, roundedShape, useContentWidth, useInCard, useM3 } from './theme';
+import { CARD_RADIUS, iconSource, roundedShape, TRANSPARENT, useContentWidth, useInCard, useM3 } from './theme';
 
 /** Copies `text`, confirming with a toast where the system does not (before Android 13). */
 function copyText(text: string) {
@@ -53,14 +56,22 @@ function copyText(text: string) {
   });
 }
 
-export function TextBlock({ text, secondary = false, size: textSize = 'body', selectable = false }: TextBlockProps) {
+export function TextBlock({
+  text,
+  secondary = false,
+  size: textSize = 'body',
+  brandMark = false,
+  selectable = false,
+}: TextBlockProps) {
   const m = useM3();
   const inCard = useInCard();
-  const typography = textSize === 'large' ? 'headlineSmall' : secondary ? 'bodyMedium' : 'bodyLarge';
-  return (
+  let typography: 'headlineLarge' | 'headlineSmall' | 'bodyMedium' | 'bodyLarge' = secondary ? 'bodyMedium' : 'bodyLarge';
+  if (textSize === 'large') typography = 'headlineSmall';
+  if (textSize === 'title') typography = 'headlineLarge';
+  const textView = (
     <Text
       color={secondary ? m.onSurfaceVariant : m.onSurface}
-      style={{ typography }}
+      style={{ typography, fontWeight: textSize === 'title' ? '700' : undefined }}
       modifiers={[
         fillMaxWidth(),
         inCard ? padding(16, 12, 16, 12) : padding(16, 0, 16, 0),
@@ -70,6 +81,16 @@ export function TextBlock({ text, secondary = false, size: textSize = 'body', se
       ]}>
       {text}
     </Text>
+  );
+  if (!(brandMark && textSize === 'title')) return textView;
+  return (
+    <Column verticalArrangement={{ spacedBy: 20 }} modifiers={[fillMaxWidth(), padding(0, 24, 0, 0)]}>
+      {/* The CK 倒三角. */}
+      <Text color={m.primary} style={{ fontSize: 56 }} modifiers={[padding(16, 0, 16, 0)]}>
+        ▼
+      </Text>
+      {textView}
+    </Column>
   );
 }
 
@@ -162,6 +183,48 @@ export function Loading({ label }: LoadingProps) {
   );
 }
 
+/**
+ * One choice among many as a grid of buttons (the welcome screen's classes):
+ * the selected one filled with the primary colour.
+ */
+export function ChoiceGrid({ options, value, onChange, columns = 5, accessibilityLabel }: ChoiceGridProps) {
+  const m = useM3();
+  const perRow = Math.max(1, Math.floor(columns));
+  return (
+    <Column verticalArrangement={{ spacedBy: 10 }} modifiers={[fillMaxWidth()]}>
+      {chunk(options, perRow).map((row) => (
+        <Row key={row[0].value} horizontalArrangement={{ spacedBy: 10 }} modifiers={[fillMaxWidth()]}>
+          {row.map((option) => {
+            const selected = option.value === value;
+            return (
+              <Surface
+                key={option.value}
+                onClick={() => onChange(option.value)}
+                color={selected ? m.primary : m.surfaceContainerHigh}
+                contentColor={selected ? m.onPrimary : m.onSurface}
+                shape={roundedShape(12)}
+                modifiers={[
+                  weight(1),
+                  // Selection is spoken: these semantics take a description only.
+                  semantics({
+                    contentDescription: joinLabel([accessibilityLabel ? `${accessibilityLabel} ${option.label}` : option.label, selected ? '已選取' : undefined]),
+                  }),
+                ]}>
+                <Box contentAlignment="center" modifiers={[fillMaxWidth(), heightModifier(48)]}>
+                  <Text style={{ typography: 'titleMedium', fontWeight: '600' }}>{option.label}</Text>
+                </Box>
+              </Surface>
+            );
+          })}
+          {Array.from({ length: perRow - row.length }, (_, index) => (
+            <Spacer key={`spacer:${index}`} modifiers={[weight(1)]} />
+          ))}
+        </Row>
+      ))}
+    </Column>
+  );
+}
+
 export function TileGrid({ tiles, columns = 3 }: TileGridProps) {
   const m = useM3();
   const inCard = useInCard();
@@ -217,26 +280,42 @@ export function TileGrid({ tiles, columns = 3 }: TileGridProps) {
 /** Height of an Embedded view given neither `height` nor `aspectRatio`. */
 const DEFAULT_EMBEDDED_HEIGHT = 240;
 
-export function Embedded({ children, height, aspectRatio }: EmbeddedProps) {
+export function Embedded({
+  children,
+  height,
+  aspectRatio,
+  fit = 'width',
+  minHeight = 0,
+  maxHeight = Infinity,
+  onPress,
+  accessibilityLabel,
+}: EmbeddedProps) {
   const inCard = useInCard();
   const estimatedWidth = useContentWidth();
+  const viewport = useContext(ViewportContext);
+  const { top, ready, onPosition } = useRestTop(viewport);
   // The measured width replaces this estimate after the first layout.
   const [width, setWidth] = useState(estimatedWidth);
-  const resolvedHeight =
+  const naturalHeight =
     height ?? (aspectRatio && aspectRatio > 0 ? Math.round(width / aspectRatio) : DEFAULT_EMBEDDED_HEIGHT);
+  const room = top === null || viewport.bottom === null ? null : viewport.bottom - top;
+  const resolvedHeight = fit === 'screen' ? fitHeight(naturalHeight, room, minHeight, maxHeight) : naturalHeight;
+  const visible = fit !== 'screen' || ready;
 
   const modifiers = [
     fillMaxWidth(),
     heightModifier(resolvedHeight),
     // In a card the card's clip rounds the corners; on its own it rounds itself.
     ...(inCard ? [] : [clip(Shapes.RoundedCorner(CARD_RADIUS))]),
-    ...(height == null && aspectRatio
+    ...(fit === 'screen' || (height == null && aspectRatio)
       ? [
-          onSizeChanged((measured) => {
-            if (Math.abs(measured.width - width) > 0.5) setWidth(measured.width);
+          onGloballyPositioned(({ y, width: measuredWidth }) => {
+            setWidth((previous) => Math.abs(measuredWidth - previous) > 0.5 ? measuredWidth : previous);
+            if (fit === 'screen') onPosition(y);
           }),
         ]
       : []),
+    ...(visible ? [] : [alpha(0)]),
   ];
 
   return (
@@ -244,8 +323,25 @@ export function Embedded({ children, height, aspectRatio }: EmbeddedProps) {
       <RNHostView modifiers={[fillMaxSize()]}>
         {/* RNHostView sizes its one child to the Compose box; the flex view
             gives maps and images a sized parent to fill. */}
-        <View style={{ flex: 1 }}>{children}</View>
+        <View
+          style={{ flex: 1 }}
+          pointerEvents={onPress || !visible ? 'none' : undefined}
+          importantForAccessibility={onPress || !visible ? 'no-hide-descendants' : undefined}>
+          {children}
+        </View>
       </RNHostView>
+      {onPress && visible ? (
+        // A native Material button supplies the button role and ripple. It
+        // fills the measured box without contributing any content size.
+        <TextButton
+          onClick={onPress}
+          shape={roundedShape(0)}
+          colors={{ containerColor: TRANSPARENT }}
+          contentPadding={{ start: 0, top: 0, end: 0, bottom: 0 }}
+          modifiers={[fillMaxSize(), semantics({ contentDescription: accessibilityLabel })]}>
+          <Spacer />
+        </TextButton>
+      ) : null}
     </Box>
   );
 }

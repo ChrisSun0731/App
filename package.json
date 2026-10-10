@@ -8,7 +8,7 @@
   "scripts": {
     "start": "expo start",
     "ios": "expo run:ios",
-    "android": "expo run:android",
+    "android": "expo run:android --app-id org.capacitor.quasar.ckapp.dev",
     "prebuild": "expo prebuild --clean",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
@@ -37,6 +37,7 @@
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
     "expo-web-browser": "~57.0.3",
+    "expo-widgets": "57.0.22",
     "fast-xml-parser": "^5.11.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",

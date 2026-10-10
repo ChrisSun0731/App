@@ -21,10 +21,11 @@ export function formHeader(onCancel: () => void, onSave: () => void, canSave: bo
 
 /**
  * A modal with nothing to save (changes apply at once, or it is read-only):
- * iOS 完成 on the right, Android the close icon.
+ * iOS the tinted ✓ (完成) on the right, as iOS 26 sheets have; Android the
+ * close icon.
  */
 export function doneHeader(onDone: () => void): HeaderActionsProps {
   return ANDROID
     ? { left: [{ kind: 'icon', key: 'done', label: '關閉', icon: icons.close, onPress: onDone }] }
-    : { right: [{ kind: 'text', key: 'done', label: '完成', prominent: true, onPress: onDone }] };
+    : { right: [{ kind: 'icon', key: 'done', label: '完成', icon: icons.check, prominent: true, onPress: onDone }] };
 }

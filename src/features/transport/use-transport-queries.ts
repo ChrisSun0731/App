@@ -1,8 +1,8 @@
-// The live YouBike and Metro queries, shared by 交通 and its picker sheets so
-// they read one cache (same query keys). Each hook only fetches, and polls
-// every 10 s, while the screen calling it is focused: 交通 stops polling while
-// a picker sheet covers it (or another tab is shown), and each screen asks
-// only for the feeds it shows.
+// The live YouBike and Metro queries, shared by 交通, its picker sheets and
+// 今天's 回家 so they read one cache (same query keys). Each hook only fetches,
+// and polls (every 10 s unless the caller asks otherwise), while the screen
+// calling it is focused: 交通 stops polling while a picker sheet covers it (or
+// another tab is shown), and each screen asks only for the feeds it shows.
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useIsFocused } from 'expo-router';
 
@@ -15,13 +15,22 @@ const STALE_MS = 5000;
 
 export type YoubikeFeeds = Record<City, UseQueryResult<YoubikeStation[]>>;
 
-function useCityStations(city: City, enabled: boolean) {
+export interface PollOptions {
+  /** Whether to poll; without it the data is fetched on focus when older than `staleMs`. @default true */
+  poll?: boolean;
+  /** @default POLL_MS (10 s) */
+  pollMs?: number;
+  /** @default STALE_MS (5 s) */
+  staleMs?: number;
+}
+
+function useCityStations(city: City, enabled: boolean, { poll = true, pollMs = POLL_MS, staleMs = STALE_MS }: PollOptions) {
   return useQuery({
     queryKey: ['transport', 'youbike', city],
     queryFn: ({ signal }) => fetchStations(city, signal),
     enabled,
-    staleTime: STALE_MS,
-    refetchInterval: enabled ? POLL_MS : false,
+    staleTime: staleMs,
+    refetchInterval: enabled && poll ? pollMs : false,
   });
 }
 
@@ -30,10 +39,10 @@ function useCityStations(city: City, enabled: boolean) {
  * polled (New Taipei alone takes several paged requests), but keeps any data
  * another screen already loaded.
  */
-export function useYoubikeFeeds(cities: readonly City[]): YoubikeFeeds {
+export function useYoubikeFeeds(cities: readonly City[], options: PollOptions = {}): YoubikeFeeds {
   const focused = useIsFocused();
-  const taipei = useCityStations('臺北市', focused && cities.includes('臺北市'));
-  const newTaipei = useCityStations('新北市', focused && cities.includes('新北市'));
+  const taipei = useCityStations('臺北市', focused && cities.includes('臺北市'), options);
+  const newTaipei = useCityStations('新北市', focused && cities.includes('新北市'), options);
   return { 臺北市: taipei, 新北市: newTaipei };
 }
 
@@ -52,7 +61,7 @@ export interface MetroLive {
 }
 
 /** Live arrivals and car crowding, fetched while `needed` (stations are followed). */
-export function useMetroLive(needed: boolean): MetroLive {
+export function useMetroLive(needed: boolean, { poll = true, pollMs = POLL_MS, staleMs = STALE_MS }: PollOptions = {}): MetroLive {
   const focused = useIsFocused();
   const configured = hasMetroCredentials();
   const enabled = focused && configured && needed;
@@ -60,15 +69,15 @@ export function useMetroLive(needed: boolean): MetroLive {
     queryKey: ['transport', 'metro', 'arrivals'],
     queryFn: ({ signal }) => fetchTrackInfo(signal),
     enabled,
-    staleTime: STALE_MS,
-    refetchInterval: enabled ? POLL_MS : false,
+    staleTime: staleMs,
+    refetchInterval: enabled && poll ? pollMs : false,
   });
   const weights = useQuery({
     queryKey: ['transport', 'metro', 'crowding'],
     queryFn: ({ signal }) => fetchCarWeights(signal),
     enabled,
-    staleTime: STALE_MS,
-    refetchInterval: enabled ? POLL_MS : false,
+    staleTime: staleMs,
+    refetchInterval: enabled && poll ? pollMs : false,
   });
   // refetch() ignores `enabled`, so it is guarded here: no credentials or no
   // stations means no request.

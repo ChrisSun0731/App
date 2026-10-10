@@ -37,15 +37,39 @@ export type HeaderItem =
       icon: IconValue;
       onPress: () => void;
       disabled?: boolean;
+      /** The confirming action of a sheet (✓): filled with the tint on iOS. */
+      prominent?: boolean;
     }
   | {
       kind: 'text';
       key: string;
       label: string;
+      /** Spoken instead of `label`, e.g. 設定，目前班級 201 for a 201 button. */
+      accessibilityLabel?: string;
       onPress: () => void;
       disabled?: boolean;
       /** The confirming action of a form: bold on iOS. */
       prominent?: boolean;
+    }
+  | {
+      /**
+       * A fixed gap between items. On iOS 26 it also ends the shared glass
+       * background, so a text button (今天) sits apart from symbol buttons.
+       */
+      kind: 'space';
+      key: string;
+      /** @default 8 */
+      width?: number;
+    }
+  | {
+      /** A segmented control, e.g. 熱食部 / 附近. */
+      kind: 'segmented';
+      key: string;
+      /** Spoken name of the control. */
+      label: string;
+      options: readonly { label: string; value: string }[];
+      value: string;
+      onChange: (value: string) => void;
     }
   | {
       kind: 'menu';

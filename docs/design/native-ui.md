@@ -75,13 +75,38 @@ unit-tested). Platform kit files must not contain feature logic.
 
 ### Navigation chrome
 
+- The tab bar is fixed: 今天 · 課表 · 行事曆 · 美食 · 校園 (`TABS` in
+  `src/features/registry.ts`; SF Symbols sun.max, tablecells, calendar,
+  fork.knife, building.columns; Material Symbols light_mode, table_chart,
+  calendar_month, restaurant, account_balance). 熱食部 lives in 美食; 校網,
+  交通, 建北特約, 校慶紀念品 and 選擇障礙小幫手 are pushed in 校園's stack. Nothing
+  is user-configurable, so no section moves or disappears, and no More tab.
+- 設定 is a modal route with its own stack (`src/app/settings/`), opened from
+  今天's class button (`201`) in the header; 關於 pushes inside it.
+- A new install opens on 你是哪一班？ (`/welcome`, full screen): pick the
+  grade (segmented) and the class (`ChoiceGrid`), 開始使用, or 先看看，之後再選.
+  `settings.welcomed` remembers it; a legacy import that brings a class sets
+  it too.
 - Tab roots and pushed screens keep expo-router's native stack header and
-  native tabs. Titles stay inline (no large titles: SwiftUI lists inside a
-  `Host` do not drive UIKit's large-title collapse reliably).
+  native tabs. On iOS the tab roots have the system large title (titles in
+  the label colour, buttons in the tint), collapsing into the bar as the list
+  scrolls; UIKit finds the SwiftUI List's scroll view. The line under it (date,
+  class, week) is `ListScreen.subtitle`, drawn as a row-less section header so
+  it sits close under the title, in the primary label colour (it is the
+  screen's main fact; `secondaryLabel` is 3.3:1 on the grouped background). Android keeps the top app bar title and shows
+  the subtitle as the list's first line.
 - Screen-level actions go in the header via `HeaderActions` (iOS
   `Stack.Toolbar` buttons/menus; Android top-app-bar icon buttons and an
-  overflow `DropdownMenu`). Primary "add" actions additionally show as an
-  Android extended FAB (`ListScreen.fab`); iOS ignores `fab`.
+  overflow `DropdownMenu`). A screen's view switch is a `segmented` header item
+  (美食 熱食部 / 附近): a SwiftUI segmented `Picker` in a
+  `Stack.Toolbar.View` on iOS, Material segmented buttons in the top app bar
+  on Android. Android sets both header sides on every render, so a side a view
+  leaves empty is cleared. A `space` item is a fixed gap that, on iOS 26, also
+  ends the shared glass background: a text button (今天, 本週) sits apart from
+  the symbol buttons beside it, so the chevrons pair as a stepper and the text
+  does not read as their label (`Stack.Toolbar.Spacer`; a `Box` on Android).
+  Primary "add" actions additionally show as an Android extended FAB
+  (`ListScreen.fab`); iOS ignores `fab`.
 - A header menu may hold one level of submenus (`{ kind: 'submenu' }`, e.g.
   課表's 選擇班級): a nested `Stack.Toolbar.Menu` (UIMenu child) on iOS; on
   Android an item with a trailing arrow that swaps the open dropdown's items
@@ -91,13 +116,14 @@ unit-tested). Platform kit files must not contain feature logic.
 - Disabled header icons and menu triggers are greyed on both platforms (iOS
   by UIKit; Android in Material's disabled colour, onSurface at 38%).
 - Search uses the native header search bar (`Stack.SearchBar`), not an
-  in-content text field.
+  in-content text field; with a large title it sits under the title.
 - Editors (`/todo-editor`, `/event-editor`, `/schedule-editor`, new
   `/categories`, `/youbike-picker`, `/metro-picker`, `/youbike-rename`,
   `/restaurant`) are modal routes: iOS page sheet with 取消 (left) and a
-  prominent 儲存/完成 (right) in the navigation bar; Android full-screen modal
-  with a close icon (left) and a 儲存 text button (right). Destructive actions
-  are a `ButtonRow role="destructive"` in the last section.
+  prominent 儲存 (right) in the navigation bar, or the tinted ✓ (完成) where
+  nothing is saved; Android full-screen modal with a close icon (left) and a
+  儲存 text button (right). Destructive actions are a `ButtonRow
+  role="destructive"` in the last section.
 - Confirmations keep `Alert.alert` (native UIAlertController / Material
   dialog).
 
@@ -112,69 +138,132 @@ unit-tested). Platform kit files must not contain feature logic.
   as they are; dark-mode variants come from the existing helpers.
 - Dynamic Type / font scaling: use text styles (SwiftUI `font({ textStyle })`,
   Compose `typography`) instead of fixed sizes.
+- The 現在 card is the one CK-navy block in the app (`NOW_CARD` in
+  `src/theme/brand.ts`: `#03328D`, `#17377F` in dark mode). White text is
+  11.4:1 / 11.1:1, 78% white 7.5:1 / 7.4:1, and the rail's parts still to
+  come are 45% white (3.45:1). Everything else keeps system colours; the tint
+  marks interaction and "now" (the 現在 badge, today's column and date).
 
 ### Accessibility
 
 Every icon-only control has a label; rows read as one element with title,
 subtitle and state; selected/checked states are exposed; colour is never the
-only signal (status text accompanies dots; crowding has a text summary).
+only signal (status text accompanies dots; crowding has a text summary; the
+period in session is ringed as well as tinted).
 
 ## Kit components (see `src/ui/types.ts` for the exact props)
 
 | Component | iOS (SwiftUI) | Android (Compose M3) |
 |---|---|---|
-| `ListScreen` | `Host{flex:1}` › `List` + `listStyle('insetGrouped')` + `refreshable` | `Host{flex:1}` › `PullToRefreshBox` › `LazyColumn` (16dp gutters, 16dp spacing, safe-area bottom padding) + optional `ExtendedFloatingActionButton` overlay |
-| `Section` | `Section title footer`; `plain` → clear row backgrounds | header `Text` (titleSmall, primary) + `Card` (surfaceContainerLow) of rows with dividers + footer `Text` (bodySmall); `plain` → rows without the card |
-| `Row` | `Button` (plain) / static `HStack`: leading SF Symbol or dot, title/subtitle `VStack`, trailing detail/badge/accessory; `SwipeActions` + `ContextMenu` for `actions`; leading swipe for `toggle`; `listRowBackground` for `background` | `ListItem` with Headline/Supporting/Overline/Leading/Trailing slots, `clickable`, `containerColor` for `background`; trailing `IconButton` for `toggle`, overflow `DropdownMenu` for `actions` |
+| `ListScreen` | `Host{flex:1}` › `List` + `listStyle('insetGrouped')` + `refreshable`; `subtitle` → a row-less first section's header under the large title | `Host{flex:1}` › `PullToRefreshBox` › `LazyColumn` (16dp gutters, 16dp spacing, safe-area bottom padding) + optional `ExtendedFloatingActionButton` overlay; `subtitle` → first line |
+| `Section` | `Section title footer`; a header row (`HStack`) for `titleBadge` (tint), trailing `detail` and an `action` link; `prominent` → `headerProminence('increased')`, lined up with the large title; `footerAction` → a link under the footer; `plain` → clear row backgrounds | header `Row`: title (titleSmall, primary; `prominent` → titleLarge bold), badge, detail, `TextButton` action + `Card` (surfaceContainerLow) of rows with dividers + footer `Text` (bodySmall) and `TextButton`; `plain` → rows without the card |
+| `Row` | `Button` (plain) / static `HStack`: leading SF Symbol, dot or square (`dotShape`), or `mark` (考 glyph, date, list number, period badge in the subject's fill/ink, dashed for 空堂); tags over the title, `titleAside` (nickname), subtitle with a status dot, `note`; `strong` / `emphasized` titles; trailing detail (`detailProminent` bold)/badge/accessory; `SwipeActions` + `ContextMenu` for `actions`; leading swipe for `toggle`, or a trailing heart-style button with `toggle.button` | `ListItem` with Headline/Supporting/Overline/Leading/Trailing slots (tags in the overline, the mark or dot leading), `clickable`, `containerColor` for `background`; trailing `IconButton` for `toggle`, overflow `DropdownMenu` for `actions` |
 | `CheckRow` | Reminders-style circle / `checkmark.circle.fill` button + title; tap row body to edit | `ListItem` with leading `Checkbox` |
 | `ToggleRow` | `Toggle` | `ListItem` + trailing `Switch` |
-| `PickerRow` (menu) | `Picker` + `pickerStyle('menu')` | `ExposedDropdownMenuBox` + read-only `OutlinedTextField` |
+| `PickerRow` (menu) | `Picker` + `pickerStyle('menu')`; options with colour dots `pickerStyle('inline')`, a row each with a coloured `circle.fill` (a menu would draw every dot in the tint) | `ExposedDropdownMenuBox` + read-only `OutlinedTextField`; colour dots before the options and the value |
 | `PickerRow` (segmented) | `Picker` + `pickerStyle('segmented')`, labels hidden | `SingleChoiceSegmentedButtonRow` |
 | `TextFieldRow` | `TextField` (vertical axis when multiline) | `OutlinedTextField` with label |
 | `DateRow` | `DatePicker displayedComponents={['date']}` (compact) | `ListItem` showing the date › `DatePickerDialog` |
 | `ButtonRow` | `Button` (role, systemImage); `prominent` → `borderedProminent` | `ListItem` clickable in primary/error colour; `prominent` → filled `Button` |
-| `TextBlock` | `Text` | `Text` bodyMedium |
+| `TextBlock` | `Text`; `size: 'title'` → large title, `brandMark` → the 倒三角 above it | `Text` bodyMedium; `title` → headlineLarge |
 | `EmptyState` | `ContentUnavailableView` on iOS 17+, `VStack` fallback on 16.x | centred `Column`: 48dp icon, titleMedium, bodyMedium, `TextButton` |
 | `Notice` | `Label` with warning/info symbol + text, optional button | tonal `Card` (errorContainer / secondaryContainer) |
 | `Loading` | `ProgressView` + label | `LinearProgressIndicator`/`CircularProgressIndicator` + label |
 | `FilterChips` | horizontal `ScrollView` of capsule `Button`s (bordered / borderedProminent) | `FlowRow` of `FilterChip`s |
 | `TileGrid` | `Grid` of tiles (`Image` + `Text`) | rows of clickable `Card` tiles (`Icon` + `Text`) |
-| `MonthCalendar` | `Grid` 7×6 day cells with dots, weekday header | `Column` of `Row`s, `Box` cells (`weight(1f)`), dots |
+| `ChoiceGrid` | `Grid` of plain buttons, the selected one on the tint | rows of `Surface` buttons, the selected one primary |
+| `DayStrip` | `HStack` of plain buttons: weekday over the date, ▼ over today, the selected date in a tint `Circle`, a day off red with its caption | `Row` of `Surface`s, the same marks |
+| `MonthCalendar` | `Grid` 7×6 day cells with dots (or a 假 / 考 mark), weekday header (the screen pages months from its header) | `Column` of `Row`s, `Box` cells (`weight(1f)`), dots (or the mark) |
 | `MetricPills` | `HStack` of `Label`s with coloured symbols | `Row` of `AssistChip`-like pills |
 | `CrowdBar` | `HStack` of `Capsule`s | `Row` of rounded `Box`es |
-| `Embedded` | `RNHostView` in a row (fixed height or aspect ratio) | `RNHostView` with `height` modifier |
+| `Embedded` | `RNHostView` in a row; `fit="screen"` uses native geometry and the tab safe area; optional native Button overlay | `RNHostView`; `fit="screen"` measures to the Host's bottom; optional native Material button overlay |
+| `NowCard` | a List row on the navy (`listRowBackground`); the rail is a `ZStack` of shapes placed by width (`onGeometryChange` on a clear full-width layer) | navy `Card`; the rail is `Row`s of `Box`es weighted by minutes |
+| `TimetableGrid` | one `VStack` of plain-button cells per weekday, one cell per period, row labels beside (the start time left out from the xxxLarge size up), lunch a plain centred label; a lesson cell in its fill/ink with the full subject (up to three lines) and a `note.text` mark when it has a note (a free period's note in the plain fill), the period in session ringed (`strokeBorder` in the tint), a 空堂 nothing but a tap target, a day off dimmed | the same as weighted `Column`s of `Box` cells (`background`, `Icon` for the note, `border` in primary for the period in session, a name past three lines ellipsized) |
 
 ## Screens
 
 All copy stays as today unless noted. Pull-to-refresh where the screen loads
 remote data.
 
-### 首頁 (Home)
-- Header: 設定 and 關於 icons (unchanged).
-- Section "今天" — `Row` with today's date as title and `{class} 班` subtitle,
-  plus the current/next period: title = subject (or 目前沒有上課), overline
-  `第N節 08:10–09:00`, badge 目前 when in session, note as subtitle; tap opens
-  課表.
-- Section "功能" — `TileGrid` of all nine features (SF Symbol / Material
-  Symbol + title).
-- Section "今日待辦事項" (widget toggle) — `CheckRow`s, empty →
-  `TextBlock secondary` 今天沒有待辦事項; `ButtonRow` 查看行事曆.
-- Section "釘選校網內容" (widget toggle) — `Row` per pin (title, date
-  subtitle, external accessory) opening the link; `ButtonRow` 查看校網.
+### 今天 (Today)
+- Header: the class (`201`, or 班級 before one is chosen), opening the 設定
+  sheet. Subtitle `10月7日 星期三 · 第 6 週 · 雙週` (the week and parity on
+  school days only).
+- A plain Section holding the kit `NowCard`: what is happening at this minute
+  (`src/features/home/now.ts`, unit-tested). States: before school (first
+  class, `22 分鐘後上課` within the hour else `08:10 上課`, `16:00 放學`), in
+  class (`第三節 · 10:10–11:00`, subject, note or `連堂到 10:00`, `23 分鐘後下課`,
+  `下一節 英語文 11:10` / 今天最後一節), 下課 (the next class, `6 分鐘後上課`),
+  午餐 (`46 分鐘後上課`, the first afternoon class), after school (今天的課上完了
+  with the time, 放學了, tomorrow's first class), an exam day (今天考試,
+  `第 2 天，共 2 天`, 祝考試順利！), a day off (今天不用上課 with the weekday, the
+  holiday's name from the 行事曆 or 週末 / 寒假, `連假到 10月11日` for a long
+  weekend, a 下次上課 line). A period ends at its bell. School days draw the
+  bell rail: each period a bar as long as the period (filling as it passes; a
+  空堂 an outline), breaks as gaps, lunch dotted, the ▼ (the emblem's inverted
+  triangle) at now. Before and after school the card adds the first YouBike
+  and Metro line (and the 回家 section hides). Tapping opens what it is about
+  (課表, 熱食部, 交通, 行事曆).
+- Sections with prominent headers, each switchable in 設定:
+  - "今日" — today's `CheckRow` todos (`待辦 · 作業`), the day's events with a
+    square swatch (`學校 · 學務處`; the user's, then the school's for the
+    grade; days off, exams and the middle days of events longer than a week
+    are left out), the next exam within three weeks with the 考 mark and a bold
+    `還有 6 天`; empty → 今天沒有待辦或活動。
+  - "午餐" — 熱食部 (`今天的菜單`, after lunch the next school day's, opening
+    美食 on that day) and `附近 41 間營業中` with the nearest open places by
+    nickname (林乾 · 建豆 …), opening 美食 › 附近. The menu is an image, so the
+    dishes are not listed here.
+  - "回家" — a `Row` per followed YouBike station (`借 30 · 還 19`) and Metro
+    station (`往松山 3 分 · 往新店 6 分`), opening 交通. Polled every minute
+    only before and after school (the Taipei feed is ~1 MB); otherwise fetched
+    on focus when older than five minutes.
+  - "釘選的校網消息" — `Row` per pin (title, date subtitle, external
+    accessory) opening the link; `ButtonRow` 查看校網.
 
 ### 課表 (Schedule)
-- Header: menu with a 選擇班級 submenu (every class, the current one checked;
-  choosing one goes through the same confirm Alert as the 班級 picker and
-  leaves the check unchanged when declined) and 重新匯入課表, once the
-  timetables have loaded.
-- Section (no title) — segmented `PickerRow` 一 二 三 四 五 (defaults to today).
-- Section titled `星期X` with footer `{academicYear} · 第N週 · 單/雙週`
-  — one `Row` per period: overline `第一節 · 08:10`, title = subject or 空堂,
-  subtitle = `單週：A　雙週：B` and/or note, `background` = cell colour,
-  `emphasized` + badge 目前 for the period in session, chevron → editor.
-- Section "班級" — menu `PickerRow` (keeps the confirm-on-change Alert and
-  the phase-1 revert behaviour) + `ButtonRow` 重新匯入課表.
-- Footer hint 點選課程可修改科目、備註與顏色。
+- One table for the whole week. Header: a menu with a 選擇班級 submenu (every
+  class, the current one checked; choosing one confirms first when it would
+  replace a timetable, and leaves the check unchanged when declined) and
+  重新匯入課表, once the timetables have loaded. Subtitle `201 · 第 6 週 · 雙週`.
+  At the weekend the table shows the coming week (and its parity).
+- The kit `TimetableGrid` on the background, like the printed timetable: a
+  column per weekday (the date under the weekday; today under ▼; days off
+  from the 行事曆 red with 放假 and dimmed), a row per period with its numeral
+  and start time (until the bell times load, the timetable's own periods
+  without times), `午休 12:00–13:00` between the morning and the afternoon,
+  one coloured cell per period with the subject's full name (a 連堂 is two
+  cells of the same colour), a small note mark on a cell with a note (a free
+  period with a note shows the note in the plain fill, as 今天 does), and
+  nothing drawn for a 空堂 (it still takes a tap). The period in session has
+  its row label tinted and its cell ringed in the tint (never on a day off).
+  Each cell's spoken label gives the weekday and period, the bell times, the
+  subject, the rotation (`單週：A　雙週：B`) and the note. Tapping a cell
+  opens the editor; the footer is the edit hint.
+- At the accessibility text sizes (the kit's `useAccessibilityTextSize`: iOS
+  AX1 and up, Android a font scale of 1.5 and up), where five columns cannot
+  hold the size chosen, the same week is a list: a Section per weekday
+  (`星期一`, its date, 今天 or the day off's name), a `Row` per period with
+  its badge in the subject's colour (dashed for a 空堂), the bell times, the
+  rotation and the note, the period in session emphasised with a 現在 badge.
+- Colours: every subject in a timetable has a colour of its own.
+  `subject-colors.ts` puts each on a wheel of 22 hues, alternately lighter
+  and darker (ink on fill 5.2:1 or more in light and dark; the closest two
+  slots measure CIEDE2000 6.5 light, 5.8 dark), at the slot its name hashes
+  to, or the next free one when another name has it, so the 14 to 20
+  subjects of a class all differ and a subject keeps one colour wherever it
+  sits in the week. The class's own (bundled) timetable anchors the wheel:
+  its subjects keep their slots through edits, and a subject the user types
+  in takes a free one (which can change when the free slots do: another
+  typed-in subject, or a class subject cleared everywhere or put back). Past
+  22 subjects the wheel widens and every colour moves once. With no class,
+  before the timetables load, or when they no longer include the class,
+  every subject is placed by name alone. A subject's colour holds within one
+  timetable only: in another class it can be quite another colour, wherever
+  the names placed before it pushed it. The user's own colour for a slot (one of
+  the seven in `cell-colors.ts`, each a soft fill with a deep ink, 4.5:1 or
+  more) wins; the picker calls the subject's colour 預設（依科目）. The Quasar
+  fills are kept only to recognise imported colours.
 - Loading/error: `Loading` / `Notice` blocks.
 
 ### 編輯課程 (/schedule-editor, modal)
@@ -182,23 +271,43 @@ remote data.
 - Section "科目": either `TextFieldRow` 科目, or (rotation on) 單週科目 /
   雙週科目; `ToggleRow` 單雙週輪替 (from phase 1 model).
 - Section "備註": multiline `TextFieldRow`.
-- Section "顏色": menu `PickerRow` with the eight colours (label + swatch
-  where possible).
+- Section "顏色": `PickerRow` with 預設（依科目） and the seven colours, each
+  with a round dot in its hue before the name (預設's is the subject's own
+  colour, a dashed ring for a 空堂; the seven are the system hues the
+  swatches soften): on iOS a row each in the section, the chosen one checked,
+  on Android a dropdown. Then a preview `Row` of the slot as 課表 will draw it
+  once saved: the displayed week's subject (the coming week's at the weekend),
+  in its colour on the timetable with the draft in place.
 
 ### 行事曆 (Todo)
-- Header: `+` menu (新增待辦 / 新增活動); Android FAB 新增待辦.
-- Section (no title): segmented 月曆 / 待辦.
-- Calendar view: a Section containing the kit `MonthCalendar`, which draws its
-  own header (month title `2026年10月`, previous / 今天 / next controls) and a
-  weekday row. Footer `{term} · 圓點為活動，方點為待辦。`. Then a Section titled with the selected
-  day (`10月4日 星期日`): events as `Row`s (dot colour, title, category ·
-  date range subtitle; school events show department/暫定/約略 and have no
-  chevron; user events open the editor; actions 編輯/刪除) and todos as
-  `CheckRow`s. Empty → `TextBlock secondary` 這一天沒有活動或待辦。
-- Todo list view: Section with menu `PickerRow` 顯示類別 (counts) and
-  `ButtonRow` 管理待辦類別 (→ `/categories?kind=todo`); then one Section per
-  date group (title = date + weekday; overdue groups get footer 已過期);
-  `CheckRow` per todo (subtitle category; tap edits; actions 刪除). Footer
+- Header: ‹ › (previous and next month) then a gap and 今天 on the left; the
+  `+` menu (新增待辦 / 新增活動) on the right; Android FAB 新增待辦. Subtitle
+  `2026年10月 · 115 學年度第 1 學期`.
+- A Section with the kit `MonthCalendar`. Days off listed in the 行事曆 are red
+  with 假, the grade's exam days carry 考 (`CalendarCell.mark`, drawn instead
+  of the dots); events are dots, todos squares. School events longer than a
+  week dot only their first and last day. The grade filter (on by default;
+  the setting is also in 設定) has one control, the calendar's footer, which
+  reads both ways: `已隱藏 6 則只給高一、高三的活動。` with 全部顯示 while it hides
+  something, `顯示所有年級的活動。` with 只顯示和高二有關的 while it is off and
+  would hide something, nothing otherwise.
+- A Section titled with the selected day (`10月7日 星期三 · 今天`): events as
+  `Row`s (square swatch, title, `學校 · 學務處 · 全天` or the category and the
+  days; school events show 暫定/約略 and have no chevron; user events open the
+  editor; actions 編輯/刪除) and todos as `CheckRow`s (`待辦 · 作業`). Empty →
+  `TextBlock secondary` 這一天沒有活動或待辦。
+- Checking a todo off is reversible: it stays listed, checked, with
+  `已完成 · 作業`, until the end of that local day (`Todo.completedAt`,
+  `todo-state.ts`), so a mis-tap is undone by tapping again; the next day it
+  is hidden and pruned. Open todos list before completed ones; 接下來, the
+  calendar's squares and every count show open todos only. The same holds on
+  今天's 今日 and in the 待辦 list.
+- "接下來": what starts in the next two weeks after the selected day (up to
+  five), each with the date mark (`四` over `8`).
+- `Row` 所有待辦 (`N 項`) → 待辦 (`/todo/list`, pushed): menu `PickerRow`
+  顯示類別 (counts) and `ButtonRow` 管理待辦類別 (→ `/categories?kind=todo`);
+  one Section per date group (title = date + weekday; overdue groups get
+  footer 已過期); `CheckRow` per todo (tap edits; actions 刪除). Footer
   勾選待辦即完成並移除。
 
 ### 待辦 / 活動 editors (modal)
@@ -215,7 +324,7 @@ remote data.
 - Header 完成.
 - Section "活動類別"/"待辦類別": `Row` per category (event: colour dot),
   actions 刪除 (with the same Alert copy; events keep ≥1 category).
-- Section "新增類別": `TextFieldRow` 新類別名稱, (event) colour `PickerRow`
+- Section "新增類別": `TextFieldRow` 新類別名稱, (event) colour `PickerRow`, each colour with its dot
   + `TextFieldRow` 自訂色碼 (#RRGGBB), `ButtonRow` 新增類別. Footers keep the
   existing hints.
 
@@ -245,16 +354,20 @@ remote data.
 - `/youbike-rename?city&sna` (modal): `TextFieldRow` 暱稱, Header 取消/儲存.
 
 ### 美食 (Food)
-- Header: map/list toggle icon, 隨機選擇 (shuffle) icon, filter menu with
-  toggles 正在營業 / 我的最愛 (iOS menu with checkmarks; Android same menu
-  with checks). `Stack.SearchBar` 搜尋餐廳.
-- Android also shows `FilterChips` (正在營業, 我的最愛) at the top; iOS shows
-  them in the header menu only.
-- Map mode: Section with `Embedded` `RestaurantMap` (≈ 60% screen height),
-  footer legend; then the list section below.
-- List: Section `{n} 間餐廳`: `Row` per restaurant — leading status dot,
-  title name, subtitle `正在營業 · 今日 06:00-14:00、16:30-19:30`, `toggle`
-  favourite (heart / heart.fill), chevron → `/restaurant?name=`.
+- The tab holds two screens switched by the segmented 熱食部 / 附近 in the
+  header (`src/features/food/tab.tsx`); 熱食部 is first. Each keeps its own
+  header actions and search. Links pass `view` (`menu` / `nearby`) and, for
+  the menu, `date`. Below: 附近.
+- Header: the switch and 隨機選擇 (dice). `Stack.SearchBar`
+  搜尋餐廳或綽號，例如「林乾」. Subtitle `附近 · 12:14 · 86 間營業中`.
+- `FilterChips` 營業中 / 我的最愛 (both platforms), then the `Embedded`
+  `RestaurantMap` card (≈ 40% of the screen height) where maps are available.
+- List: Section `由近到遠` (detail 距離從學校算起): `Row` per restaurant —
+  title name, nickname or branch beside it (`titleAside`), subtitle with the
+  status dot `營業中 · 至 13:30 · 140 m` (快打烊 · 13:00, 快開門 · 17:00,
+  休息中 · 明天 06:00; `statusLine`), the favourite heart as a trailing button
+  (red when on), tap → `/restaurant?name=`. Nearest first, straight-line from
+  the east gate (`CK_COORDINATE`).
 - `/restaurant?name=` (modal): Section header block (name, status), Section
   actions (加入/移除最愛, 在地圖開啟位置, 餐廳網站), Section "營業時間": `Row`
   per day (title 星期一, detail hours; today emphasized with badge 今天).
@@ -273,12 +386,56 @@ remote data.
   (in place of the notice), not `ListScreen.refreshing`, so there is one
   indicator, not two.
 
-### 熱食部 (Menu)
-- Header: previous week / next week icons and a 本週 text button.
-- Section: segmented 一 二 三 四 五. Section titled with date + weekday:
-  `Embedded` menu image (aspect ratio from the image), `Loading`, failure
-  `EmptyState` 這一天的菜單尚未公布… with 重新讀取菜單 action. Section
-  `ButtonRow` 在瀏覽器開啟菜單.
+### 熱食部 (Menu, inside 美食)
+- Header: the 熱食部 / 附近 switch; ‹ › then a gap and 本週 on the left (iOS)
+  or in a menu beside the switch (Android, where the top app bar has no room
+  for both). Subtitle `熱食部 · 10月5日–9日`.
+- `DayStrip` of the week (days off from 行事曆 marked 放假). The default is
+  today, or Monday at weekends; 本週 restores that selection. Week paging
+  announces the range for screen readers.
+- The menu starts close below the strip (`Section tight`: 12pt on iOS17+,
+  normal 16dp spacing on Android), without a repeated date/count header.
+- A week without `menus/<Monday>.json` shows a paper card (`#F8F9FA`).
+  `Embedded fit="screen"` measures its resting top and the visible list's
+  bottom above the tab bar, fitting the whole picture into that space.
+  Known 420×1000 template images (including proportional larger renders)
+  show rows 120–758: all eight dishes, without the repeated date band or
+  blank tail. Other image shapes display whole. The card centres the picture
+  on matching paper; dark mode dims both together by 20%, and Android light
+  mode adds a 1dp separator outline.
+- The whole loaded card opens the original through `openWebsite` (native
+  in-app browser with zoom). It is one native button with the spoken date,
+  image label and hint; the hosted picture takes no touches or accessibility
+  focus. Loading uses the same card frame, paper, spinner and busy label.
+  There is no separate browser row in picture mode.
+- Picture text keeps a minimum height of
+  `ceil(638 × max(11, 12 × fontScale) / 28)`, capped at 638pt/dp. If the room
+  is smaller, or an accessibility text size is selected, the full-width
+  picture scrolls rather than shrinking further. The resting position is
+  latched so ordinary scrolling and pull-to-refresh do not resize it.
+- Once the week's JSON is available, two tight cards show native `Row`s:
+  rice dishes 1–5, then noodles and sets 6–8. Each has its 項次 `index` mark,
+  dish name and prominent price; the first row also reads the date and dish
+  count. `ButtonRow` 查看原始菜單圖片 follows. The small SE can scroll this
+  native list; ordinary larger portrait phones show all eight dishes.
+- A day without dishes shows 這天沒有菜單 or the calendar's day-off name.
+  In picture mode only a named calendar holiday suppresses the image request;
+  inferred term breaks do not hide historical menus. A day off offers the
+  next school day's menu. Failure shows 這一天的菜單尚未公布… with
+  重新讀取菜單. A JSON404 immediately falls back to the picture; pull refresh
+  reloads whichever is shown and retains the old picture while loading.
+
+### 校園 (Campus)
+- Header: search (opens 校網, which has the search bar).
+- Section "校網" (prominent, `N 則未讀` badge, 全部 → 校網): the three newest
+  unread announcements, then pinned ones: unread with a navy dot and a bold
+  title, the title's leading 【轉知】-style labels as tags (`newsTags`),
+  subtitle `10月8日 · 最新消息` (`· 已釘選`), opening the article. A failed
+  feed says so in the footer with 重試. Polls like 校網 while focused.
+- Section "交通": `Row` YouBike 與捷運 with the first followed stations'
+  numbers (`建中東側門 借 7 · 還 41`; counts until loaded) → 交通.
+- Section "學生福利": `Row`s 建北特約 (合作店家優惠), 校慶紀念品. Section "工具":
+  選擇障礙小幫手. All prominent headers.
 
 ### 建北特約 (Promo), 選擇障礙小幫手 (Help), 關於 (About), 設定 (Settings)
 - Promo: Section "建北特約" `TextBlock`s; Section "尋找特約店家" link `Row`s with
@@ -289,21 +446,75 @@ remote data.
 - About: Section app identity (`Row` CK APP / 你的校園助理, detail 版本 x.y.z);
   Section "關於這個 APP" `TextBlock`s; Section "聯絡我們" link rows (mail,
   Instagram, web symbols, external accessory).
-- Settings: Section "我的班級" menu `PickerRow` (confirm Alert + revert);
-  Section "首頁顯示項目" three `ToggleRow`s; Section "自訂工具列" footer 最多
-  顯示 4 個… — `ToggleRow` per feature with `actions` 上移/下移 (iOS: in edit
-  mode via `List.ForEach onMove` is preferred if feasible inside the kit as
-  `ReorderableSection`; otherwise context-menu/overflow 上移/下移); Section
-  "個人資料" destructive `ButtonRow` 重設個人資料與設定 + footer.
-- Settings, as built: 上移/下移 are row `actions`. At the 4-tab limit a hidden
-  feature's switch is `disabled` (greyed rather than refused), and its
-  上移/下移 stay available. iOS adds 長按功能可調整順序。 to the 自訂工具列
-  footer, because its actions live only in the long-press menu, which nothing
-  on screen reveals; Android's overflow button is visible, so it has no hint.
+- Settings (sheet; header ✓ on iOS, close icon on Android): Section
+  "我的班級" menu `PickerRow` 班級 (confirm Alert + revert; 尚未選擇 and no
+  confirmation while no class is set; footer 換班級會載入那一班的課表。); Section 「今天」顯示 with `ToggleRow`s 今日待辦與活動,
+  午餐, 回家, 釘選的校網消息 (footer: the 現在 card always shows); Section
+  "行事曆" `ToggleRow` 只顯示和高X有關的學校活動; Section "資料" destructive
+  `ButtonRow` 重設個人資料與設定 + footer (the reset closes every sheet and returns to 你是哪一班？, as on a new install); Section
+  with `Row` 關於 CK APP (detail: the version) → 關於. iOS switches are the
+  system green, as in Settings.
+
+### Welcome (你是哪一班？, /welcome)
+- Shown once on a new install, full screen, before 今天: the 倒三角 over the
+  title (`TextBlock size="title" brandMark`), a line on what the class is for
+  and that it stays on the phone, segmented 高一 / 高二 / 高三, the grade's
+  classes as a `ChoiceGrid`, a prominent 開始使用 (enabled once a class is
+  chosen; loads its timetable) and 先看看，之後再選. Either way
+  `settings.welcomed` is set and 今天 opens. Skipping leaves the class empty
+  (`DEFAULT_CLASS` is ""): 今天's card then says 選擇班級 and its chip 班級,
+  課表's empty state offers 選擇班級, and 設定's 班級 picker shows 尚未選擇 until
+  one is picked (the first pick needs no confirmation). No class is ever
+  assumed.
 
 ### 紀念品 (Souvenir)
 - Keeps the WebView (it is a website). Failure → kit `EmptyState` 目前無法載入
   紀念品商店。 with 重試 and 在瀏覽器開啟 actions; header button 在瀏覽器開啟.
+
+### Widgets (iOS, opt-in)
+- The 現在 widget (`src/widgets/`, expo-widgets): Home Screen small and medium
+  on the navy (eyebrow, subject, the bell rail with ▼, a live countdown
+  `22:56 後下課` in the timer style; the medium one lists the rest of the day,
+  `英語文 11:10 · 午餐 12:00 · 地理 · 連堂 13:00`), Lock Screen rectangular
+  (▼, period and subject, countdown, next) and inline in the system's
+  monochrome. The rail's kinds differ by shape, not only by colour: a lesson
+  is a 4 pt bar, a 空堂 a 2 pt bar, lunch a short dash; passed bars are white,
+  the rest 45% white (3.5:1 on the navy). The
+  layout is a `'widget'` function (Babel turns it into source text that the
+  extension runs with @expo/ui's SwiftUI views as globals).
+- The app writes the timeline whenever 今天's inputs change and once a day: the
+  next 36 hours, one entry per bell and midnight (`now-timeline.ts`,
+  unit-tested), so the widget follows the school day without the app open.
+- Built only with `ENABLE_WIDGETS=1` at prebuild: it adds the extension
+  (`org.capacitor.quasar.ckapp.ExpoWidgetsTarget`) and the App Group
+  `group.org.capacitor.quasar.ckapp`. Before turning it on for store builds,
+  register both in the Apple Developer account and add the extension's
+  provisioning profile to the release signing.
+- A Live Activity would need a push server to move from one period to the
+  next while the app is closed, so there is none.
+
+### Text sizes
+
+On iOS every piece of text uses a system text style, never a fixed size (a
+bare `font({ size })` in @expo/ui never scales); the one exception is the
+64 pt decorative 倒三角 on the welcome screen. Android uses Material type
+styles, plus a few small fixed sp sizes (the ▼, 放假 captions, the 56 sp
+倒三角), which still follow the font scale. Geometry drawn around text (the rail's
+offsets and ▼, the day circle, the grid's marker row) grows with the text
+through `layoutScale` (src/ui/ios/helpers.ts) up to the layout's own
+`dynamicTypeSize` cap, and layouts that cannot hold the accessibility sizes
+(the week grid, the day strip, the calendar) cap there instead of truncating:
+the grid drops the start times from its row labels and stacks 放假 under the
+date, section headers stack their badge, detail and action, the 現在 card
+stacks its pairs and drops the rail's labels. 課表 goes further and lists the
+week at those sizes (`useAccessibilityTextSize`), so its text takes the size
+chosen; on Android, whose grid text is not capped, a cell ends a name it
+cannot fit in three lines with an ellipsis.
+
+The 熱食部 picture fits the remaining viewport at ordinary text sizes with
+a legibility floor that grows with font scale. At accessibility sizes it
+keeps the full-width dish band and allows scrolling; its native dish list
+uses the system's row text sizes.
 
 ## Verification
 

@@ -4,7 +4,22 @@ import { Pressable, Text, View } from 'react-native';
 import type { HeaderActionsProps, HeaderItem, HeaderMenuEntry } from './header-actions.types';
 
 /** Every pressable a header item offers: menus (and their submenus) are spread out as plain buttons. */
-function buttonsOf(item: HeaderItem): { key: string; label: string; onPress: () => void; disabled?: boolean }[] {
+function buttonsOf(item: HeaderItem): {
+  key: string;
+  label: string;
+  /** Spoken instead of `label`, e.g. 設定，目前班級 201 for the class chip. */
+  accessibilityLabel?: string;
+  onPress: () => void;
+  disabled?: boolean;
+}[] {
+  if (item.kind === 'segmented') {
+    return item.options.map((option) => ({
+      key: `${item.key}-${option.value}`,
+      label: option.value === item.value ? `• ${option.label}` : option.label,
+      onPress: () => item.onChange(option.value),
+    }));
+  }
+  if (item.kind === 'space') return [];
   if (item.kind !== 'menu') return [item];
   const actions = item.actions.flatMap((entry: HeaderMenuEntry) => (entry.kind === 'submenu' ? entry.actions : [entry]));
   return actions.map((action) => ({ ...action, disabled: item.disabled }));
@@ -13,8 +28,8 @@ function buttonsOf(item: HeaderItem): { key: string; label: string; onPress: () 
 function ActionRow({ items }: { items: HeaderItem[] }) {
   return <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 12 }}>
     {items.flatMap(buttonsOf).map((item) =>
-      <Pressable key={item.key} accessibilityRole="button" onPress={item.onPress}
-        disabled={item.disabled === true} style={{ padding: 8 }}><Text>{item.label}</Text></Pressable>)}
+      <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={item.accessibilityLabel ?? item.label}
+        onPress={item.onPress} disabled={item.disabled === true} style={{ padding: 8 }}><Text>{item.label}</Text></Pressable>)}
   </View>;
 }
 

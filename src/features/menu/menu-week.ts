@@ -37,3 +37,8 @@ export function defaultMenuDay(date: Date): MenuDay {
 export function menuImageUrl(weekStart: string, day: MenuDay): string {
   return dataUrl(`menus/${weekStart}_${day}.png`);
 }
+
+/** The week's dishes as data (menu-data.ts), e.g. menus/2025-09-08.json. */
+export function menuDataPath(weekStart: string): string {
+  return `menus/${weekStart}.json`;
+}

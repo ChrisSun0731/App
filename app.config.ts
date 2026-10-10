@@ -12,6 +12,13 @@ import pkg from './package.json';
 const version = process.env.APP_VERSION || pkg.version;
 const buildNumber = process.env.BUILD_NUMBER || '1';
 
+// The 現在 widget (src/widgets/) adds a widget extension target and an App
+// Group (group.<bundle id>) to the iOS app. Store builds can only sign them
+// once both are registered in the Apple Developer account with provisioning
+// profiles for the extension, so they are opt-in: ENABLE_WIDGETS=1 at
+// prebuild. See docs/design/native-ui.md, "Widgets".
+const widgets = process.env.ENABLE_WIDGETS === '1';
+
 // The store identity is inherited from the original Capacitor app. Changing it
 // would publish a brand-new app instead of an update to the existing one.
 const APP_ID = 'org.capacitor.quasar.ckapp';
@@ -52,6 +59,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     'expo-router',
+    './plugins/with-android-debug-identity',
     [
       'expo-splash-screen',
       {
@@ -63,6 +71,26 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-sqlite',
     // SDK 57 opts into scenes so builds made with Xcode 27 launch on iOS 27.
     ['expo-build-properties', { ios: { enableSceneSupport: true } }],
+    ...(widgets
+      ? [
+          [
+            'expo-widgets',
+            {
+              bundleIdentifier: `${APP_ID}.ExpoWidgetsTarget`,
+              groupIdentifier: `group.${APP_ID}`,
+              widgets: [
+                {
+                  name: 'NowWidget',
+                  displayName: '現在',
+                  description: '現在這一節、下課倒數和接下來的課。',
+                  supportedFamilies: ['systemSmall', 'systemMedium', 'accessoryRectangular', 'accessoryInline'],
+                  contentMarginsDisabled: false,
+                },
+              ],
+            },
+          ] as [string, unknown],
+        ]
+      : []),
   ],
   extra: {
     googleMapsConfigured: Boolean(process.env.GOOGLE_MAPS_API_KEY),

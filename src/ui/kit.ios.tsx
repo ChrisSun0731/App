@@ -4,19 +4,25 @@
 // inside ListScreen's Host, tinted with the CK navy (lifted in dark mode), and
 // the kit draws with semantic system colours so light/dark and Increase
 // Contrast follow the system.
-import { Embedded, EmptyState, FilterChips, Loading, Notice, TextBlock, TileGrid } from './ios/blocks';
+import { ChoiceGrid, Embedded, EmptyState, FilterChips, Loading, Notice, TextBlock, TileGrid } from './ios/blocks';
 import { MonthCalendar } from './ios/calendar';
+import { DayStrip } from './ios/day-strip';
 import { CrowdBar, MetricPills } from './ios/inline';
 import { DateRow, PickerRow, TextFieldRow } from './ios/inputs';
 import { ListScreen, Section } from './ios/list';
+import { NowCard } from './ios/now-card';
 import { ButtonRow, CheckRow, Row, ToggleRow } from './ios/rows';
+import { useAccessibilityTextSize } from './ios/text-size';
+import { TimetableGrid } from './ios/timetable-grid';
 import type { Kit } from './types';
 
 export {
   ButtonRow,
   CheckRow,
+  ChoiceGrid,
   CrowdBar,
   DateRow,
+  DayStrip,
   Embedded,
   EmptyState,
   FilterChips,
@@ -25,13 +31,16 @@ export {
   MetricPills,
   MonthCalendar,
   Notice,
+  NowCard,
   PickerRow,
   Row,
   Section,
   TextBlock,
   TextFieldRow,
   TileGrid,
+  TimetableGrid,
   ToggleRow,
+  useAccessibilityTextSize,
 };
 
 // Compile-time check that this file implements the whole contract.
@@ -48,11 +57,16 @@ export default {
   TextBlock,
   EmptyState,
   Notice,
+  NowCard,
   Loading,
   FilterChips,
   TileGrid,
+  ChoiceGrid,
+  DayStrip,
+  TimetableGrid,
   MonthCalendar,
   MetricPills,
   CrowdBar,
   Embedded,
+  useAccessibilityTextSize,
 } satisfies Kit;

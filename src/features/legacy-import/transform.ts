@@ -10,7 +10,6 @@
 // here throws: whatever is valid is kept, and a field is left out when there
 // is nothing usable for it, which leaves this app's value alone.
 import type { NewsItem } from '@/features/news/rss';
-import { FEATURES, isTabFeature, TAB_FEATURE_IDS, type TabFeatureId } from '@/features/registry';
 import { CELL_COLORS } from '@/features/schedule/cell-colors';
 import {
   PERIOD_NAMES,
@@ -32,7 +31,6 @@ import {
 import { STATION_LINES } from '@/features/transport/metro-lines';
 import { stationDisplayName, type City } from '@/features/transport/youbike';
 import { isDateKey, toDateKey } from '@/lib/dates';
-import { normalizeToolbar, type ToolbarItem } from '@/store/settings';
 import type { FollowedYoubike } from '@/store/transport';
 
 import type { LegacyImport } from './types';
@@ -303,27 +301,6 @@ function metroStations(value: unknown): string[] | undefined {
   return [...new Set((value as unknown[]).map(text).filter(known))];
 }
 
-// Toolbar entries were {label, icon, link, visible}; the fixed 首頁 entry has
-// no counterpart because this app always shows 首頁. Labels are the fallback
-// for a link that does not name a feature.
-const TOOLBAR_LABELS = new Map(TAB_FEATURE_IDS.flatMap((id): [string, TabFeatureId][] => [
-  [FEATURES[id].tabLabel, id],
-  [FEATURES[id].title, id],
-]));
-
-function toolbar(value: unknown): ToolbarItem[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const items = (value as unknown[]).flatMap((item): ToolbarItem[] => {
-    if (!isRecord(item)) return [];
-    const route = text(item.link).replace(/^#?\/*/, '').split(/[/?#]/)[0];
-    const id = isTabFeature(route) ? route : TOOLBAR_LABELS.get(text(item.label));
-    return id ? [{ id, visible: item.visible === true }] : [];
-  });
-  // Keeps the order, shows at most MAX_FEATURE_TABS (the old toolbar had no
-  // limit) and appends features the old app did not have, hidden.
-  return items.length ? normalizeToolbar(items) : undefined;
-}
-
 function parse(value: unknown): unknown {
   if (typeof value !== 'string') return value;
   try {
@@ -338,7 +315,8 @@ function parse(value: unknown): unknown {
  * value (JSON text, or already parsed) and `userClass` its "userClass" value.
  *
  * The cached news (news.fetchedNews / lastFetchTime) is not carried over: it
- * is refetched on launch and is not the user's data.
+ * is refetched on launch and is not the user's data. Nor is the toolbar
+ * (settings.menuItems): this app's tab bar is fixed.
  */
 export function transformLegacyStore(store: unknown, userClass?: unknown, { dateKey = toDateKey }: TransformOptions = {}): LegacyImport {
   const parsed = parse(store);
@@ -347,8 +325,8 @@ export function transformLegacyStore(store: unknown, userClass?: unknown, { date
     const value = state[name];
     return isRecord(value) ? value : {};
   };
-  const [schedule, todo, news, food, youbike, metro, settings] =
-    ['schedule', 'todo', 'news', 'food', 'youbike', 'metro', 'settings'].map(slice);
+  const [schedule, todo, news, food, youbike, metro] =
+    ['schedule', 'todo', 'news', 'food', 'youbike', 'metro'].map(slice);
   const categories = eventCategories(todo.eventCategories);
   const view = todo.currentView;
   return compact<LegacyImport>({
@@ -372,9 +350,8 @@ export function transformLegacyStore(store: unknown, userClass?: unknown, { date
     food: compact({ favorites: favoriteNames(food.favoriteRestaurants) }),
     transport: compact({ youbike: youbikeStations(youbike.stationList), metro: metroStations(metro.metroStationList) }),
     settings: compact({
-      toolbar: toolbar(settings.menuItems),
+      // displayScheduleWidget has no counterpart: 今天's 現在 card is always shown.
       homeWidgets: compact({
-        schedule: flag(schedule.displayScheduleWidget),
         todo: flag(todo.displayTodoWidget),
         news: flag(news.displayNewsWidget),
       }),

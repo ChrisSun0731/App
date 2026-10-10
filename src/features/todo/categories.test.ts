@@ -34,7 +34,10 @@ describe('category management rules', () => {
 
   test('shows a typed code as 自訂顏色 so the picker always has the current value', () => {
     expect(colorOptions('#C62828')).toBe(EVENT_COLORS);
-    expect(colorOptions('#123456').at(-1)).toEqual({ label: '自訂顏色', value: '#123456' });
+    expect(colorOptions('#123456').at(-1)).toEqual({ label: '自訂顏色', value: '#123456', dot: '#123456' });
+    // A code still being typed has no colour to show yet.
+    expect(colorOptions('#12').at(-1)).toEqual({ label: '自訂顏色', value: '#12', dot: undefined });
+    expect(EVENT_COLORS.every((option) => option.dot === option.value)).toBe(true);
   });
 
   test("keeps an item's deleted category available in its editor", () => {

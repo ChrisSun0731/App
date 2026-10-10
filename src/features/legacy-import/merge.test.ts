@@ -1,7 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
 import { PERIOD_NAMES, WEEKDAYS, type ScheduleRow } from '@/features/schedule/timetable';
-import type { ToolbarItem } from '@/store/settings';
 
 import { mergeLegacyImport } from './merge';
 import type { LegacyImport, StoresData } from './types';
@@ -12,22 +11,18 @@ const rows = (subject: string): ScheduleRow[] => PERIOD_NAMES.map((name) => {
   return row;
 });
 
-const toolbar = (visible: string[]): ToolbarItem[] =>
-  (['promo', 'souvenir', 'schedule', 'todo', 'transport', 'menu', 'food', 'news'] as const)
-    .map((id) => ({ id, visible: visible.includes(id) }));
-
 const DEFAULT_CATEGORY = { name: 'Default', color: '#ADADAD' };
 const BIKE_SCHOOL = { sna: 'YouBike2.0_泉州寧波西街口', nickname: '建中東側門', city: '臺北市' as const };
 const BIKE_GARDEN = { sna: 'YouBike2.0_植物園', nickname: '台北植物園', city: '臺北市' as const };
 
-/** Each store's defaults, as in src/store. */
+/** Each store's defaults, as in src/store (no class until one is chosen). */
 const initial: StoresData = {
-  schedule: { userClass: '101', rows: [] },
+  schedule: { userClass: '', rows: [] },
   todo: { events: [], eventCategories: [DEFAULT_CATEGORY], todos: [], todoCategories: [], view: 'calendar' },
   news: { pinned: [], lastClearedTime: null },
   food: { favorites: [] },
   transport: { youbike: [BIKE_SCHOOL, BIKE_GARDEN], metro: ['中正紀念堂', '小南門', '西門'] },
-  settings: { toolbar: toolbar(['promo', 'souvenir', 'schedule', 'todo']), homeWidgets: { schedule: true, todo: true, news: true } },
+  settings: { homeWidgets: { todo: true, lunch: true, commute: true, news: true } },
 };
 
 const legacy: LegacyImport = {
@@ -43,7 +38,7 @@ const legacy: LegacyImport = {
   food: { favorites: ['南門市場'] },
   // The user had removed 植物園 and 西門.
   transport: { youbike: [BIKE_SCHOOL], metro: ['中正紀念堂', '小南門', '台北車站'] },
-  settings: { toolbar: toolbar(['food', 'news']), homeWidgets: { news: false } },
+  settings: { homeWidgets: { news: false } },
 };
 
 describe('legacy import merge', () => {
@@ -55,7 +50,7 @@ describe('legacy import merge', () => {
       news: legacy.news,
       food: legacy.food,
       transport: legacy.transport,
-      settings: { toolbar: legacy.settings?.toolbar, homeWidgets: { schedule: true, todo: true, news: false } },
+      settings: { homeWidgets: { todo: true, lunch: true, commute: true, news: false } },
     });
     // Nothing to import leaves everything as it is.
     expect(mergeLegacyImport(initial, {}, initial, { scheduleEdited: false })).toEqual(initial);
@@ -74,7 +69,7 @@ describe('legacy import merge', () => {
       news: { pinned: [], lastClearedTime: '2026-10-04T08:00:00.000Z' },
       food: { favorites: ['建中黑白切'] },
       transport: { youbike: [BIKE_SCHOOL, BIKE_GARDEN], metro: ['中正紀念堂', '小南門', '西門', '東門'] },
-      settings: { toolbar: toolbar(['todo']), homeWidgets: { schedule: false, todo: true, news: true } },
+      settings: { homeWidgets: { todo: false, lunch: false, commute: true, news: true } },
     };
     const merged = mergeLegacyImport(current, legacy, initial, { scheduleEdited: true });
     // The user edited the timetable here: it stays.
@@ -93,7 +88,7 @@ describe('legacy import merge', () => {
     // Untouched default stations take the previous app's list; changed ones are combined.
     expect(merged.transport).toEqual({ youbike: [BIKE_SCHOOL], metro: ['中正紀念堂', '小南門', '西門', '東門', '台北車站'] });
     // Settings already changed here are kept, the rest come over.
-    expect(merged.settings).toEqual({ toolbar: current.settings.toolbar, homeWidgets: { schedule: false, todo: true, news: false } });
+    expect(merged.settings).toEqual({ homeWidgets: { todo: false, lunch: false, commute: true, news: false } });
   });
 
   test('replaces an automatically filled timetable, but not one the user edited', () => {

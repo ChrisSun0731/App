@@ -147,6 +147,19 @@ export function getOpenStatus(hours: OpeningHours, date: Date = new Date()): Ope
   return periods.some(({ open }) => open > now && open - now <= SOON_MINUTES) ? 'openingSoon' : 'closed';
 }
 
+/**
+ * When the status next changes: the closing time while open, else the next
+ * opening (today or tomorrow); minutes on `date`'s clock (1440+ = tomorrow),
+ * or null when nothing opens before tomorrow ends.
+ */
+export function nextChange(hours: OpeningHours, date: Date = new Date()): number | null {
+  const now = minutesOfDay(date);
+  const periods = periodsAround(hours, date);
+  const current = periods.find(({ open, close }) => now >= open && now < close);
+  if (current) return current.close;
+  return periods.find(({ open }) => open > now)?.open ?? null;
+}
+
 export function isOpenNow(hours: OpeningHours, date: Date = new Date()): boolean {
   const status = getOpenStatus(hours, date);
   return status === 'open' || status === 'closingSoon';

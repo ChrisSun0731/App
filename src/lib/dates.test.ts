@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { addDays, fromDateKey, isDateKey, parseClockTime, startOfWeekMonday, toDateKey } from './dates';
+import { addDays, clock, fromDateKey, isDateKey, parseClockTime, startOfWeekMonday, toDateKey } from './dates';
 
 describe('calendar date boundaries', () => {
   test('accepts leap days but rejects invalid dates rather than rolling them over', () => {
@@ -18,5 +18,10 @@ describe('calendar date boundaries', () => {
   test('allows extended overnight hours and rejects impossible minutes', () => {
     expect(parseClockTime('26:30')).toBe(1590);
     expect(parseClockTime('12:60')).toBeNull();
+  });
+  test('formats minutes since midnight as a zero-padded clock time, hours past 23 included', () => {
+    expect(clock(490)).toBe('08:10');
+    expect(clock(1020)).toBe('17:00');
+    expect(clock(1590)).toBe('26:30');
   });
 });

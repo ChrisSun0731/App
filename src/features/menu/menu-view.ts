@@ -1,7 +1,6 @@
-// Pure helpers behind the 熱食部 screen: week paging, the segmented weekday
-// options, section titles, the cache-busting image URL and the image's aspect
-// ratio. Kept out of the screen so they can be unit tested without a renderer.
-import { addDays, formatFullDate, formatMonthDay, fromDateKey, toDateKey } from '@/lib/dates';
+// Pure helpers behind 熱食部: week paging, labels, image requests and fitting
+// the printed dish band. Kept out of the screen to test without a renderer.
+import { addDays, formatMonthDayRange, formatMonthDayZh, fromDateKey, toDateKey } from '@/lib/dates';
 import type { ChoiceOption } from '@/ui/types';
 
 import { MENU_DAYS, type MenuDay } from './menu-week';
@@ -24,16 +23,16 @@ export function shiftWeek(weekStart: string, weeks: number): string {
   return toDateKey(addDays(fromDateKey(weekStart), weeks * 7));
 }
 
-/** e.g. "10/5 (一) — 10/9 (五)". */
+/** e.g. "10月5日–9日". */
 export function weekRangeLabel(weekStart: string): string {
   const monday = fromDateKey(weekStart);
-  return `${formatMonthDay(monday)} — ${formatMonthDay(addDays(monday, 4))}`;
+  return formatMonthDayRange(monday, addDays(monday, 4));
 }
 
-/** The selected school day, e.g. "2026/10/8 星期四". */
+/** The selected school day, e.g. "10月8日 星期四". */
 export function menuDayTitle(weekStart: string, day: MenuDay): string {
   const date = addDays(fromDateKey(weekStart), day - 1);
-  return `${formatFullDate(date)} ${MENU_DAYS[day - 1].label}`;
+  return `${formatMonthDayZh(date)} ${MENU_DAYS[day - 1].label}`;
 }
 
 /**
@@ -45,11 +44,35 @@ export function menuRequestUrl(url: string, revision: number): string {
   return revision ? `${url}?refresh=${revision}` : url;
 }
 
-/** Portrait A4-ish; only used if the image reports no usable size. */
-export const FALLBACK_ASPECT_RATIO = 0.7;
+export const MENU_TEMPLATE = { width: 420, height: 1000 };
+export const MENU_BAND = { top: 120, bottom: 758 };
+export const MENU_BAND_HEIGHT = MENU_BAND.bottom - MENU_BAND.top;
+export const MENU_BAND_RATIO = MENU_TEMPLATE.width / MENU_BAND_HEIGHT;
+export const MENU_MAX_HEIGHT = MENU_BAND_HEIGHT;
+export const MENU_PAPER = '#F8F9FA';
+export const MENU_DIM = 'rgba(0,0,0,0.2)';
 
-/** width / height of the loaded menu image. */
-export function imageAspectRatio(width: number, height: number): number {
-  const ratio = width / height;
-  return Number.isFinite(ratio) && ratio > 0 ? ratio : FALLBACK_ASPECT_RATIO;
+/** Only the known printed template has a redundant date band and blank tail. */
+export function isMenuTemplate(width: number, height: number): boolean {
+  return width > 0 && height > 0 && Number.isFinite(width) && Number.isFinite(height) && Math.abs(width / height - 0.42) <= 0.002;
+}
+
+/** Keep printed 28px dish names at least 12pt at the user's text scale. */
+export function menuFitFloor(fontScale: number): number {
+  return Math.ceil(MENU_BAND_HEIGHT * Math.max(11, 12 * fontScale) / 28);
+}
+
+interface Size { width: number; height: number }
+
+/** Centre the dish band inside the card; preserve the whole sheet for unfamiliar images. */
+export function menuPictureLayout(image: Size, box: Size) {
+  if (![image.width, image.height, box.width, box.height].every((size) => Number.isFinite(size) && size > 0)) return null;
+  const template = isMenuTemplate(image.width, image.height);
+  const unit = image.height / MENU_TEMPLATE.height;
+  const bandHeight = template ? MENU_BAND_HEIGHT * unit : image.height;
+  const scale = Math.min(box.width / image.width, box.height / bandHeight);
+  return {
+    sheet: { width: image.width * scale, height: bandHeight * scale },
+    picture: { width: image.width * scale, height: image.height * scale, top: template ? -MENU_BAND.top * unit * scale : 0 },
+  };
 }

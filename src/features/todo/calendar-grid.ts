@@ -1,5 +1,6 @@
 import { addDays, toDateKey } from '@/lib/dates';
 
+import { openFirst } from './todo-state';
 import type { CalendarEvent, Todo } from './types';
 
 export interface CalendarDay {
@@ -32,16 +33,16 @@ export function eventCoversDay(event: CalendarEvent, dayKey: string): boolean {
 }
 
 /**
- * Events (by start date) followed by todos, for one day. Events come first
- * because the calendar indicators and the day list both show them first.
+ * Events (by start date) followed by todos (open ones first), for one day.
+ * Events come first because the calendar indicators and the day list both
+ * show them first.
  */
 export function itemsForDay(dayKey: string, events: CalendarEvent[], todos: Todo[]): DayItem[] {
   const dayEvents: DayItem[] = events
     .filter((event) => eventCoversDay(event, dayKey))
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .map((event) => ({ type: 'event', key: `event-${event.id}`, event }));
-  const dayTodos: DayItem[] = todos
-    .filter((todo) => todo.date === dayKey)
+  const dayTodos: DayItem[] = openFirst(todos.filter((todo) => todo.date === dayKey))
     .map((todo) => ({ type: 'todo', key: `todo-${todo.id}`, todo }));
   return [...dayEvents, ...dayTodos];
 }

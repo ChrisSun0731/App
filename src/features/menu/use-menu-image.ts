@@ -35,7 +35,9 @@ export interface MenuImage {
 // small bitmap, and the native image is freed with its JS object (ImageRef
 // reports its memory to Hermes). Releasing in an effect cleanup would also free
 // the image on screen when StrictMode replays effects.
-export function useMenuImage(week: string, day: MenuDay): MenuImage {
+//
+// `enabled` false loads nothing (the screen lists the dishes instead).
+export function useMenuImage(week: string, day: MenuDay, enabled = true): MenuImage {
   const [revision, setRevision] = useState(0);
   const [result, setResult] = useState<LoadResult<ImageRef> | null>(null);
   // The URL a refresh() promise waits for. It is state because it decides
@@ -52,6 +54,7 @@ export function useMenuImage(week: string, day: MenuDay): MenuImage {
       waiter.current = null;
       setRefreshing(null);
     };
+    if (!enabled) return settle;
     const cancel = startMenuLoad(url, {
       load: (requestUrl) => Image.loadAsync({ uri: requestUrl }, { maxWidth: MAX_IMAGE_WIDTH }),
       retries,
@@ -67,9 +70,10 @@ export function useMenuImage(week: string, day: MenuDay): MenuImage {
       // and coming back later must not show the old menu as if refreshing.
       settle();
     };
-  }, [url, slot]);
+  }, [url, slot, enabled]);
 
   function refresh() {
+    if (!enabled) return Promise.resolve();
     return new Promise<void>((resolve) => {
       // Strictly increasing, so a refresh always changes the URL (and so
       // starts a load that settles the promise).

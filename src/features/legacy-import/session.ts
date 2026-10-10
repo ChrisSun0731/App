@@ -48,10 +48,13 @@ function finish(outcome: 'imported' | 'empty' | 'reset') {
 
 // While the import is owed, two things the user does here matter to it.
 //
-// The timetable changes in two ways: the screens' automatic first load fills
-// an empty one with the class's timetable, or the user edits a cell, reloads,
-// or picks a class. Only the latter makes it theirs, which a later attempt
-// must then leave alone.
+// The timetable changes in two ways: a class's bundled timetable fills an
+// empty one (the screens' automatic load for a class already set, or the
+// first class picked on 你是哪一班？ or in 設定 over a class-less, empty
+// timetable), or the user edits a cell, reloads, or changes class. Only the
+// latter makes it theirs, which a later attempt must then leave alone; a first
+// pick only answers the question, so the previous app's class and edits still
+// land on a later attempt.
 //
 // Settings' 重設個人資料與設定 puts every store back to its initial state in
 // one go. The user asked to start over, so the previous app's data must not
@@ -63,6 +66,8 @@ function watchUser() {
   const unsubscribe = [
     useScheduleStore.subscribe((state, prev) => {
       if (applying || !status || status.done || status.scheduleEdited) return;
+      // A first class over an empty, class-less timetable: its bundled rows.
+      if (prev.userClass === '' && prev.rows.length === 0) return;
       if (state.userClass === prev.userClass && (prev.rows.length === 0 || state.rows === prev.rows)) return;
       save({ ...status, scheduleEdited: true });
     }),
@@ -129,7 +134,7 @@ function storesData(read: <S>(store: { getState: () => S; getInitialState: () =>
     news: { pinned: news.pinned, lastClearedTime: news.lastClearedTime },
     food: { favorites: food.favorites },
     transport: { youbike: transport.youbike, metro: transport.metro },
-    settings: { toolbar: settings.toolbar, homeWidgets: settings.homeWidgets },
+    settings: { homeWidgets: settings.homeWidgets },
   };
 }
 
@@ -161,6 +166,8 @@ export function finishLegacyImport(source: LegacySource): void {
         useFoodStore.setState(next.food);
         useTransportStore.setState(next.transport);
         useSettingsStore.setState(next.settings);
+        // The previous app knew the class: no need to ask 你是哪一班？
+        if (legacy.schedule?.userClass) useSettingsStore.setState({ welcomed: true });
       } finally {
         applying = false;
       }

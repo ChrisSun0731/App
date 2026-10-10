@@ -1,13 +1,17 @@
 import { describe, expect, it } from '@jest/globals';
 
 import {
-  activeFilterLabels,
   addressText,
+  distanceLabel,
+  metresFromSchool,
+  openNearSchool,
+  shortName,
+  splitName,
   filterRestaurants,
   findRestaurant,
   mapsUrl,
   pickRandomOpen,
-  resultsTitle,
+  statusLine,
   summarize,
   websiteUrl,
   weeklyHours,
@@ -51,14 +55,12 @@ describe('美食 list', () => {
       .toEqual([]);
   });
 
-  it('titles the results with the filters in use', () => {
-    expect(activeFilterLabels({ openOnly: false, favoritesOnly: false })).toEqual([]);
-    expect(activeFilterLabels({ openOnly: true, favoritesOnly: true })).toEqual(['正在營業', '我的最愛']);
-    expect(activeFilterLabels({ openOnly: false, favoritesOnly: true })).toEqual(['我的最愛']);
-    expect(resultsTitle(89)).toBe('89 間餐廳');
-    expect(resultsTitle(89, [])).toBe('89 間餐廳');
-    expect(resultsTitle(3, ['正在營業'])).toBe('3 間餐廳 · 篩選：正在營業');
-    expect(resultsTitle(1, ['正在營業', '我的最愛'])).toBe('1 間餐廳 · 篩選：正在營業、我的最愛');
+  it('says briefly when the status next changes', () => {
+    expect(statusLine(noodles, mondayNoon)).toEqual({ text: '營業中 · 至 14:00', color: '#1B873F' });
+    expect(statusLine(cafe, mondayNoon).text).toBe('快打烊 · 12:20');
+    expect(statusLine(nightMarket, new Date(2026, 9, 5, 16, 45)).text).toBe('快開門 · 17:00');
+    expect(statusLine(noodles, new Date(2026, 9, 5, 15, 0)).text).toBe('休息中 · 16:30 開');
+    expect(statusLine(noodles, new Date(2026, 9, 5, 20, 0)).text).toBe('休息中');
   });
 
   it('describes the status and today’s hours on one line', () => {
@@ -113,5 +115,32 @@ describe('/restaurant detail', () => {
     expect(findRestaurant(all, '建中')).toBeUndefined();
     expect(findRestaurant(undefined, '建中咖啡')).toBeUndefined();
     expect(findRestaurant(all, undefined)).toBeUndefined();
+  });
+});
+
+describe('names and distances', () => {
+  it('splits the bracketed nickname or branch off a name', () => {
+    expect(splitName('林家乾麵(林乾)')).toEqual({ name: '林家乾麵', aside: '林乾' });
+    expect(splitName('呷尚寶（泉州店）')).toEqual({ name: '呷尚寶', aside: '泉州店' });
+    expect(splitName('烤上台大')).toEqual({ name: '烤上台大', aside: null });
+  });
+
+  it('calls a place by its nickname, but a branch by the name', () => {
+    expect(shortName('廣東小吃(廣炒)')).toBe('廣炒');
+    expect(shortName('Q Burger(中正寧波店)')).toBe('Q Burger');
+    expect(shortName('烤上台大')).toBe('烤上台大');
+  });
+
+  it('measures from the school gate and rounds for display', () => {
+    expect(metresFromSchool([25.031204, 121.515966])).toBe(0);
+    expect(distanceLabel(147)).toBe('150 m');
+    expect(distanceLabel(1240)).toBe('1.2 km');
+  });
+
+  it('lists open places nearest first', () => {
+    const near: Restaurant = { ...noodles, name: '近', position: [25.0312, 121.5158] };
+    const far: Restaurant = { ...noodles, name: '遠', position: [25.04, 121.53] };
+    const closed: Restaurant = { ...noodles, name: '休息', position: [25.0312, 121.516], openingHours: { monday: '休息' } };
+    expect(openNearSchool([far, closed, near], mondayNoon).map((restaurant) => restaurant.name)).toEqual(['近', '遠']);
   });
 });

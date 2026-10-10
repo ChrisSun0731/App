@@ -4,17 +4,23 @@
 // inside ListScreen's Host, seeded with the CK navy (light/dark follow the
 // system), so the kit reads its colours from that Host's palette.
 import { MonthCalendar } from './android/calendar';
-import { CrowdBar, Embedded, EmptyState, Loading, MetricPills, Notice, TextBlock, TileGrid } from './android/content';
+import { ChoiceGrid, CrowdBar, Embedded, EmptyState, Loading, MetricPills, Notice, TextBlock, TileGrid } from './android/content';
 import { FilterChips, PickerRow, TextFieldRow } from './android/controls';
+import { DayStrip } from './android/day-strip';
+import { NowCard } from './android/now-card';
 import { ButtonRow, CheckRow, DateRow, Row, ToggleRow } from './android/rows';
 import { ListScreen, Section } from './android/screen';
+import { useAccessibilityTextSize } from './android/text-size';
+import { TimetableGrid } from './android/timetable-grid';
 import type { Kit } from './types';
 
 export {
   ButtonRow,
   CheckRow,
+  ChoiceGrid,
   CrowdBar,
   DateRow,
+  DayStrip,
   Embedded,
   EmptyState,
   FilterChips,
@@ -23,13 +29,16 @@ export {
   MetricPills,
   MonthCalendar,
   Notice,
+  NowCard,
   PickerRow,
   Row,
   Section,
   TextBlock,
   TextFieldRow,
   TileGrid,
+  TimetableGrid,
   ToggleRow,
+  useAccessibilityTextSize,
 };
 
 // Compile-time check that this file implements the whole contract.
@@ -46,11 +55,16 @@ export default {
   TextBlock,
   EmptyState,
   Notice,
+  NowCard,
   Loading,
   FilterChips,
   TileGrid,
+  ChoiceGrid,
+  DayStrip,
+  TimetableGrid,
   MonthCalendar,
   MetricPills,
   CrowdBar,
   Embedded,
+  useAccessibilityTextSize,
 } satisfies Kit;

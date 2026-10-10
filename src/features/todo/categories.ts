@@ -10,14 +10,14 @@ export function categoryKind(param: unknown): CategoryKind {
   return param === 'event' ? 'event' : 'todo';
 }
 
-/** The preset event colours (unchanged from the previous manager). */
+/** The preset event colours (unchanged from the previous manager), each with a dot of itself in the picker. */
 export const EVENT_COLORS: readonly ChoiceOption[] = [
-  { label: '灰色', value: '#ADADAD' },
-  { label: '紅色', value: '#C62828' },
-  { label: '橙色', value: '#EF6C00' },
-  { label: '綠色', value: '#2E7D32' },
-  { label: '藍色', value: '#1565C0' },
-  { label: '紫色', value: '#7B1FA2' },
+  { label: '灰色', value: '#ADADAD', dot: '#ADADAD' },
+  { label: '紅色', value: '#C62828', dot: '#C62828' },
+  { label: '橙色', value: '#EF6C00', dot: '#EF6C00' },
+  { label: '綠色', value: '#2E7D32', dot: '#2E7D32' },
+  { label: '藍色', value: '#1565C0', dot: '#1565C0' },
+  { label: '紫色', value: '#7B1FA2', dot: '#7B1FA2' },
 ];
 
 export function isHexColor(value: string): boolean {
@@ -26,12 +26,13 @@ export function isHexColor(value: string): boolean {
 
 /**
  * The colour picker's options. A typed code that is not a preset shows as
- * 自訂顏色, so the picker always has an option for the current value.
+ * 自訂顏色, so the picker always has an option for the current value; its dot
+ * is that colour once the code is complete.
  */
 export function colorOptions(color: string): readonly ChoiceOption[] {
   return EVENT_COLORS.some((option) => option.value === color)
     ? EVENT_COLORS
-    : [...EVENT_COLORS, { label: '自訂顏色', value: color }];
+    : [...EVENT_COLORS, { label: '自訂顏色', value: color, dot: isHexColor(color) ? color : undefined }];
 }
 
 export const ADD_CATEGORY_FAILED = '無法新增類別';

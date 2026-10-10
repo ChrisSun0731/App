@@ -45,6 +45,9 @@ describe('class timetable feeds', () => {
   test('marks only real lessons as current and leaves break time unmarked', () => {
     const periods = buildTimetables([grade])!.periods;
     expect(getCurrentPeriod(periods, new Date(2026, 9, 5, 8, 30))).toBe('一');
+    expect(getCurrentPeriod(periods, new Date(2026, 9, 5, 8, 59))).toBe('一');
+    // At the bell the period is over.
+    expect(getCurrentPeriod(periods, new Date(2026, 9, 5, 9, 0))).toBeNull();
     expect(getCurrentPeriod(periods, new Date(2026, 9, 5, 9, 5))).toBeNull();
     expect(getCurrentPeriod(periods, new Date(2026, 9, 5, 12, 0))).toBeNull();
   });

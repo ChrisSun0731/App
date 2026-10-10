@@ -1,7 +1,7 @@
 import type { NewsItem } from '@/features/news/rss';
 import type { ScheduleRow } from '@/features/schedule/timetable';
 import type { CalendarEvent, EventCategory, Todo, TodoCategory, TodoView } from '@/features/todo/types';
-import type { HomeWidgets, ToolbarItem } from '@/store/settings';
+import type { HomeWidgets } from '@/store/settings';
 import type { FollowedYoubike } from '@/store/transport';
 
 /** The persisted part of every store the import writes to. */
@@ -17,7 +17,7 @@ export interface StoresData {
   news: { pinned: NewsItem[]; lastClearedTime: string | null };
   food: { favorites: string[] };
   transport: { youbike: FollowedYoubike[]; metro: string[] };
-  settings: { toolbar: ToolbarItem[]; homeWidgets: HomeWidgets };
+  settings: { homeWidgets: HomeWidgets };
 }
 
 /**
@@ -30,5 +30,5 @@ export interface LegacyImport {
   news?: { pinned?: NewsItem[]; lastClearedTime?: string };
   food?: Partial<StoresData['food']>;
   transport?: Partial<StoresData['transport']>;
-  settings?: { toolbar?: ToolbarItem[]; homeWidgets?: Partial<HomeWidgets> };
+  settings?: { homeWidgets?: Partial<HomeWidgets> };
 }
