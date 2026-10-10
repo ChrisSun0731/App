@@ -73,10 +73,9 @@ export function mergeLegacyImport(current: StoresData, legacy: LegacyImport, ini
       metro: combine(current.transport.metro, initial.transport.metro, transport.metro, self),
     },
     settings: {
-      // The toolbar is one choice (order and visibility together), not a list to combine.
-      toolbar: pick(current.settings.toolbar, initial.settings.toolbar, settings.toolbar),
+      // The previous app had no 午餐 or 回家 sections, so those keep this app's choice.
       homeWidgets: {
-        schedule: pick(current.settings.homeWidgets.schedule, initial.settings.homeWidgets.schedule, widgets.schedule),
+        ...current.settings.homeWidgets,
         todo: pick(current.settings.homeWidgets.todo, initial.settings.homeWidgets.todo, widgets.todo),
         news: pick(current.settings.homeWidgets.news, initial.settings.homeWidgets.news, widgets.news),
       },

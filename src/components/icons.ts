@@ -15,6 +15,7 @@ export const icons = {
   edit: Icon.select({ ios: 'pencil', android: import('@expo/material-symbols/edit.xml') }),
   close: Icon.select({ ios: 'xmark', android: import('@expo/material-symbols/close.xml') }),
   check: Icon.select({ ios: 'checkmark', android: import('@expo/material-symbols/check.xml') }),
+  search: Icon.select({ ios: 'magnifyingglass', android: import('@expo/material-symbols/search.xml') }),
   pin: Icon.select({ ios: 'pin', android: import('@expo/material-symbols/keep.xml') }),
   unpin: Icon.select({ ios: 'pin.slash', android: import('@expo/material-symbols/keep_off.xml') }),
   list: Icon.select({ ios: 'list.bullet', android: import('@expo/material-symbols/list.xml') }),

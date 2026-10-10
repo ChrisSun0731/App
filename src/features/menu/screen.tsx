@@ -1,31 +1,39 @@
-// 熱食部: the cafeteria's menu image for one school day, paged by week from the
-// header and by weekday with a segmented control, reloadable past the caches
-// and openable in the browser. Layout per docs/design/native-ui.md,
-// "熱食部 (Menu)".
+// 美食 › 熱食部: the cafeteria's menu image for one school day, paged by week
+// from the header and by weekday with the week strip (days off from the
+// 行事曆 marked), reloadable past the caches and openable in the browser.
+// Layout per docs/design/native-ui.md, "熱食部 (Menu)".
 import { Image } from 'expo-image';
 import { useState, type ReactElement } from 'react';
 import { Alert, Linking, StyleSheet } from 'react-native';
 
 import { HeaderActions, type HeaderItem } from '@/components/header-actions';
 import { icons } from '@/components/icons';
-import { ButtonRow, Embedded, EmptyState, ListScreen, Loading, PickerRow, Section } from '@/ui';
+import { gradeOfClass, schoolDayOf } from '@/features/todo/school-days';
+import { useSchoolEvents } from '@/features/todo/use-school-events';
+import { addDays, formatMonthDayZh, fromDateKey, isSameDay } from '@/lib/dates';
+import { useScheduleStore } from '@/store/schedule';
+import { ButtonRow, DayStrip, Embedded, EmptyState, ListScreen, Loading, Section } from '@/ui';
 
-import {
-  DAY_OPTIONS,
-  imageAspectRatio,
-  menuDayTitle,
-  shiftWeek,
-  toMenuDay,
-  weekRangeLabel,
-} from './menu-view';
-import { defaultMenuDay, menuWeekStart, type MenuDay } from './menu-week';
+import { imageAspectRatio, menuDayTitle, shiftWeek, weekRangeLabel } from './menu-view';
+import { defaultMenuDay, MENU_DAYS, menuWeekStart, type MenuDay } from './menu-week';
 import { useMenuImage } from './use-menu-image';
 
-export default function MenuScreen() {
-  const [week, setWeek] = useState(() => menuWeekStart(new Date()));
-  const [day, setDay] = useState<MenuDay>(() => defaultMenuDay(new Date()));
+const ANDROID = process.env.EXPO_OS === 'android';
+
+/**
+ * `switcher`: the 美食 tab's 熱食部 / 附近 control, first in the navigation
+ * bar (see food/tab.tsx). `date` ("YYYY-MM-DD"): the day to open on, else today.
+ */
+export default function MenuScreen({ switcher, date }: { switcher?: HeaderItem; date?: string }) {
+  const [week, setWeek] = useState(() => menuWeekStart(date ? fromDateKey(date) : new Date()));
+  const [day, setDay] = useState<MenuDay>(() => defaultMenuDay(date ? fromDateKey(date) : new Date()));
   const menu = useMenuImage(week, day);
   const dayTitle = menuDayTitle(week, day);
+  const school = useSchoolEvents();
+  const grade = gradeOfClass(useScheduleStore((state) => state.userClass));
+  const calendar = { events: school.events, term: school.term, grade };
+  const monday = fromDateKey(week);
+  const today = new Date();
 
   function showThisWeek() {
     // Back to today's menu (Monday's at the weekend), as when the screen opens.
@@ -38,23 +46,29 @@ export default function MenuScreen() {
     void Linking.openURL(menu.url).catch(() => Alert.alert('無法開啟菜單', '請稍後再試一次。'));
   }
 
-  const header: HeaderItem[] = [
-    {
-      kind: 'icon',
-      key: 'previous',
-      label: '上一週',
-      icon: icons.chevronLeft,
-      onPress: () => setWeek((current) => shiftWeek(current, -1)),
-    },
-    { kind: 'text', key: 'this-week', label: '本週', onPress: showThisWeek },
-    {
-      kind: 'icon',
-      key: 'next',
-      label: '下一週',
-      icon: icons.chevronRight,
-      onPress: () => setWeek((current) => shiftWeek(current, 1)),
-    },
-  ];
+  const previousWeek = () => setWeek((current) => shiftWeek(current, -1));
+  const nextWeek = () => setWeek((current) => shiftWeek(current, 1));
+  // iOS: ‹ 本週 › before the title. Android's top app bar has no room for
+  // them beside the title and the switch, so they go in a menu there.
+  const weekControls: HeaderItem[] = ANDROID
+    ? [
+        {
+          kind: 'menu',
+          key: 'week',
+          label: '切換週次',
+          icon: icons.today,
+          actions: [
+            { key: 'previous', label: '上一週', icon: icons.chevronLeft, onPress: previousWeek },
+            { key: 'this-week', label: '本週', onPress: showThisWeek },
+            { key: 'next', label: '下一週', icon: icons.chevronRight, onPress: nextWeek },
+          ],
+        },
+      ]
+    : [
+        { kind: 'icon', key: 'previous', label: '上一週', icon: icons.chevronLeft, onPress: previousWeek },
+        { kind: 'text', key: 'this-week', label: '本週', onPress: showThisWeek },
+        { kind: 'icon', key: 'next', label: '下一週', icon: icons.chevronRight, onPress: nextWeek },
+      ];
 
   let content: ReactElement;
   if (menu.status === 'failed') {
@@ -84,16 +98,31 @@ export default function MenuScreen() {
 
   return (
     <>
-      <HeaderActions right={header} />
+      <HeaderActions
+        left={ANDROID ? undefined : weekControls}
+        right={[...(switcher ? [switcher] : []), ...(ANDROID ? weekControls : [])]}
+      />
       {/* onRefresh from the first render: the iOS List is rebuilt if it appears later. */}
-      <ListScreen onRefresh={menu.refresh}>
-        <Section plain title={weekRangeLabel(week)}>
-          <PickerRow
-            variant="segmented"
-            label="星期"
-            value={`${day}`}
-            options={DAY_OPTIONS}
-            onChange={(value) => setDay(toMenuDay(value))}
+      <ListScreen subtitle={`熱食部 · ${weekRangeLabel(week)}`} onRefresh={menu.refresh}>
+        <Section plain>
+          <DayStrip
+            days={MENU_DAYS.map(({ day: menuDay, label }) => {
+              const date = addDays(monday, menuDay - 1);
+              const off = schoolDayOf(date, calendar);
+              const isToday = isSameDay(date, today);
+              return {
+                key: `${menuDay}`,
+                weekday: label.slice(-1),
+                day: String(date.getDate()),
+                isToday,
+                holiday: off.kind === 'off' ? '放假' : undefined,
+                accessibilityLabel: [`${label} ${formatMonthDayZh(date)}`, isToday ? '今天' : '', off.kind === 'off' ? off.name : '']
+                  .filter(Boolean)
+                  .join('，'),
+              };
+            })}
+            selectedKey={`${day}`}
+            onSelect={(key) => setDay(Number(key) as MenuDay)}
           />
         </Section>
 

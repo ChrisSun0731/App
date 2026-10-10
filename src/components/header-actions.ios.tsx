@@ -1,3 +1,5 @@
+import { Host, Picker, Text } from '@expo/ui/swift-ui';
+import { labelsHidden, pickerStyle, tag } from '@expo/ui/swift-ui/modifiers';
 import { Stack } from 'expo-router';
 import type { SFSymbol } from 'expo-symbols';
 
@@ -20,6 +22,7 @@ function renderItem(item: HeaderItem) {
         <Stack.Toolbar.Button
           key={item.key}
           icon={item.icon as SFSymbol}
+          variant={item.prominent ? 'done' : 'plain'}
           accessibilityLabel={item.label}
           disabled={item.disabled}
           onPress={item.onPress}
@@ -30,10 +33,17 @@ function renderItem(item: HeaderItem) {
         <Stack.Toolbar.Button
           key={item.key}
           variant={item.prominent ? 'done' : 'plain'}
+          accessibilityLabel={item.accessibilityLabel}
           disabled={item.disabled}
           onPress={item.onPress}>
           {item.label}
         </Stack.Toolbar.Button>
+      );
+    case 'segmented':
+      return (
+        <Stack.Toolbar.View key={item.key}>
+          <Segmented item={item} />
+        </Stack.Toolbar.View>
       );
     case 'menu':
       return (
@@ -46,6 +56,25 @@ function renderItem(item: HeaderItem) {
         </Stack.Toolbar.Menu>
       );
   }
+}
+
+/** A SwiftUI segmented picker sized to its labels, in the bar's glass. */
+function Segmented({ item }: { item: Extract<HeaderItem, { kind: 'segmented' }> }) {
+  return (
+    <Host matchContents>
+      <Picker<string>
+        label={item.label}
+        selection={item.value}
+        onSelectionChange={item.onChange}
+        modifiers={[pickerStyle('segmented'), labelsHidden()]}>
+        {item.options.map((option) => (
+          <Text key={option.value} modifiers={[tag(option.value)]}>
+            {option.label}
+          </Text>
+        ))}
+      </Picker>
+    </Host>
+  );
 }
 
 /**

@@ -34,6 +34,7 @@ import { Platform, ToastAndroid, useWindowDimensions, View } from 'react-native'
 import { icons } from '@/components/icons';
 
 import type {
+  ChoiceGridProps,
   CrowdBarProps,
   EmbeddedProps,
   EmptyStateProps,
@@ -53,14 +54,22 @@ function copyText(text: string) {
   });
 }
 
-export function TextBlock({ text, secondary = false, size: textSize = 'body', selectable = false }: TextBlockProps) {
+export function TextBlock({
+  text,
+  secondary = false,
+  size: textSize = 'body',
+  brandMark = false,
+  selectable = false,
+}: TextBlockProps) {
   const m = useM3();
   const inCard = useInCard();
-  const typography = textSize === 'large' ? 'headlineSmall' : secondary ? 'bodyMedium' : 'bodyLarge';
-  return (
+  let typography: 'headlineLarge' | 'headlineSmall' | 'bodyMedium' | 'bodyLarge' = secondary ? 'bodyMedium' : 'bodyLarge';
+  if (textSize === 'large') typography = 'headlineSmall';
+  if (textSize === 'title') typography = 'headlineLarge';
+  const textView = (
     <Text
       color={secondary ? m.onSurfaceVariant : m.onSurface}
-      style={{ typography }}
+      style={{ typography, fontWeight: textSize === 'title' ? '700' : undefined }}
       modifiers={[
         fillMaxWidth(),
         inCard ? padding(16, 12, 16, 12) : padding(16, 0, 16, 0),
@@ -70,6 +79,16 @@ export function TextBlock({ text, secondary = false, size: textSize = 'body', se
       ]}>
       {text}
     </Text>
+  );
+  if (!(brandMark && textSize === 'title')) return textView;
+  return (
+    <Column verticalArrangement={{ spacedBy: 20 }} modifiers={[fillMaxWidth(), padding(0, 24, 0, 0)]}>
+      {/* The CK 倒三角. */}
+      <Text color={m.primary} style={{ fontSize: 56 }} modifiers={[padding(16, 0, 16, 0)]}>
+        ▼
+      </Text>
+      {textView}
+    </Column>
   );
 }
 
@@ -158,6 +177,48 @@ export function Loading({ label }: LoadingProps) {
       <Text color={m.onSurfaceVariant} style={{ typography: 'bodyMedium', textAlign: 'center' }}>
         {label}
       </Text>
+    </Column>
+  );
+}
+
+/**
+ * One choice among many as a grid of buttons (the welcome screen's classes):
+ * the selected one filled with the primary colour.
+ */
+export function ChoiceGrid({ options, value, onChange, columns = 5, accessibilityLabel }: ChoiceGridProps) {
+  const m = useM3();
+  const perRow = Math.max(1, Math.floor(columns));
+  return (
+    <Column verticalArrangement={{ spacedBy: 10 }} modifiers={[fillMaxWidth()]}>
+      {chunk(options, perRow).map((row) => (
+        <Row key={row[0].value} horizontalArrangement={{ spacedBy: 10 }} modifiers={[fillMaxWidth()]}>
+          {row.map((option) => {
+            const selected = option.value === value;
+            return (
+              <Surface
+                key={option.value}
+                onClick={() => onChange(option.value)}
+                color={selected ? m.primary : m.surfaceContainerHigh}
+                contentColor={selected ? m.onPrimary : m.onSurface}
+                shape={roundedShape(12)}
+                modifiers={[
+                  weight(1),
+                  // Selection is spoken: these semantics take a description only.
+                  semantics({
+                    contentDescription: joinLabel([accessibilityLabel ? `${accessibilityLabel} ${option.label}` : option.label, selected ? '已選取' : undefined]),
+                  }),
+                ]}>
+                <Box contentAlignment="center" modifiers={[fillMaxWidth(), heightModifier(48)]}>
+                  <Text style={{ typography: 'titleMedium', fontWeight: '600' }}>{option.label}</Text>
+                </Box>
+              </Surface>
+            );
+          })}
+          {Array.from({ length: perRow - row.length }, (_, index) => (
+            <Spacer key={`spacer:${index}`} modifiers={[weight(1)]} />
+          ))}
+        </Row>
+      ))}
     </Column>
   );
 }

@@ -1,9 +1,9 @@
 // What 校網 shows: the four filters, search, paging and the row and notice
 // texts. Pure, so the screen stays declarative and this stays testable.
-import { formatFullDate, pad2 } from '@/lib/dates';
+import { formatFullDate, formatMonthDayZh, pad2 } from '@/lib/dates';
 import type { ChoiceOption } from '@/ui/types';
 
-import { unreadNews, type NewsItem } from './rss';
+import { feedLabels, unreadNews, type NewsItem } from './rss';
 
 export type NewsFilter = 'unread' | 'pinned' | 'read' | 'all';
 
@@ -57,6 +57,27 @@ const EMPTY_MESSAGES: Record<NewsFilter, string> = {
 
 export function emptyMessage(filter: NewsFilter, search: string): string {
   return search.trim() ? '沒有符合關鍵字的消息。' : EMPTY_MESSAGES[filter];
+}
+
+/**
+ * A title's leading bracketed labels as tags, e.g. 【轉知】市府函轉… → tags
+ * [轉知] and the rest as the title. Titles without them stay as they are.
+ */
+export function newsTags(title: string): { tags: string[]; title: string } {
+  const tags: string[] = [];
+  let rest = title.trim();
+  for (let match = /^[【［\[]([^】］\]]{1,10})[】］\]]\s*/.exec(rest); match; match = /^[【［\[]([^】］\]]{1,10})[】］\]]\s*/.exec(rest)) {
+    tags.push(match[1].trim());
+    rest = rest.slice(match[0].length);
+  }
+  return rest ? { tags, title: rest } : { tags: [], title: title.trim() };
+}
+
+/** e.g. "10月8日 · 最新消息": the day and the feeds it came from. */
+export function newsSubtitle(item: NewsItem): string {
+  const date = new Date(item.pubDate);
+  const parts = Number.isNaN(date.getTime()) ? [] : [formatMonthDayZh(date)];
+  return [...parts, ...feedLabels(item.feeds ?? [])].join(' · ');
 }
 
 /** e.g. "2026/10/5 09:30" in local time; undefined for an unreadable timestamp. */

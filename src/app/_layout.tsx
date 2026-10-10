@@ -45,9 +45,10 @@ export default function RootLayout() {
         <Stack screenOptions={options}>
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="feature/[id]" />
-          <Stack.Screen name="settings" options={{ title: '設定' }} />
-          <Stack.Screen name="about" options={{ title: '關於 CK APP' }} />
+          {/* 你是哪一班？ on a new install: full screen, left only by answering or skipping. */}
+          <Stack.Screen name="welcome" options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false }} />
+          {/* A sheet with its own stack (settings/_layout.tsx), so its header is that stack's. */}
+          <Stack.Screen name="settings" options={{ presentation: 'modal', headerShown: false }} />
           <Stack.Screen name="event-editor" options={{ presentation: 'modal', title: '活動' }} />
           <Stack.Screen name="todo-editor" options={{ presentation: 'modal', title: '待辦事項' }} />
           <Stack.Screen name="schedule-editor" options={{ presentation: 'modal', title: '編輯課程' }} />

@@ -1,9 +1,17 @@
-import { Host, HStack, List, ProgressView, Section as SwiftUISection, Spacer, Text } from '@expo/ui/swift-ui';
+import { Button, Host, HStack, List, ProgressView, Section as SwiftUISection, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import {
+  accessibilityAddTraits,
+  buttonStyle,
   environment,
+  font,
+  foregroundStyle,
+  headerProminence,
   listRowBackground,
+  listRowInsets,
   listRowSeparator,
+  listSectionSpacing,
   listStyle,
+  monospacedDigit,
   refreshable,
   scrollDismissesKeyboard,
   type ModifierConfig,
@@ -13,7 +21,7 @@ import { useState } from 'react';
 import { usePalette } from '@/theme/palette';
 
 import type { ListScreenProps, SectionProps } from '../types';
-import { PlainSectionContext } from './chrome';
+import { PlainSectionContext, secondaryLabelText } from './chrome';
 
 // The app's copy is Traditional Chinese only, so system-formatted content
 // (DatePicker dates, its calendar popover) follows it instead of the device
@@ -44,7 +52,7 @@ const LOCALE = environment('locale', 'zh_Hant_TW');
  * sits above the first section instead, except during a pull, which already
  * shows one.
  */
-export function ListScreen({ children, onRefresh, refreshing = false }: ListScreenProps) {
+export function ListScreen({ children, subtitle, onRefresh, refreshing = false }: ListScreenProps) {
   const palette = usePalette();
   const [refreshes, setRefreshes] = useState(onRefresh !== undefined);
   // Adjusting state while rendering (see above): latched on first sight.
@@ -74,10 +82,36 @@ export function ListScreen({ children, onRefresh, refreshing = false }: ListScre
   return (
     <Host style={{ flex: 1 }} seedColor={palette.tint} modifiers={[LOCALE]}>
       <List modifiers={listModifiers}>
+        {subtitle ? <Subtitle text={subtitle} /> : null}
         {refreshing && !pulling ? <RefreshingRow /> : null}
         {children}
       </List>
     </Host>
+  );
+}
+
+/**
+ * The line under the navigation bar's large title, lined up with it (4pt
+ * inside the cards' edge). It is the header of a section without rows: a
+ * header has no minimum row height, so it sits close under the title.
+ */
+function Subtitle({ text }: { text: string }) {
+  return (
+    <SwiftUISection
+      header={
+        <Text
+          modifiers={[
+            font({ textStyle: 'subheadline' }),
+            secondaryLabelText,
+            monospacedDigit(),
+            listRowInsets({ top: 0, leading: 4, bottom: 0, trailing: 4 }),
+          ]}>
+          {text}
+        </Text>
+      }
+      modifiers={[listSectionSpacing(14)]}>
+      {[]}
+    </SwiftUISection>
   );
 }
 
@@ -98,11 +132,66 @@ function RefreshingRow() {
   );
 }
 
-/** A SwiftUI `Section` with an optional header title and footer text. */
-export function Section({ title, footer, plain = false, children }: SectionProps) {
+/**
+ * A SwiftUI `Section`. A plain title uses SwiftUI's own header; a title
+ * badge, trailing detail or link makes a header row of them (still styled by
+ * the List), and `prominent` raises the header's prominence (title-3 bold in
+ * the label colour). A footer link sits under the footer text.
+ */
+export function Section({
+  title,
+  titleBadge,
+  detail,
+  action,
+  prominent = false,
+  footer,
+  footerAction,
+  plain = false,
+  children,
+}: SectionProps) {
+  const palette = usePalette();
+  // Header extras keep the body size next to a prominent title.
+  const extraFont = font({ textStyle: prominent ? 'body' : 'footnote' });
+  // A prominent header lines up with the large title, like the subtitle.
+  const headerInsets = prominent ? [listRowInsets({ top: 0, leading: 4, bottom: 8, trailing: 4 })] : [];
+  const header =
+    prominent || titleBadge || detail || action ? (
+      <HStack alignment="firstTextBaseline" spacing={6} modifiers={headerInsets}>
+        {title ? <Text modifiers={[accessibilityAddTraits(['isHeader'])]}>{title}</Text> : null}
+        {titleBadge ? (
+          <Text modifiers={[extraFont, foregroundStyle(palette.tint)]}>{titleBadge}</Text>
+        ) : null}
+        <Spacer minLength={8} />
+        {detail ? <Text modifiers={[extraFont, secondaryLabelText, monospacedDigit()]}>{detail}</Text> : null}
+        {action ? (
+          <Button
+            label={action.label}
+            onPress={action.onPress}
+            modifiers={[buttonStyle('borderless'), extraFont, foregroundStyle(palette.tint)]}
+          />
+        ) : null}
+      </HStack>
+    ) : undefined;
+  const footerView =
+    footer && footerAction ? (
+      <VStack alignment="leading" spacing={4}>
+        <Text>{footer}</Text>
+        <Button
+          label={footerAction.label}
+          onPress={footerAction.onPress}
+          modifiers={[buttonStyle('borderless'), font({ textStyle: 'footnote', weight: 'semibold' }), foregroundStyle(palette.tint)]}
+        />
+      </VStack>
+    ) : footer ? (
+      <Text>{footer}</Text>
+    ) : undefined;
   return (
     <PlainSectionContext.Provider value={plain}>
-      <SwiftUISection title={title || undefined} footer={footer ? <Text>{footer}</Text> : undefined}>
+      <SwiftUISection
+        title={header ? undefined : title || undefined}
+        header={header}
+        footer={footerView}
+        modifiers={prominent ? [headerProminence('increased')] : undefined}>
         {children}
       </SwiftUISection>
     </PlainSectionContext.Provider>

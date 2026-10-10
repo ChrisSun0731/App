@@ -6,14 +6,19 @@ import {
   dayIndicators,
   effectiveFilter,
   eventRowText,
+  eventsForGrade,
   filterTodos,
   formatDateRange,
   formatDayTitle,
+  formatShortRange,
+  otherGrades,
+  spacedTerm,
   todoFilterOptions,
   todoSections,
+  upcomingItems,
 } from './calendar-view';
 import { itemsForDay } from './calendar-grid';
-import { SCHOOL_EVENT_CATEGORY } from './school-calendar';
+import { SCHOOL_EVENT_CATEGORY, toSchoolEvents } from './school-calendar';
 import type { CalendarEvent, Todo } from './types';
 
 const TINT = '#03328D';
@@ -32,6 +37,25 @@ describe('day titles and ranges', () => {
     const today = new Date(2026, 9, 5);
     expect(formatDayTitle('2026-10-04', today)).toBe('10月4日 星期日');
     expect(formatDayTitle('2027-01-02', today)).toBe('2027年1月2日 星期六');
+    expect(formatDayTitle('2026-10-05', today)).toBe('10月5日 星期一 · 今天');
+  });
+
+  test('short ranges name the month once', () => {
+    expect(formatShortRange('2026-10-13', '2026-10-14')).toBe('10月13日–14日');
+    expect(formatShortRange('2026-10-30', '2026-11-02')).toBe('10月30日–11月2日');
+    expect(formatShortRange('2026-12-31', '2027-01-02')).toBe('2026年12月31日–2027年1月2日');
+  });
+
+  test('接下來 lists what starts after the day, soonest first', () => {
+    const events: CalendarEvent[] = [
+      exam,
+      { id: 'later', title: '校慶', startDate: '2026-10-08', endDate: '2026-10-08', category: { name: '活動', color: '#00897B' } },
+    ];
+    const todos: Todo[] = [homework, undated, { id: 'next', title: '交報告', date: '2026-10-07', category: null }];
+    expect(upcomingItems('2026-10-04', events, todos).map((entry) => entry.key)).toEqual(['todo-next', 'event-later']);
+    expect(upcomingItems('2026-10-04', events, todos, { limit: 1 })).toHaveLength(1);
+    expect(otherGrades(2)).toBe('高一、高三');
+    expect(spacedTerm('115學年度第1學期')).toBe('115 學年度第 1 學期');
   });
 
   test('shows one date for a single-day event and a span otherwise', () => {
@@ -115,7 +139,7 @@ describe('day indicators', () => {
 
 describe('event rows', () => {
   test('user events show category and dates', () => {
-    expect(eventRowText(exam)).toEqual({ subtitle: '考試 · 2026/10/4 – 2026/10/6', overline: undefined });
+    expect(eventRowText(exam)).toEqual({ subtitle: '考試 · 10月4日–6日' });
   });
 
   test('school events add department, 暫定 and 約略', () => {
@@ -127,7 +151,7 @@ describe('event rows', () => {
       category: SCHOOL_EVENT_CATEGORY,
       school: { department: '學務處', tentative: true, approximate: true },
     };
-    expect(eventRowText(school)).toEqual({ subtitle: '學校事務 · 2026/10/4 · 暫定日期 · 約略日期', overline: '學務處' });
+    expect(eventRowText(school)).toEqual({ subtitle: '學校 · 學務處 · 全天 · 暫定日期 · 約略日期' });
   });
 });
 
@@ -154,8 +178,52 @@ describe('todo list', () => {
     const sections = todoSections(todos, new Date(2026, 9, 4, 9));
     expect(sections.map(({ key, title, overdue }) => ({ key, title, overdue }))).toEqual([
       { key: '2026-10-01', title: '10月1日 星期四', overdue: true },
-      { key: '2026-10-04', title: '10月4日 星期日', overdue: false },
+      { key: '2026-10-04', title: '10月4日 星期日 · 今天', overdue: false },
       { key: 'undated', title: '無日期', overdue: false },
     ]);
+  });
+});
+
+describe('day marks and the grade filter', () => {
+  // Taken from the 115-1 行事曆.
+  const school = toSchoolEvents({
+    events: [
+      { title: '國慶日補假', startDate: '2026-10-09', endDate: '2026-10-09' },
+      { title: '高一、高二、高三第1次定期考(◆考後大掃除)', startDate: '2026-10-13', endDate: '2026-10-14', department: '教務處' },
+      { title: '高三大學多元入學說明會', startDate: '2026-10-16', endDate: '2026-10-16', department: '教務處' },
+      { title: '高一健康檢查', startDate: '2026-10-20', endDate: '2026-10-22', department: '學務處' },
+      { title: '高三第2次學測模擬考', startDate: '2026-10-28', endDate: '2026-10-29', department: '教務處' },
+      { title: '高一X光篩檢', startDate: '2026-11-05', endDate: '2026-11-05', department: '學務處' },
+    ],
+  });
+  const marks = (grade: 1 | 2 | 3) =>
+    Object.fromEntries(
+      calendarCells(2026, 9, school, [], TINT, new Date(2026, 9, 7), grade)
+        .filter((cell) => cell.inMonth && cell.mark)
+        .map((cell) => [cell.day, cell.mark?.text]),
+    );
+
+  test('假 on holidays and 考 on the grade\'s exam days', () => {
+    expect(marks(2)).toEqual({ 9: '假', 13: '考', 14: '考' });
+    // 高三 also sits its 模擬考.
+    expect(marks(3)).toEqual({ 9: '假', 13: '考', 14: '考', 28: '考', 29: '考' });
+  });
+
+  test('a long school event dots only its first and last day', () => {
+    const window = toSchoolEvents({
+      events: [{ title: '國際數理奧賽/科展升學優待辦法送件(開學後2個月內)', startDate: '2026-09-01', endDate: '2026-10-24', department: '教務處' }],
+    });
+    const dotted = calendarCells(2026, 9, window, [], TINT, new Date(2026, 9, 7))
+      .filter((cell) => cell.inMonth && cell.indicators.length > 0)
+      .map((cell) => cell.day);
+    expect(dotted).toEqual([24]);
+  });
+
+  test('hides the other grades\' events and counts those in the month', () => {
+    const { events, hidden } = eventsForGrade(school, 2, { year: 2026, month: 9 });
+    expect(events.map((event) => event.title)).toEqual(['國慶日補假', '高一、高二、高三第1次定期考(◆考後大掃除)']);
+    // 健康檢查, 說明會 and 模擬考 fall in October; the X光 is in November.
+    expect(hidden).toBe(3);
+    expect(eventsForGrade(school, 2, { year: 2026, month: 10 }).hidden).toBe(1);
   });
 });

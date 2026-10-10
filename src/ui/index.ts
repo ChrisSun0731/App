@@ -5,8 +5,10 @@
 export {
   ButtonRow,
   CheckRow,
+  ChoiceGrid,
   CrowdBar,
   DateRow,
+  DayStrip,
   Embedded,
   EmptyState,
   FilterChips,
@@ -15,12 +17,14 @@ export {
   MetricPills,
   MonthCalendar,
   Notice,
+  NowCard,
   PickerRow,
   Row,
   Section,
   TextBlock,
   TextFieldRow,
   TileGrid,
+  TimetableGrid,
   ToggleRow,
 } from './kit';
 export type * from './types';

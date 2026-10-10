@@ -1,4 +1,4 @@
-import { Box, Column, Icon, IconButton, Row, Surface, Text } from '@expo/ui/jetpack-compose';
+import { Box, Column, Row, Surface, Text } from '@expo/ui/jetpack-compose';
 import {
   background,
   clip,
@@ -13,11 +13,9 @@ import {
   wrapContentHeight,
 } from '@expo/ui/jetpack-compose/modifiers';
 
-import { icons } from '@/components/icons';
-
 import { CALENDAR_CELL_INDICATORS, type CalendarCell, type MonthCalendarProps } from '../types';
 import { chunk, withAlpha } from './helpers';
-import { iconSource, roundedShape, TRANSPARENT, useM3 } from './theme';
+import { roundedShape, TRANSPARENT, useM3 } from './theme';
 
 /** Size of the day-number circle. */
 const DAY_SIZE = 32;
@@ -26,33 +24,11 @@ const DAY_SIZE = 32;
 // Shape.Circle is a polygon whose radius defaults to 0 natively (ShapeView.kt).
 const DAY_SHAPE = roundedShape(DAY_SIZE / 2);
 
-export function MonthCalendar({
-  title,
-  weekdays,
-  cells,
-  selectedKey,
-  onSelect,
-  onPrevious,
-  onNext,
-  onToday,
-}: MonthCalendarProps) {
+/** The month grid: a weekday row and six weeks of days (the screen pages months from its top app bar). */
+export function MonthCalendar({ weekdays, cells, selectedKey, onSelect }: MonthCalendarProps) {
   const m = useM3();
   return (
-    <Column modifiers={[fillMaxWidth(), padding(8, 4, 8, 12)]}>
-      <Row verticalAlignment="center" modifiers={[fillMaxWidth(), padding(8, 0, 0, 4)]}>
-        <Text color={m.onSurface} style={{ typography: 'titleMedium' }} modifiers={[weight(1)]}>
-          {title}
-        </Text>
-        <IconButton onClick={onPrevious}>
-          <Icon source={iconSource(icons.chevronLeft)} size={24} contentDescription="上個月" />
-        </IconButton>
-        <IconButton onClick={onToday}>
-          <Icon source={iconSource(icons.today)} size={24} contentDescription="今天" />
-        </IconButton>
-        <IconButton onClick={onNext}>
-          <Icon source={iconSource(icons.chevronRight)} size={24} contentDescription="下個月" />
-        </IconButton>
-      </Row>
+    <Column modifiers={[fillMaxWidth(), padding(8, 12, 8, 12)]}>
       <Row modifiers={[fillMaxWidth(), padding(0, 0, 0, 4)]}>
         {weekdays.map((weekday) => (
           <Text
@@ -81,6 +57,8 @@ function DayCell({ cell, selected, onSelect }: { cell: CalendarCell; selected: b
   let color: string = m.onSurface;
   if (selected) color = m.onPrimaryContainer;
   else if (cell.isToday) color = m.primary;
+  // Days off are red, as on printed Taiwanese calendars (the 假 mark says it too).
+  else if (cell.mark?.tone === 'holiday') color = m.error;
   else if (!cell.inMonth) color = withAlpha(m.onSurfaceVariant, 0.5);
 
   return (
@@ -111,17 +89,25 @@ function DayCell({ cell, selected, onSelect }: { cell: CalendarCell; selected: b
           {String(cell.day)}
         </Text>
       </Surface>
-      <Row verticalAlignment="center" horizontalArrangement={{ spacedBy: 2 }} modifiers={[height(6)]}>
-        {cell.indicators.slice(0, CALENDAR_CELL_INDICATORS).map((indicator) => (
-          <Box
-            key={indicator.key}
-            modifiers={[
-              size(5, 5),
-              clip(indicator.shape === 'dot' ? Shapes.Circle : Shapes.RoundedCorner(1)),
-              background(cell.inMonth ? indicator.color : withAlpha(indicator.color, 0.5)),
-            ]}
-          />
-        ))}
+      <Row verticalAlignment="center" horizontalArrangement={{ spacedBy: 2 }} modifiers={[height(12)]}>
+        {cell.mark ? (
+          <Text
+            color={cell.mark.tone === 'holiday' ? m.error : m.onSurface}
+            style={{ typography: 'labelSmall', fontWeight: '700' }}>
+            {cell.mark.text}
+          </Text>
+        ) : (
+          cell.indicators.slice(0, CALENDAR_CELL_INDICATORS).map((indicator) => (
+            <Box
+              key={indicator.key}
+              modifiers={[
+                size(5, 5),
+                clip(indicator.shape === 'dot' ? Shapes.Circle : Shapes.RoundedCorner(1)),
+                background(cell.inMonth ? indicator.color : withAlpha(indicator.color, 0.5)),
+              ]}
+            />
+          ))
+        )}
       </Row>
     </Column>
   );

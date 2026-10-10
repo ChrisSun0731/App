@@ -120,12 +120,12 @@ function CellForm({ target, cell, onClose }: { target: EditorTarget; cell: Sched
 
         <Section title="顏色">
           <PickerRow label="顏色" value={draft.color} options={CELL_COLOR_OPTIONS} onChange={(color) => edit({ color })} />
-          {/* The kit's menu pickers show text only, so the fill is previewed as 課表 will draw it (light or dark). */}
+          {/* The kit's menu pickers show text only, so the colour is previewed as 課表 will draw it (light or dark). */}
           <Row
             overline={preview.overline}
             title={preview.title}
             subtitle={preview.subtitle}
-            background={preview.background}
+            mark={{ kind: 'period', lines: [target.period], fill: preview.fill, ink: preview.ink, empty: preview.title === '空堂' }}
             accessibilityLabel={preview.accessibilityLabel}
           />
         </Section>

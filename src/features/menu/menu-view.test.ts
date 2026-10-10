@@ -28,10 +28,10 @@ describe('熱食部 view helpers', () => {
   });
 
   it('labels the week and the selected day', () => {
-    expect(weekRangeLabel('2026-10-05')).toBe('10/5 (一) — 10/9 (五)');
-    expect(weekRangeLabel('2026-12-28')).toBe('12/28 (一) — 1/1 (五)');
-    expect(menuDayTitle('2026-10-05', 1)).toBe('2026/10/5 星期一');
-    expect(menuDayTitle('2026-12-28', 5)).toBe('2027/1/1 星期五');
+    expect(weekRangeLabel('2026-10-05')).toBe('10月5日–9日');
+    expect(weekRangeLabel('2026-12-28')).toBe('2026年12月28日–2027年1月1日');
+    expect(menuDayTitle('2026-10-05', 1)).toBe('10月5日 星期一');
+    expect(menuDayTitle('2026-12-28', 5)).toBe('1月1日 星期五');
   });
 
   it('cache-busts the image URL only after a manual refresh', () => {

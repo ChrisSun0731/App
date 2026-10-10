@@ -1,7 +1,7 @@
 // Pure helpers behind the 熱食部 screen: week paging, the segmented weekday
 // options, section titles, the cache-busting image URL and the image's aspect
 // ratio. Kept out of the screen so they can be unit tested without a renderer.
-import { addDays, formatFullDate, formatMonthDay, fromDateKey, toDateKey } from '@/lib/dates';
+import { addDays, formatMonthDayRange, formatMonthDayZh, fromDateKey, toDateKey } from '@/lib/dates';
 import type { ChoiceOption } from '@/ui/types';
 
 import { MENU_DAYS, type MenuDay } from './menu-week';
@@ -24,16 +24,16 @@ export function shiftWeek(weekStart: string, weeks: number): string {
   return toDateKey(addDays(fromDateKey(weekStart), weeks * 7));
 }
 
-/** e.g. "10/5 (一) — 10/9 (五)". */
+/** e.g. "10月5日–9日". */
 export function weekRangeLabel(weekStart: string): string {
   const monday = fromDateKey(weekStart);
-  return `${formatMonthDay(monday)} — ${formatMonthDay(addDays(monday, 4))}`;
+  return formatMonthDayRange(monday, addDays(monday, 4));
 }
 
-/** The selected school day, e.g. "2026/10/8 星期四". */
+/** The selected school day, e.g. "10月8日 星期四". */
 export function menuDayTitle(weekStart: string, day: MenuDay): string {
   const date = addDays(fromDateKey(weekStart), day - 1);
-  return `${formatFullDate(date)} ${MENU_DAYS[day - 1].label}`;
+  return `${formatMonthDayZh(date)} ${MENU_DAYS[day - 1].label}`;
 }
 
 /**

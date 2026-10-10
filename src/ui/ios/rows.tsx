@@ -5,11 +5,13 @@ import {
   HStack,
   Image,
   Label,
+  RoundedRectangle,
   Spacer,
   SwipeActions,
   Text,
   Toggle,
   VStack,
+  ZStack,
 } from '@expo/ui/swift-ui';
 import {
   accessibilityAddTraits,
@@ -21,6 +23,7 @@ import {
   contentShape,
   controlSize,
   disabled as disabledModifier,
+  dynamicTypeSize,
   fixedSize,
   font,
   foregroundStyle,
@@ -31,11 +34,13 @@ import {
   multilineTextAlignment,
   padding,
   shapes,
+  strokeBorder,
   tint,
   type AccessibilityTrait,
   type ModifierConfig,
 } from '@expo/ui/swift-ui/modifiers';
 import { Children, type ReactElement, type ReactNode } from 'react';
+import { PlatformColor } from 'react-native';
 
 import { usePalette } from '@/theme/palette';
 
@@ -46,6 +51,7 @@ import type {
   IconValue,
   RowAccessory,
   RowAction,
+  RowMark,
   RowProps,
   RowToggle,
   ToggleRowProps,
@@ -55,6 +61,7 @@ import {
   labelText,
   NEUTRAL,
   primaryText,
+  QUIET_FILL,
   secondaryLabelText,
   secondaryText,
   tertiaryLabelText,
@@ -65,6 +72,7 @@ import {
 import { footerSpeech, sf, spokenLabel, trailingSwipeActions } from './helpers';
 
 const FULL_ROW = contentShape(shapes.rectangle());
+const SWITCH_ON = PlatformColor('systemGreen');
 /** Extra tappable margin around CheckRow's circle (see CheckRow). */
 const CHECK_SLOP = 10;
 
@@ -83,6 +91,14 @@ export function Row({
   icon,
   iconColor,
   dotColor,
+  dotShape = 'dot',
+  mark,
+  titleAside,
+  subtitleDotColor,
+  note,
+  tags,
+  strong = false,
+  detailProminent = false,
   background: rowBackground,
   badge,
   emphasized = false,
@@ -102,7 +118,9 @@ export function Row({
   // as the contract asks.
   const hasMenus = (actions?.length ?? 0) > 0 || toggle !== undefined;
 
-  const spoken = spokenOverride ?? spokenLabel([title, overline, subtitle, ...footerSpeech(footer), detail, badge]);
+  const spoken =
+    spokenOverride ??
+    spokenLabel([...(tags ?? []), title, titleAside, overline, subtitle, note, ...footerSpeech(footer), detail, badge]);
   const traits: AccessibilityTrait[] = [];
   // State is spoken, not only drawn: a checkmark accessory, or an active
   // toggle (favourite, pinned) whose only visible sign is a trailing symbol.
@@ -113,48 +131,67 @@ export function Row({
 
   // Fixed label colours: the default List button style would tint
   // hierarchical ones (see chrome.labelText).
-  const titleStyle = disabled ? tertiaryLabelText : emphasized ? foregroundStyle(palette.tint) : labelText;
+  const tinted = foregroundStyle(palette.tint);
+  const titleStyle = disabled ? tertiaryLabelText : emphasized ? tinted : labelText;
   const detailStyle = disabled ? tertiaryLabelText : secondaryLabelText;
+  const subtitleStyle = emphasized && !disabled ? tinted : detailStyle;
+  const toggleButton = toggle?.button === true;
 
   const content = (extra: ModifierConfig[]) => (
     <HStack spacing={12} modifiers={[FULL_ROW, ...extra]}>
-      <RowLeading icon={icon} iconColor={iconColor} dotColor={dotColor} dimmed={disabled} />
+      <RowLeading icon={icon} iconColor={iconColor} dotColor={dotColor} dotShape={dotShape} mark={mark} dimmed={disabled} />
       <VStack alignment="leading" spacing={2} modifiers={[layoutPriority(1)]}>
+        {tags?.length ? (
+          <HStack spacing={4} modifiers={[padding({ bottom: 2 })]}>
+            {tags.map((tag) => (
+              <Tag key={tag} text={tag} />
+            ))}
+          </HStack>
+        ) : null}
         {overline ? (
           <Text modifiers={[font({ textStyle: 'caption' }), detailStyle, monospacedDigit()]}>{overline}</Text>
         ) : null}
         <HStack spacing={6} alignment="firstTextBaseline">
           <Text
             modifiers={[
-              font({ textStyle: 'body', weight: emphasized ? 'semibold' : 'regular' }),
+              font({ textStyle: 'body', weight: strong ? 'bold' : emphasized ? 'semibold' : 'regular' }),
               titleStyle,
               lineLimit(titleLines),
             ]}>
             {title}
           </Text>
+          {titleAside ? (
+            <Text modifiers={[font({ textStyle: 'subheadline' }), detailStyle, lineLimit(1)]}>{titleAside}</Text>
+          ) : null}
           {badge ? <Badge text={badge} /> : null}
         </HStack>
         {subtitle ? (
-          <Text modifiers={[font({ textStyle: 'subheadline' }), detailStyle]}>{subtitle}</Text>
+          <HStack spacing={6} alignment="center">
+            {subtitleDotColor ? (
+              <Circle modifiers={[foregroundStyle(subtitleDotColor), frame({ width: 8, height: 8 })]} />
+            ) : null}
+            <Text modifiers={[font({ textStyle: 'subheadline' }), subtitleStyle, monospacedDigit()]}>{subtitle}</Text>
+          </HStack>
         ) : null}
+        {note ? <Text modifiers={[font({ textStyle: 'subheadline' }), detailStyle]}>{note}</Text> : null}
         {footerContent(footer, detailStyle)}
       </VStack>
       <Spacer minLength={8} />
       {detail ? (
         <Text
           modifiers={[
-            font({ textStyle: 'subheadline' }),
-            detailStyle,
+            detailProminent ? font({ textStyle: 'body', weight: 'semibold' }) : font({ textStyle: 'subheadline' }),
+            detailProminent && !disabled ? labelText : detailStyle,
             monospacedDigit(),
             multilineTextAlignment('trailing'),
           ]}>
           {detail}
         </Text>
       ) : null}
-      {toggle?.active ? (
+      {toggle?.active && !toggleButton ? (
         <Image
           systemName={sf(toggle.activeIcon)}
-          modifiers={[font({ textStyle: 'footnote' }), foregroundStyle(palette.tint)]}
+          modifiers={[font({ textStyle: 'footnote' }), foregroundStyle(toggle.activeColor ?? palette.tint)]}
         />
       ) : null}
       <Accessory kind={accessory} />
@@ -166,13 +203,30 @@ export function Row({
   // button in the row, so nothing else fires with it), or one static
   // accessibility element.
   const rootChrome = hasMenus ? [] : chrome;
-  const main = onPress ? (
-    <Button onPress={onPress} modifiers={[disabledModifier(disabled), ...a11y, ...rootChrome]}>
+  let main = onPress ? (
+    <Button
+      onPress={onPress}
+      modifiers={[
+        // Beside the toggle's own button, plain: SwiftUI's List fires every
+        // default-style button in a row on any tap.
+        ...(toggleButton ? [buttonStyle('plain')] : []),
+        disabledModifier(disabled),
+        ...a11y,
+        ...(toggleButton ? [] : rootChrome),
+      ]}>
       {content([])}
     </Button>
   ) : (
-    content([accessibilityElement('ignore'), ...a11y, ...rootChrome])
+    content([accessibilityElement('ignore'), ...a11y, ...(toggleButton ? [] : rootChrome)])
   );
+  if (toggle && toggleButton) {
+    main = (
+      <HStack spacing={8} modifiers={rootChrome}>
+        {main}
+        <ToggleButton toggle={toggle} />
+      </HStack>
+    );
+  }
 
   if (!hasMenus) return main;
   return (
@@ -264,8 +318,9 @@ export function ToggleRow({ label, subtitle, icon, value, onValueChange, disable
   const symbol = sf(icon);
   const hasMenu = (actions?.length ?? 0) > 0;
   // `.disabled` on the Toggle only: the context menu is attached outside it,
-  // so it still opens.
-  const modifiers = [disabledModifier(disabled), ...(hasMenu ? [] : chrome)];
+  // so it still opens. Switches stay the system green, as in Settings; the
+  // navy tint is for selection and links.
+  const modifiers = [tint(SWITCH_ON), disabledModifier(disabled), ...(hasMenu ? [] : chrome)];
 
   let control: ReactElement;
   if (subtitle) {
@@ -343,10 +398,15 @@ export function ButtonRow({ label, icon, role = 'default', prominent = false, di
 
 // MARK: - Row parts
 
-function RowLeading({ icon, iconColor, dotColor, dimmed }: {
+/** The leading column's width for dots and glyphs: CheckRow's circle, so titles line up in mixed lists. */
+const LEADING_COLUMN = 24;
+
+function RowLeading({ icon, iconColor, dotColor, dotShape, mark, dimmed }: {
   icon?: IconValue;
   iconColor?: HexColor;
   dotColor?: HexColor;
+  dotShape: 'dot' | 'square';
+  mark?: RowMark;
   dimmed: boolean;
 }) {
   const palette = usePalette();
@@ -368,10 +428,137 @@ function RowLeading({ icon, iconColor, dotColor, dimmed }: {
       />
     );
   }
+  if (mark) return <Mark mark={mark} dimmed={dimmed} />;
   if (dotColor) {
-    return <Circle modifiers={[foregroundStyle(dotColor), frame({ width: 10, height: 10 })]} />;
+    const swatch = [foregroundStyle(dotColor), frame({ width: 10, height: 10 })];
+    return (
+      <ZStack modifiers={[frame({ width: LEADING_COLUMN })]}>
+        {dotShape === 'square' ? <RoundedRectangle cornerRadius={3} modifiers={swatch} /> : <Circle modifiers={swatch} />}
+      </ZStack>
+    );
   }
   return null;
+}
+
+/** Period badges: 40pt wide, taller for a 連堂's two numerals. */
+const PERIOD_WIDTH = 40;
+const PERIOD_RADIUS = 12;
+
+function Mark({ mark, dimmed }: { mark: RowMark; dimmed: boolean }) {
+  const quiet = dimmed ? tertiaryLabelText : secondaryLabelText;
+  switch (mark.kind) {
+    case 'glyph':
+      return (
+        <Text
+          modifiers={[
+            font({ textStyle: 'subheadline', weight: 'bold' }),
+            dimmed ? tertiaryLabelText : labelText,
+            frame({ minWidth: LEADING_COLUMN }),
+            fixedSize({ horizontal: true }),
+          ]}>
+          {mark.text}
+        </Text>
+      );
+    case 'index':
+      return (
+        <Text
+          modifiers={[
+            font({ textStyle: 'body' }),
+            quiet,
+            monospacedDigit(),
+            frame({ minWidth: LEADING_COLUMN }),
+            fixedSize({ horizontal: true }),
+          ]}>
+          {mark.text}
+        </Text>
+      );
+    case 'date':
+      return (
+        <VStack spacing={0} modifiers={[frame({ minWidth: PERIOD_WIDTH }), fixedSize({ horizontal: true })]}>
+          <Text modifiers={[font({ textStyle: 'caption' }), quiet]}>{mark.weekday}</Text>
+          <Text modifiers={[font({ textStyle: 'title3', weight: 'semibold' }), dimmed ? tertiaryLabelText : labelText, monospacedDigit()]}>
+            {mark.day}
+          </Text>
+        </VStack>
+      );
+    case 'period': {
+      const height = mark.lines.length > 1 ? 52 : PERIOD_WIDTH;
+      return (
+        <ZStack modifiers={[frame({ width: PERIOD_WIDTH, height })]}>
+          {mark.empty ? (
+            <RoundedRectangle
+              cornerRadius={PERIOD_RADIUS}
+              modifiers={[
+                foregroundStyle('#00000000'),
+                strokeBorder({
+                  content: PlatformColor('separator'),
+                  style: { lineWidth: 1.5, dash: [4, 3] },
+                  shape: 'roundedRectangle',
+                  cornerRadius: PERIOD_RADIUS,
+                }),
+              ]}
+            />
+          ) : (
+            <RoundedRectangle cornerRadius={PERIOD_RADIUS} modifiers={[foregroundStyle(mark.fill ?? QUIET_FILL)]} />
+          )}
+          <VStack spacing={0}>
+            {mark.lines.map((line, index) => (
+              <Text
+                key={`${index}-${line}`}
+                modifiers={[
+                  font({ size: 17, weight: 'bold' }),
+                  mark.empty ? tertiaryLabelText : mark.ink ? foregroundStyle(mark.ink) : secondaryLabelText,
+                  dynamicTypeSize({ max: 'xLarge' }),
+                ]}>
+                {line}
+              </Text>
+            ))}
+          </VStack>
+        </ZStack>
+      );
+    }
+  }
+}
+
+/** A small grey tag above a title, e.g. 116升學. */
+function Tag({ text }: { text: string }) {
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: 'caption', weight: 'semibold' }),
+        secondaryLabelText,
+        padding({ horizontal: 6, vertical: 2 }),
+        background(QUIET_FILL, shapes.roundedRectangle({ cornerRadius: 6 })),
+        lineLimit(1),
+        fixedSize(),
+      ]}>
+      {text}
+    </Text>
+  );
+}
+
+/** A toggle as its own trailing button (the 美食 hearts): the active icon in its colour, or the icon greyed. */
+function ToggleButton({ toggle }: { toggle: RowToggle }) {
+  const palette = usePalette();
+  return (
+    <Button
+      onPress={toggle.onPress}
+      modifiers={[
+        buttonStyle('borderless'),
+        accessibilityLabel(toggle.label),
+        ...(toggle.active ? [accessibilityAddTraits(['isSelected'])] : []),
+      ]}>
+      <Image
+        systemName={sf(toggle.active ? toggle.activeIcon : toggle.icon)}
+        modifiers={[
+          font({ textStyle: 'title3' }),
+          toggle.active ? foregroundStyle(toggle.activeColor ?? palette.tint) : secondaryLabelText,
+          frame({ width: 44, height: 44 }),
+          FULL_ROW,
+        ]}
+      />
+    </Button>
+  );
 }
 
 /** A small filled pill after the title (目前, 今天). */

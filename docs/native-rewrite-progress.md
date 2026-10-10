@@ -12,12 +12,45 @@ stacks. The original app identity is preserved.
 Home, settings, about, timetable editing, calendar and task editing, category
 management, restaurant map/list/favorites, school RSS and pins, weekly menus,
 YouBike and Metro, partner links, souvenir store, and random-choice helper are
-implemented. Hidden toolbar features open through a stack route; toolbar
-configuration stays within the native five-tab limit. The previous app's user
+implemented. The tab bar is fixed at five tabs (今天, 課表, 行事曆, 美食,
+校園); the other features live inside 美食 and 校園. The previous app's user
 data is imported once on the first launch after the update (see below).
 
 CI and contributor documentation now use Expo prebuild, native Gradle/Xcode
 builds, and lint/type/test checks. No release was published.
+
+## Redesign (2026-10-09)
+
+On branch `redesign/fixed-tabs` (uncommitted). See docs/design/native-ui.md.
+
+- Five fixed tabs (今天 · 課表 · 行事曆 · 美食 · 校園); 設定 is a sheet with
+  關於 inside; 熱食部 sits in 美食, the rest in 校園.
+- 今天: the 現在 card with the bell rail (kit `NowCard`), states from
+  `features/home/now.ts`; school days, holidays and exams from the 行事曆
+  (`features/todo/school-days.ts`); sections 今日, 午餐, 回家, 釘選.
+- 課表: 上午 / 下午 with 連堂 merged, and a week grid (kit `TimetableGrid`).
+- 行事曆: 假 / 考 day marks, long events dot their ends only, and a grade
+  filter (on by default).
+- 美食: nearest first with distances; links open a view and a menu day.
+- iOS widget (expo-widgets 57.0.22, opt-in with `ENABLE_WIDGETS=1`).
+- A period now ends at its bell (`getCurrentPeriod`), on 今天 and 課表 alike.
+
+Verified on the iPhone Air simulator (iOS, the app's real data, the clock set
+from the debugger for each state): the tabs, the 設定 sheet, 校園, 美食's
+switch and links, every 現在 card state in light and dark mode, 課表's day and
+week views, 行事曆's marks.
+
+Then the screens were brought to the design (the CK APP Redesign PDF):
+large titles with a subtitle line on iOS, prominent section headers, view
+switches in the navigation bar, the welcome screen (你是哪一班？), week strips
+with dates (`DayStrip`), period badges in soft subject colours, 連堂 as one
+tall cell in the week grid, 行事曆's 接下來 and a pushed 待辦 list, 美食's
+chips, map card and 營業中 · 至 13:30 lines, 校園's unread dots and tags, the
+✓ done button and green switches, and the widget's rail and 接下來 list.
+Checked on the iPhone Air simulator (light and dark, both widget sizes on the
+Home Screen) and on the CK_Pixel emulator as a separate `.codexverify` build
+(every tab, the welcome flow, 設定). The 熱食部 menu is published as an image,
+so the dishes the design lists in text appear in the image only.
 
 ## Verification
 
@@ -79,9 +112,8 @@ keeping the bundle ID alone does not carry the data over.
 - `transform.ts` maps the Vuex state to each store, defensively: UTC-serialised
   event/todo dates become local `YYYY-MM-DD`, numeric ids become strings,
   timetable cells keep notes, colours (label, Quasar option object or fill),
-  單/雙週 rotations and overrides, toolbar links/labels map to tab features
-  through `normalizeToolbar`, and junk or duplicates are dropped. The news
-  cache is not carried over.
+  單/雙週 rotations and overrides, and junk or duplicates are dropped. The
+  news cache and the toolbar (the tab bar is fixed now) are not carried over.
 - `merge.ts` applies it without losing anything made in this app: values and
   lists still at their defaults are replaced, other lists are combined by
   id/name/title, and the timetable is replaced only if the user has not edited
@@ -103,7 +135,7 @@ Legacy user-data import is implemented but **not yet validated on a device**.
 Install a real previous store release (a Capacitor 7 build, e.g. 3.4.0) on
 Android and on iOS, add data in every area (edited and 單/雙週 cells with notes
 and colours, a changed class, events and todos, custom categories, pins,
-favourites, YouBike and Metro stations, toolbar order and home widgets), then
+favourites, YouBike and Metro stations and home widgets), then
 install this build over it and check that everything arrives. The emulator's older installed app
 is NativeScript and was kept intact, so it cannot serve for this.
 

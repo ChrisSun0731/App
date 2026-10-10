@@ -8,7 +8,11 @@ import {
   defaultDay,
   describeCell,
   describeDay,
+  describeDayParts,
+  describeWeek,
+  displayedWeek,
   formatWeekInfo,
+  shortSubject,
   periodOverline,
   scheduleLoadState,
 } from './schedule-view';
@@ -53,28 +57,29 @@ describe('period rows', () => {
       ['二', '第二節 · 09:10', '化學', '單週：物理　雙週：化學'],
       ['三', '第三節 · 10:10', '空堂', undefined],
     ]);
-    expect(result[0].background).toBe('#FFCCCB');
-    expect(result[1].background).toBeUndefined();
+    expect(result[0]).toMatchObject({ fill: '#FFE0DE', ink: '#BF0018' });
+    expect(result[1].fill).toBeUndefined();
     expect(result[0].accessibilityLabel).toBe('第一節，08:10，國文，帶課本，紅色');
   });
 
-  test('mark 目前 only on today\'s column, bell minute included', () => {
+  test('mark 現在 only on today\'s column, until the bell', () => {
     const rows = rowsWith('Monday', [{ subject: '國文' }, { subject: '英文' }]);
     const input = { rows, periods: PERIODS, semesterStart: SEMESTER_START, scheme: 'light' as const };
 
-    const monday = describeDay({ ...input, day: 'Monday', now: at(9, 0) });
+    const monday = describeDay({ ...input, day: 'Monday', now: at(8, 59) });
     expect(monday.map((row) => row.current)).toEqual([true, false]);
-    expect(monday[0].accessibilityLabel).toBe('第一節，08:10，國文，目前');
-    // Between periods nothing is in session.
+    expect(monday[0].accessibilityLabel).toBe('第一節，08:10，國文，現在');
+    // At the bell the period is over, and between periods nothing is in session.
+    expect(describeDay({ ...input, day: 'Monday', now: at(9, 0) }).some((row) => row.current)).toBe(false);
     expect(describeDay({ ...input, day: 'Monday', now: at(9, 5) }).some((row) => row.current)).toBe(false);
     // Tuesday's column is not today's.
     expect(describeDay({ ...input, day: 'Tuesday', now: at(8, 30) }).some((row) => row.current)).toBe(false);
   });
 
-  test('use the dimmed fills in dark mode and keep the list colour for 預設', () => {
+  test('use the dark swatches in dark mode and the plain cell for 預設', () => {
     const options = { overline: '第一節', parity: 'odd' as const };
-    expect(describeCell({ subject: '數學', color: 'Blue' }, { ...options, scheme: 'dark' }).background).toBe('#1E4553');
-    expect(describeCell({ subject: '數學', color: 'Default' }, { ...options, scheme: 'dark' }).background).toBeUndefined();
+    expect(describeCell({ subject: '數學', color: 'Blue' }, { ...options, scheme: 'dark' })).toMatchObject({ fill: '#183554', ink: '#5CAAFF' });
+    expect(describeCell({ subject: '數學', color: 'Default' }, { ...options, scheme: 'dark' }).fill).toBeUndefined();
     expect(describeCell({ subject: '數學', color: 'Default' }, { ...options, scheme: 'light' }).accessibilityLabel).toBe('第一節，數學');
   });
 
@@ -156,5 +161,105 @@ describe('load state', () => {
     // ...with rows, the notice's place does.
     expect(scheduleLoadState({ ...idle, hasRows: true, isError: true, isFetching: true }))
       .toEqual({ banner: 'retrying', day: 'rows' });
+  });
+});
+
+// The real bell times.
+const BELLS: Period[] = [
+  ['08:10', '09:00'], ['09:10', '10:00'], ['10:10', '11:00'], ['11:10', '12:00'],
+  ['13:00', '13:50'], ['14:00', '14:50'], ['15:10', '16:00'], ['16:10', '17:00'],
+].map(([start, end], index) => ({ name: PERIOD_NAMES[index], start, end }));
+
+/** Class 201's Wednesday, with a note and a colour on 物理. */
+const WEDNESDAY: ScheduleRow[] = ['各類文學選讀', '各類文學選讀', '物理', '英語文', '地理', '地理', '班會', ''].map((subject, index) => ({
+  name: PERIOD_NAMES[index],
+  Monday: empty,
+  Tuesday: empty,
+  Wednesday: index === 2 ? { subject, note: '實驗室上課', color: 'Purple' } : { subject },
+  Thursday: empty,
+  Friday: empty,
+}));
+
+describe('the day as 上午 and 下午', () => {
+  const parts = (now: Date) =>
+    describeDayParts({ rows: WEDNESDAY, day: 'Wednesday', periods: BELLS, semesterStart: SEMESTER_START, now, scheme: 'light' });
+
+  test('splits at lunch and merges a 連堂 into one row', () => {
+    const [morning, afternoon] = parts(at(7, 0, 7));
+    expect([morning.title, morning.detail]).toEqual(['上午', '08:10–12:00']);
+    expect([afternoon.title, afternoon.detail]).toEqual(['下午', '13:00–17:00']);
+    expect(morning.rows.map((row) => row.time)).toEqual(['08:10–10:00', '10:10–11:00', '11:10–12:00']);
+    expect(morning.rows.map((row) => [row.overline, row.title])).toEqual([
+      ['第一、二節 · 08:10–10:00 · 連堂', '各類文學選讀'],
+      ['第三節 · 10:10–11:00', '物理'],
+      ['第四節 · 11:10–12:00', '英語文'],
+    ]);
+    expect(morning.rows[0].periods).toEqual(['一', '二']);
+    expect(afternoon.rows.map((row) => row.title)).toEqual(['地理', '班會', '空堂']);
+    expect(afternoon.rows[0].periods).toEqual(['五', '六']);
+  });
+
+  test('marks the row in session, a 連堂 through both periods, with the minutes to the bell', () => {
+    expect(parts(at(10, 37, 7))[0].rows.map((row) => row.current)).toEqual([false, true, false]);
+    expect(parts(at(10, 37, 7))[0].rows.map((row) => row.untilBell)).toEqual([null, 23, null]);
+    expect(parts(at(9, 30, 7))[0].rows[0]).toMatchObject({ current: true, untilBell: 30 });
+    expect(parts(at(10, 37, 7))[0].rows[1].accessibilityLabel).toBe('第三節，10:10–11:00，物理，實驗室上課，現在，紫色');
+  });
+
+  test('different notes or colours keep periods apart', () => {
+    const rows = WEDNESDAY.map((row) => (row.name === '二' ? { ...row, Wednesday: { subject: '各類文學選讀', note: '小考' } } : row));
+    const [morning] = describeDayParts({ rows, day: 'Wednesday', periods: BELLS, semesterStart: SEMESTER_START, now: at(7, 0, 7), scheme: 'light' });
+    expect(morning.rows.map((row) => row.periods)).toEqual([['一'], ['二'], ['三'], ['四']]);
+  });
+
+  test('without bell times, one part of single periods', () => {
+    const result = describeDayParts({ rows: WEDNESDAY, day: 'Wednesday', periods: [], semesterStart: SEMESTER_START, now: at(7, 0, 7), scheme: 'light' });
+    expect(result).toHaveLength(1);
+    expect(result[0].rows).toHaveLength(8);
+  });
+});
+
+describe('the week grid', () => {
+  test('a column per weekday of the displayed week, a row per period, lunch after 第四節', () => {
+    const week = describeWeek({
+      rows: WEDNESDAY,
+      periods: BELLS,
+      semesterStart: SEMESTER_START,
+      now: at(10, 37, 7),
+      scheme: 'light',
+      offDay: (date) => (date.getDate() === 9 ? '國慶日補假' : null),
+    });
+    expect(week.columns.map((column) => [column.label, column.date, column.today, column.off])).toEqual([
+      ['一', '5', false, null],
+      ['二', '6', false, null],
+      ['三', '7', true, null],
+      ['四', '8', false, null],
+      ['五', '9', false, '國慶日補假'],
+    ]);
+    expect(week.rows.map((row) => row.highlighted)).toEqual([false, false, true, false, false, false, false, false]);
+    expect(week.rows.map((row) => row.detail)).toEqual(['08:10', '09:10', '10:10', '11:10', '13:00', '14:00', '15:10', '16:10']);
+    expect(week.lunchAfter).toBe(3);
+    const wednesday = week.cells.map((row) => row[2]);
+    expect(wednesday.map((cell) => cell.text)).toEqual(['文學選讀', '文學選讀', '物理', '英文', '地理', '地理', '班會', '']);
+    // A 連堂 is one cell covering the next period; lunch is never crossed.
+    expect(wednesday.map((cell) => cell.span)).toEqual([2, 0, 1, 1, 2, 0, 1, 1]);
+    expect(wednesday[0].accessibilityLabel).toBe('星期三第一、二節，各類文學選讀，連堂');
+    expect(wednesday[2]).toMatchObject({ current: true, color: '#F2E3FA', ink: '#8944AB', accessibilityLabel: '星期三第三節，物理，現在，紫色' });
+    expect(wednesday[7].empty).toBe(true);
+  });
+
+  test('shortens subjects to fit a cell', () => {
+    expect(shortSubject('國語文')).toBe('國文');
+    expect(shortSubject('數學(彈性學習)')).toBe('數學彈');
+    expect(shortSubject('選修物理')).toBe('選修物理');
+    expect(shortSubject('探索與實作研究')).toBe('探索與實');
+  });
+});
+
+describe('weekends show the coming week', () => {
+  test('its Monday, parity and week number', () => {
+    expect(displayedWeek(new Date(2026, 9, 10, 12, 0))).toEqual(new Date(2026, 9, 12));
+    expect(displayedWeek(new Date(2026, 9, 7, 12, 0))).toEqual(new Date(2026, 9, 5));
+    expect(formatWeekInfo('115學年度第1學期', SEMESTER_START, new Date(2026, 9, 11))).toBe('115學年度第1學期 · 第7週 · 單週');
   });
 });

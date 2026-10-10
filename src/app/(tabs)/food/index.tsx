@@ -1,1 +1,1 @@
-export { default } from '@/features/food/screen';
+export { default } from '@/features/food/tab';

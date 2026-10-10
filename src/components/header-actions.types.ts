@@ -37,15 +37,29 @@ export type HeaderItem =
       icon: IconValue;
       onPress: () => void;
       disabled?: boolean;
+      /** The confirming action of a sheet (✓): filled with the tint on iOS. */
+      prominent?: boolean;
     }
   | {
       kind: 'text';
       key: string;
       label: string;
+      /** Spoken instead of `label`, e.g. 設定，目前班級 201 for a 201 button. */
+      accessibilityLabel?: string;
       onPress: () => void;
       disabled?: boolean;
       /** The confirming action of a form: bold on iOS. */
       prominent?: boolean;
+    }
+  | {
+      /** A segmented control, e.g. 日 / 週. */
+      kind: 'segmented';
+      key: string;
+      /** Spoken name of the control. */
+      label: string;
+      options: readonly { label: string; value: string }[];
+      value: string;
+      onChange: (value: string) => void;
     }
   | {
       kind: 'menu';

@@ -66,6 +66,20 @@ export function formatMonthDay(date: Date): string {
   return `${date.getMonth() + 1}/${date.getDate()} (${WEEKDAY_ZH[date.getDay()]})`;
 }
 
+/** e.g. "10月9日". */
+export function formatMonthDayZh(date: Date): string {
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+/** e.g. "10月13日–14日", "10月30日–11月2日", "2026年12月28日–2027年1月1日". */
+export function formatMonthDayRange(start: Date, end: Date): string {
+  if (start.getFullYear() !== end.getFullYear()) {
+    return `${start.getFullYear()}年${formatMonthDayZh(start)}–${end.getFullYear()}年${formatMonthDayZh(end)}`;
+  }
+  const tail = start.getMonth() === end.getMonth() ? `${end.getDate()}日` : formatMonthDayZh(end);
+  return `${formatMonthDayZh(start)}–${tail}`;
+}
+
 /** e.g. "2026/10/4". */
 export function formatFullDate(date: Date): string {
   return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;

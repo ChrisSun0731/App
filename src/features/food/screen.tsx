@@ -1,7 +1,7 @@
-// 美食: restaurants near 建中 on a map and in a list, with their opening
-// status, name search, 正在營業 / 我的最愛 filters, favourites and a random
-// pick, each restaurant opening the /restaurant modal. Layout per
-// docs/design/native-ui.md, "美食 (Food)".
+// 美食 › 附近: restaurants near 建中 on a map and in a list (nearest first),
+// with their opening status, name search, 營業中 / 我的最愛 filters,
+// favourites and a random pick, each restaurant opening the /restaurant
+// modal. Layout per docs/design/native-ui.md, "美食 (Food)".
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useState, type ReactElement } from 'react';
 import { Alert, useWindowDimensions } from 'react-native';
@@ -14,13 +14,14 @@ import { usePalette } from '@/theme/palette';
 import { Embedded, EmptyState, FilterChips, ListScreen, Loading, Notice, Row, Section } from '@/ui';
 
 import {
-  activeFilterLabels,
+  distanceLabel,
   FILTER_LABELS,
   filterRestaurants,
+  metresFromSchool,
+  openNearSchool,
   pickRandomOpen,
-  resultsTitle,
-  STATUS_LEGEND,
-  summarize,
+  splitName,
+  statusLine,
 } from './food-view';
 import { MAP_AVAILABLE } from './map-availability';
 import type { Restaurant } from './opening-hours';
@@ -32,11 +33,17 @@ const ANDROID = process.env.EXPO_OS === 'android';
 /** Statuses are minute-resolution; the clock only ticks while 美食 is focused. */
 const CLOCK_INTERVAL_MS = 30_000;
 
-/** The map takes about 60% of the screen height, leaving the list's first rows in view. */
-const MAP_HEIGHT_RATIO = 0.6;
-const MIN_MAP_HEIGHT = 240;
+/** The map takes about 40% of the screen height, leaving the list's first rows in view. */
+const MAP_HEIGHT_RATIO = 0.4;
+const MIN_MAP_HEIGHT = 220;
 
-export default function FoodScreen() {
+/** The favourite heart's colour (systemPink). */
+const HEART = '#FF2D55';
+
+const clock = (date: Date) => `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+/** `switcher`: the 美食 tab's 熱食部 / 附近 control, first in the navigation bar (see ./tab.tsx). */
+export default function FoodScreen({ switcher }: { switcher?: HeaderItem }) {
   const now = useNow(CLOCK_INTERVAL_MS);
   const palette = usePalette();
   const { height: windowHeight } = useWindowDimensions();
@@ -46,7 +53,6 @@ export default function FoodScreen() {
   const [query, setQuery] = useState('');
   const [openOnly, setOpenOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [view, setView] = useState<'map' | 'list'>(MAP_AVAILABLE ? 'map' : 'list');
   // The restaurant just opened, so the map pans to it behind the modal.
   const [selected, setSelected] = useState<Restaurant | null>(null);
 
@@ -85,64 +91,40 @@ export default function FoodScreen() {
     setFavoritesOnly(false);
   }
 
-  const header: HeaderItem[] = [];
-  if (MAP_AVAILABLE) {
-    header.push({
+  const header: HeaderItem[] = [
+    ...(switcher ? [switcher] : []),
+    {
       kind: 'icon',
-      key: 'view',
-      label: view === 'map' ? '顯示列表' : '顯示地圖',
-      icon: view === 'map' ? icons.list : icons.map,
-      onPress: () => setView((current) => (current === 'map' ? 'list' : 'map')),
-    });
-  }
-  header.push({
-    kind: 'icon',
-    key: 'random',
-    label: '隨機選擇營業中的餐廳',
-    icon: icons.shuffle,
-    disabled: !filtered.length,
-    onPress: chooseRandom,
-  });
-  // One filter control per platform: an iOS menu with checkmarks, and on
-  // Android the Material filter chips at the top of the list (a second copy
-  // in the top app bar's menu would only repeat them).
-  if (!ANDROID) {
-    header.push({
-      kind: 'menu',
-      key: 'filter',
-      label: filtering ? '篩選（已套用）' : '篩選',
-      icon: filtering ? icons.filterActive : icons.filter,
-      actions: [
-        { key: 'open', label: FILTER_LABELS.open, selected: openOnly, onPress: () => toggleFilter('open') },
-        {
-          key: 'favorites',
-          label: FILTER_LABELS.favorites,
-          selected: favoritesOnly,
-          onPress: () => toggleFilter('favorites'),
-        },
-      ],
-    });
-  }
+      key: 'random',
+      label: '隨機選擇營業中的餐廳',
+      icon: icons.dice,
+      disabled: !filtered.length,
+      onPress: chooseRandom,
+    },
+  ];
+  const openCount = data ? openNearSchool(data, now).length : null;
 
-  // iOS: the filter menu is the only filter UI, and the navigation bar (with
-  // the menu) hides while searching, so the title names the filters in use.
-  // Android's chips stay in view above the list.
-  const listTitle = resultsTitle(filtered.length, ANDROID ? [] : activeFilterLabels({ openOnly, favoritesOnly }));
   let listSection: ReactElement;
   if (data && filtered.length > 0) {
+    // Nearest first: what students weigh between classes.
+    const listed = filtered
+      .map((restaurant) => ({ restaurant, metres: metresFromSchool(restaurant.position) }))
+      .sort((a, b) => a.metres - b.metres);
     listSection = (
-      <Section title={listTitle}>
-        {filtered.map((restaurant) => {
-          const summary = summarize(restaurant, now);
+      <Section title="由近到遠" detail="距離從學校算起" footer="直線距離，從建中東側門算起。">
+        {listed.map(({ restaurant, metres }) => {
+          const status = statusLine(restaurant, now);
+          const { name, aside } = splitName(restaurant.name);
           const favorite = favorites.includes(restaurant.name);
+          const subtitle = `${status.text} · ${distanceLabel(metres)}`;
           return (
             <Row
               key={restaurant.name}
-              title={restaurant.name}
-              subtitle={summary.subtitle}
-              dotColor={summary.color}
-              accessory="chevron"
-              accessibilityLabel={[restaurant.name, favorite ? FILTER_LABELS.favorites : null, summary.subtitle]
+              title={name}
+              titleAside={aside ?? undefined}
+              subtitle={subtitle}
+              subtitleDotColor={status.color}
+              accessibilityLabel={[restaurant.name, favorite ? FILTER_LABELS.favorites : null, subtitle]
                 .filter(Boolean)
                 .join('，')}
               toggle={{
@@ -151,6 +133,8 @@ export default function FoodScreen() {
                 activeIcon: icons.favoriteFilled,
                 active: favorite,
                 onPress: () => toggleFavorite(restaurant.name),
+                button: true,
+                activeColor: HEART,
               }}
               onPress={() => openDetail(restaurant)}
             />
@@ -193,7 +177,7 @@ export default function FoodScreen() {
   return (
     <>
       <Stack.SearchBar
-        placeholder="搜尋餐廳"
+        placeholder="搜尋餐廳或綽號，例如「林乾」"
         // The SwiftUI list inside the Host does not drive UIKit's
         // hide-on-scroll, which could leave the bar unreachable.
         hideWhenScrolling={false}
@@ -211,7 +195,9 @@ export default function FoodScreen() {
           : null)}
       />
       <HeaderActions right={header} />
-      <ListScreen onRefresh={refresh}>
+      <ListScreen
+        subtitle={['附近', clock(now), openCount !== null ? `${openCount} 間營業中` : ''].filter(Boolean).join(' · ')}
+        onRefresh={refresh}>
         {/* Cached restaurants stay on screen when a refresh fails. */}
         {data && restaurants.isError ? (
           <Section>
@@ -224,20 +210,18 @@ export default function FoodScreen() {
           </Section>
         ) : null}
 
-        {ANDROID ? (
-          <Section plain>
-            <FilterChips
-              options={[
-                { key: 'open', label: FILTER_LABELS.open, selected: openOnly },
-                { key: 'favorites', label: FILTER_LABELS.favorites, selected: favoritesOnly },
-              ]}
-              onToggle={toggleFilter}
-            />
-          </Section>
-        ) : null}
+        <Section plain>
+          <FilterChips
+            options={[
+              { key: 'open', label: FILTER_LABELS.open, selected: openOnly },
+              { key: 'favorites', label: FILTER_LABELS.favorites, selected: favoritesOnly },
+            ]}
+            onToggle={toggleFilter}
+          />
+        </Section>
 
-        {view === 'map' ? (
-          <Section footer={STATUS_LEGEND}>
+        {MAP_AVAILABLE ? (
+          <Section>
             <Embedded height={Math.max(MIN_MAP_HEIGHT, Math.round(windowHeight * MAP_HEIGHT_RATIO))}>
               <RestaurantMap restaurants={filtered} selected={selected} now={now} onSelect={openDetail} />
             </Embedded>

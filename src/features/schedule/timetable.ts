@@ -177,12 +177,14 @@ function toMinutes(hhmm: string): number {
 /**
  * The period in session at `date`, or null outside every period (before or
  * after school, between periods, lunch). Uses the real bell times rather than
- * guessing from the hour, which the Quasar app once did and got wrong.
+ * guessing from the hour, which the Quasar app once did and got wrong. A
+ * period runs from its start minute up to its end: at the bell it is over,
+ * as on 今天's 現在 card.
  */
-export function getCurrentPeriod(periods: Period[], date: Date): PeriodName | null {
+export function getCurrentPeriod(periods: readonly Period[], date: Date): PeriodName | null {
   const now = date.getHours() * 60 + date.getMinutes();
   for (const period of periods) {
-    if (now >= toMinutes(period.start) && now <= toMinutes(period.end)) {
+    if (now >= toMinutes(period.start) && now < toMinutes(period.end)) {
       return period.name;
     }
   }

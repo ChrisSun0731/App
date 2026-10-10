@@ -1,28 +1,12 @@
 import { describe, expect, test } from '@jest/globals';
 
-import type { Period, ScheduleCell, ScheduleRow, Timetables } from '@/features/schedule/timetable';
+import type { ScheduleCell, ScheduleRow, Timetables } from '@/features/schedule/timetable';
 import { PERIOD_NAMES } from '@/features/schedule/timetable';
-import type { Todo } from '@/features/todo/types';
+import { toSchoolEvents } from '@/features/todo/school-calendar';
+import type { CalendarEvent, Todo } from '@/features/todo/types';
 
-import {
-  formatPeriodOverline,
-  formatPeriodTitle,
-  formatPinnedDate,
-  formatTodayTitle,
-  getTodayPeriod,
-  timetableToAutofill,
-  todosDueOn,
-} from './today';
+import { agendaEvents, agendaSubtitle, formatPinnedDate, formatTodayTitle, timetableToAutofill, todayHeading, todosDueOn } from './today';
 
-const PERIODS: Period[] = [
-  { name: '一', start: '08:10', end: '09:00' },
-  { name: '二', start: '09:10', end: '10:00' },
-  { name: '三', start: '10:10', end: '11:00' },
-  { name: '四', start: '11:10', end: '12:00' },
-];
-
-// 2026-08-31 is a Monday, so 2026-10-05 (Monday) starts week 6, a 雙週.
-const SEMESTER_START = '2026-08-31';
 const at = (hours: number, minutes: number, day = 5) => new Date(2026, 9, day, hours, minutes);
 
 const empty: ScheduleCell = { subject: '' };
@@ -39,82 +23,17 @@ function rowsWithMonday(monday: ScheduleCell[]): ScheduleRow[] {
   }));
 }
 
-const ROWS = rowsWithMonday([
-  { subject: '國文', note: '  帶課本 ' },
-  { subject: '物理', alternating: { odd: '物理', even: '化學' } },
-  empty,
-  { subject: '英文' },
-]);
-
-describe('the current or next period today', () => {
-  test('returns the period in session with this week\'s subject and the trimmed note', () => {
-    expect(getTodayPeriod(PERIODS, ROWS, at(8, 30), SEMESTER_START)).toEqual({
-      status: 'current',
-      period: PERIODS[0],
-      subject: '國文',
-      note: '帶課本',
-    });
-    // The bell minute still counts as in session, like the 課表 screen's 目前.
-    expect(getTodayPeriod(PERIODS, ROWS, at(9, 0), SEMESTER_START)?.status).toBe('current');
-    // Week 6 is a 雙週, so the rotating slot teaches 化學.
-    expect(getTodayPeriod(PERIODS, ROWS, at(9, 30), SEMESTER_START)?.subject).toBe('化學');
-  });
-
-  test('shows a free period in session as it is', () => {
-    expect(getTodayPeriod(PERIODS, ROWS, at(10, 30), SEMESTER_START)).toEqual({
-      status: 'current',
-      period: PERIODS[2],
-      subject: '',
-      note: '',
-    });
-  });
-
-  test('before school and between periods, points at the next class and skips free periods', () => {
-    expect(getTodayPeriod(PERIODS, ROWS, at(7, 30), SEMESTER_START)).toMatchObject({ status: 'next', period: PERIODS[0] });
-    expect(getTodayPeriod(PERIODS, ROWS, at(9, 5), SEMESTER_START)).toMatchObject({ status: 'next', subject: '化學' });
-    // 第三節 is free, so after 第二節 the next class is 第四節.
-    expect(getTodayPeriod(PERIODS, ROWS, at(10, 5), SEMESTER_START)).toMatchObject({ status: 'next', period: PERIODS[3] });
-  });
-
-  test('a free period with a note is still worth pointing at', () => {
-    const rows = rowsWithMonday([empty, { subject: '', note: '自習' }]);
-    expect(getTodayPeriod(PERIODS, rows, at(7, 0), SEMESTER_START)).toMatchObject({ status: 'next', period: PERIODS[1], note: '自習' });
-  });
-
-  test('uses bell times, not the order the periods arrive in', () => {
-    const shuffled = [PERIODS[3], PERIODS[1], PERIODS[0], PERIODS[2]];
-    expect(getTodayPeriod(shuffled, ROWS, at(7, 0), SEMESTER_START)?.period).toEqual(PERIODS[0]);
-  });
-
-  test('nothing after the last class, on weekends, or without a timetable', () => {
-    expect(getTodayPeriod(PERIODS, ROWS, at(12, 30), SEMESTER_START)).toBeNull();
-    expect(getTodayPeriod(PERIODS, ROWS, at(8, 30, 4), SEMESTER_START)).toBeNull();
-    expect(getTodayPeriod(PERIODS, [], at(8, 30), SEMESTER_START)).toBeNull();
-    expect(getTodayPeriod([], ROWS, at(8, 30), SEMESTER_START)).toBeNull();
-  });
-
-  test('without a semester start, weeks count as 單週', () => {
-    expect(getTodayPeriod(PERIODS, ROWS, at(9, 30), null)?.subject).toBe('物理');
-  });
-});
-
-describe('home screen labels', () => {
-  test('formats the period overline, today\'s title and pinned dates', () => {
-    expect(formatPeriodOverline(PERIODS[2])).toBe('第三節 10:10–11:00');
+describe('今天 labels', () => {
+  test('the date, the class and this week\'s parity', () => {
     expect(formatTodayTitle(at(8, 0))).toBe('10月5日 星期一');
     expect(formatTodayTitle(at(8, 0, 4))).toBe('10月4日 星期日');
-    expect(formatPinnedDate(new Date(2026, 8, 30, 15, 0).toISOString())).toBe('2026/9/30');
-    expect(formatPinnedDate('not a date')).toBeUndefined();
+    expect(todayHeading(at(8, 0), 6, 'even')).toBe('10月5日 星期一 · 第 6 週 · 雙週');
+    expect(todayHeading(at(8, 0), null, null)).toBe('10月5日 星期一');
   });
 
-  test('titles a free period by whether it is in session or ahead', () => {
-    expect(formatPeriodTitle({ status: 'current', subject: '國文' })).toBe('國文');
-    expect(formatPeriodTitle({ status: 'next', subject: '英文' })).toBe('英文');
-    expect(formatPeriodTitle({ status: 'current', subject: '' })).toBe('本節沒有課程');
-    // An upcoming free period with only a note must not say 本節 next to the 下一節 badge.
-    const rows = rowsWithMonday([empty, { subject: '', note: '自習' }]);
-    const upcoming = getTodayPeriod(PERIODS, rows, at(7, 30), SEMESTER_START);
-    expect(upcoming && formatPeriodTitle(upcoming)).toBe('空堂');
+  test('pinned dates', () => {
+    expect(formatPinnedDate(new Date(2026, 8, 30, 15, 0).toISOString())).toBe('2026/9/30');
+    expect(formatPinnedDate('not a date')).toBeUndefined();
   });
 });
 
@@ -126,8 +45,50 @@ describe('today\'s todos', () => {
   });
 });
 
+describe('the 今日 agenda', () => {
+  // Taken from the 115-1 行事曆.
+  const school = toSchoolEvents({
+    events: [
+      { title: '國際數理奧賽/科展升學優待辦法送件(開學後2個月內)', startDate: '2026-09-01', endDate: '2026-10-24', department: '教務處' },
+      { title: '115-1校內獎學金線上申請截止日', startDate: '2026-10-08', endDate: '2026-10-08', department: '教務處' },
+      { title: '捐血活動', startDate: '2026-10-08', endDate: '2026-10-08', department: '學務處' },
+      { title: '高一X光篩檢(13:00-16:00)', startDate: '2026-10-08', endDate: '2026-10-08', department: '學務處' },
+      { title: '國慶日補假', startDate: '2026-10-09', endDate: '2026-10-09' },
+      { title: '心臟病篩檢(13:00-16:00)', startDate: '2026-10-05', endDate: '2026-10-06', department: '學務處', tentative: true },
+      { title: '高一、高二、高三第1次定期考(◆考後大掃除)', startDate: '2026-10-13', endDate: '2026-10-14', department: '教務處' },
+    ],
+  });
+  const own: CalendarEvent[] = [
+    { id: 'a', title: '社團成發', startDate: '2026-10-08', endDate: '2026-10-08', category: { name: '社團', color: '#2E7D32' } },
+  ];
+  const titles = (date: Date) => agendaEvents(date, school, own, 2).map((event) => event.title);
+
+  test('the user\'s events first, then the school\'s for the grade', () => {
+    expect(titles(at(8, 0, 8))).toEqual(['社團成發', '115-1校內獎學金線上申請截止日', '捐血活動']);
+  });
+
+  test('days off and exams are left to the card and the exam row', () => {
+    expect(titles(at(8, 0, 9))).toEqual([]);
+    expect(titles(at(8, 0, 13))).toEqual([]);
+  });
+
+  test('long school events only on their first and last day', () => {
+    expect(titles(at(8, 0, 1)).length).toBe(0);
+    expect(titles(new Date(2026, 8, 1))).toContain('國際數理奧賽/科展升學優待辦法送件(開學後2個月內)');
+    expect(titles(new Date(2026, 9, 24))).toContain('國際數理奧賽/科展升學優待辦法送件(開學後2個月內)');
+  });
+
+  test('subtitles name the 處室, 暫定 and where today falls', () => {
+    const screening = school.find((event) => event.title.startsWith('心臟病'))!;
+    expect(agendaSubtitle(screening, at(8, 0, 5))).toBe('學校 · 學務處 · 暫定 · 到 10/6');
+    expect(agendaSubtitle(screening, at(8, 0, 6))).toBe('學校 · 學務處 · 暫定 · 最後一天');
+    expect(agendaSubtitle(own[0], at(8, 0, 8))).toBe('社團');
+  });
+});
+
 describe('automatic timetable fill', () => {
-  const byClass: Timetables['byClass'] = { '101': ROWS, '102': rowsWithMonday([]) };
+  const rows = rowsWithMonday([{ subject: '國文' }]);
+  const byClass: Timetables['byClass'] = { '101': rows, '102': rowsWithMonday([]) };
 
   test('fills an empty timetable with the user\'s class', () => {
     expect(timetableToAutofill({ rows: [], userClass: '102' }, byClass)).toBe(byClass['102']);

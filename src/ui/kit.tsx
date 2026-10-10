@@ -26,6 +26,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { formatMonthDay, fromDateKey, isDateKey } from '@/lib/dates';
+import { NOW_CARD, NOW_RAIL_AHEAD, ON_NOW_CARD, ON_NOW_CARD_SOFT } from '@/theme/brand';
 import { usePalette } from '@/theme/palette';
 
 import { overflowMenuLabel } from './labels';
@@ -33,8 +34,10 @@ import {
   CALENDAR_CELL_INDICATORS,
   type ButtonRowProps,
   type CheckRowProps,
+  type ChoiceGridProps,
   type CrowdBarProps,
   type DateRowProps,
+  type DayStripProps,
   type EmbeddedProps,
   type EmptyStateProps,
   type FilterChipsProps,
@@ -44,6 +47,8 @@ import {
   type MetricPillsProps,
   type MonthCalendarProps,
   type NoticeProps,
+  type NowCardProps,
+  type NowRail,
   type PickerRowProps,
   type RowAction,
   type RowProps,
@@ -51,6 +56,7 @@ import {
   type TextBlockProps,
   type TextFieldRowProps,
   type TileGridProps,
+  type TimetableGridProps,
   type ToggleRowProps,
 } from './types';
 
@@ -62,7 +68,7 @@ function rowsOf(children: ReactNode): ReactElement[] {
   });
 }
 
-export function ListScreen({ children, onRefresh, refreshing = false, fab }: ListScreenProps) {
+export function ListScreen({ children, subtitle, onRefresh, refreshing = false, fab }: ListScreenProps) {
   const palette = usePalette();
   const insets = useSafeAreaInsets();
   const [pulling, setPulling] = useState(false);
@@ -86,6 +92,7 @@ export function ListScreen({ children, onRefresh, refreshing = false, fab }: Lis
           onRefresh ? <RefreshControl refreshing={refreshing || pulling} onRefresh={() => void refresh()} /> : undefined
         }
         contentContainerStyle={[styles.screen, { paddingBottom: insets.bottom + (fab ? 96 : 24) }]}>
+        {subtitle ? <Text style={[styles.subtitle, styles.screenSubtitle, { color: palette.textSecondary }]}>{subtitle}</Text> : null}
         {children}
       </ScrollView>
       {fab ? (
@@ -100,15 +107,26 @@ export function ListScreen({ children, onRefresh, refreshing = false, fab }: Lis
   );
 }
 
-export function Section({ title, footer, plain = false, children }: SectionProps) {
+export function Section({ title, titleBadge, detail, action, prominent, footer, footerAction, plain = false, children }: SectionProps) {
   const palette = usePalette();
   const rows = rowsOf(children);
   return (
     <View style={styles.section}>
-      {title ? (
-        <Text accessibilityRole="header" style={[styles.sectionTitle, { color: palette.tint }]}>
-          {title}
-        </Text>
+      {title || detail || action ? (
+        <View style={styles.inline}>
+          <Text
+            accessibilityRole="header"
+            style={[styles.sectionTitle, styles.grow, prominent ? styles.prominentTitle : null, { color: prominent ? palette.text : palette.tint }]}>
+            {title}
+            {titleBadge ? <Text style={{ color: palette.tint }}>{` ${titleBadge}`}</Text> : null}
+          </Text>
+          {detail ? <Text style={[styles.overline, { color: palette.textSecondary }]}>{detail}</Text> : null}
+          {action ? (
+            <Pressable accessibilityRole="button" onPress={action.onPress} hitSlop={8}>
+              <Text style={[styles.label, { color: palette.tint }]}>{action.label}</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
       {rows.length > 0 ? (
         <View style={plain ? styles.plain : [styles.card, { backgroundColor: palette.surface }]}>
@@ -121,6 +139,11 @@ export function Section({ title, footer, plain = false, children }: SectionProps
         </View>
       ) : null}
       {footer ? <Text style={[styles.footer, { color: palette.textSecondary }]}>{footer}</Text> : null}
+      {footerAction ? (
+        <Pressable accessibilityRole="button" onPress={footerAction.onPress} hitSlop={8}>
+          <Text style={[styles.footer, { color: palette.tint }]}>{footerAction.label}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -160,14 +183,17 @@ function Actions({ actions, rowName }: { actions: readonly RowAction[]; rowName:
   );
 }
 
-function Dot({ color }: { color: ColorValue }) {
-  return <View style={[styles.dot, { backgroundColor: color }]} />;
+function Dot({ color, square = false }: { color: ColorValue; square?: boolean }) {
+  return <View style={[styles.dot, square ? styles.square : null, { backgroundColor: color }]} />;
 }
 
 export function Row(props: RowProps) {
   const palette = usePalette();
   const { title, subtitle, overline, detail, dotColor, background, badge, emphasized, titleLines = 2, accessory = 'none' } = props;
-  const label = props.accessibilityLabel ?? [title, overline, subtitle, detail, badge].filter(Boolean).join('，');
+  const label =
+    props.accessibilityLabel ??
+    [...(props.tags ?? []), title, props.titleAside, overline, subtitle, props.note, detail, badge].filter(Boolean).join('，');
+  const mark = props.mark;
   // `disabled` dims the row's own content and turns off its tap; the toggle
   // and actions stay usable.
   return (
@@ -178,14 +204,32 @@ export function Row(props: RowProps) {
       disabled={props.disabled || !props.onPress}
       onPress={props.onPress}
       style={[styles.row, background ? { backgroundColor: background } : null]}>
-      {dotColor && !props.icon ? <Dot color={dotColor} /> : null}
+      {mark && !props.icon ? (
+        <View
+          style={[
+            styles.mark,
+            mark.kind === 'period' ? [styles.period, { backgroundColor: mark.empty ? undefined : (mark.fill ?? palette.surfaceHighlight) }] : null,
+          ]}>
+          {(mark.kind === 'period' ? mark.lines : mark.kind === 'date' ? [mark.weekday, mark.day] : [mark.text]).map((line, index) => (
+            <Text
+              key={`${index}-${line}`}
+              style={[styles.center, styles.bold, { color: mark.kind === 'period' && mark.ink ? mark.ink : palette.text }]}>
+              {line}
+            </Text>
+          ))}
+        </View>
+      ) : dotColor && !props.icon ? (
+        <Dot color={dotColor} square={props.dotShape === 'square'} />
+      ) : null}
       <View style={[styles.rowBody, props.disabled ? styles.disabled : null]}>
+        {props.tags?.length ? <Text style={[styles.overline, { color: palette.textSecondary }]}>{props.tags.join(' · ')}</Text> : null}
         {overline ? <Text style={[styles.overline, { color: palette.textSecondary }]}>{overline}</Text> : null}
         <View style={styles.inline}>
           <Text
             numberOfLines={titleLines}
-            style={[styles.title, { color: emphasized ? palette.tint : palette.text }, emphasized ? styles.bold : null]}>
+            style={[styles.title, { color: emphasized ? palette.tint : palette.text }, emphasized || props.strong ? styles.bold : null]}>
             {title}
+            {props.titleAside ? <Text style={{ color: palette.textSecondary }}>{` ${props.titleAside}`}</Text> : null}
           </Text>
           {badge ? (
             <Text style={[styles.badge, { backgroundColor: palette.tintContainer, color: palette.onTintContainer }]}>
@@ -193,10 +237,20 @@ export function Row(props: RowProps) {
             </Text>
           ) : null}
         </View>
-        {subtitle ? <Text style={[styles.subtitle, { color: palette.textSecondary }]}>{subtitle}</Text> : null}
+        {subtitle ? (
+          <View style={styles.inline}>
+            {props.subtitleDotColor ? <Dot color={props.subtitleDotColor} /> : null}
+            <Text style={[styles.subtitle, { color: emphasized ? palette.tint : palette.textSecondary }]}>{subtitle}</Text>
+          </View>
+        ) : null}
+        {props.note ? <Text style={[styles.subtitle, { color: palette.textSecondary }]}>{props.note}</Text> : null}
         {props.footer}
       </View>
-      {detail ? <Text style={[styles.detail, { color: palette.textSecondary }]}>{detail}</Text> : null}
+      {detail ? (
+        <Text style={[styles.detail, props.detailProminent ? styles.bold : null, { color: props.detailProminent ? palette.text : palette.textSecondary }]}>
+          {detail}
+        </Text>
+      ) : null}
       {props.toggle ? (
         <Pressable
           accessibilityRole="button"
@@ -350,14 +404,22 @@ export function ButtonRow({ label, role = 'default', prominent, disabled, onPres
   );
 }
 
-export function TextBlock({ text, secondary, size = 'body', selectable }: TextBlockProps) {
+export function TextBlock({ text, secondary, size = 'body', brandMark, selectable }: TextBlockProps) {
   const palette = usePalette();
   return (
-    <Text
-      selectable={selectable}
-      style={[styles.block, size === 'large' ? styles.large : null, { color: secondary ? palette.textSecondary : palette.text }]}>
-      {text}
-    </Text>
+    <View>
+      {brandMark && size === 'title' ? <Text style={[styles.brandMark, { color: palette.tint }]}>▼</Text> : null}
+      <Text
+        selectable={selectable}
+        accessibilityRole={size === 'title' ? 'header' : undefined}
+        style={[
+          styles.block,
+          size === 'large' ? styles.large : size === 'title' ? styles.pageTitle : null,
+          { color: secondary ? palette.textSecondary : palette.text },
+        ]}>
+        {text}
+      </Text>
+    </View>
   );
 }
 
@@ -442,18 +504,10 @@ export function TileGrid({ tiles, columns = 3 }: TileGridProps) {
   );
 }
 
-export function MonthCalendar({ title, weekdays, cells, selectedKey, onSelect, onPrevious, onNext, onToday }: MonthCalendarProps) {
+export function MonthCalendar({ weekdays, cells, selectedKey, onSelect }: MonthCalendarProps) {
   const palette = usePalette();
   return (
     <View style={styles.field}>
-      <View style={styles.inline}>
-        <Text style={[styles.title, styles.bold, styles.grow, { color: palette.text }]}>{title}</Text>
-        {([['‹', '上個月', onPrevious], ['今天', '今天', onToday], ['›', '下個月', onNext]] as const).map(([text, a11y, press]) => (
-          <Pressable key={a11y} accessibilityRole="button" accessibilityLabel={a11y} onPress={press} hitSlop={8}>
-            <Text style={[styles.label, { color: palette.tint }]}>{text}</Text>
-          </Pressable>
-        ))}
-      </View>
       <View style={styles.grid}>
         {weekdays.map((weekday) => (
           <Text key={weekday} style={[styles.cell, styles.center, { color: palette.textSecondary }]}>{weekday}</Text>
@@ -471,18 +525,30 @@ export function MonthCalendar({ title, weekdays, cells, selectedKey, onSelect, o
               <Text
                 style={[
                   styles.center,
-                  { color: cell.isToday ? palette.tint : cell.inMonth ? palette.text : palette.textTertiary },
+                  {
+                    color: cell.isToday
+                      ? palette.tint
+                      : cell.mark?.tone === 'holiday'
+                        ? palette.danger
+                        : cell.inMonth
+                          ? palette.text
+                          : palette.textTertiary,
+                  },
                   cell.isToday ? styles.bold : null,
                 ]}>
                 {cell.day}
               </Text>
               <View style={[styles.inline, styles.indicators]}>
-                {cell.indicators.slice(0, CALENDAR_CELL_INDICATORS).map((indicator) => (
-                  <View
-                    key={indicator.key}
-                    style={[styles.indicator, { backgroundColor: indicator.color }, indicator.shape === 'dot' ? styles.round : null]}
-                  />
-                ))}
+                {cell.mark ? (
+                  <Text style={[styles.markText, { color: cell.mark.tone === 'holiday' ? palette.danger : palette.text }]}>{cell.mark.text}</Text>
+                ) : (
+                  cell.indicators.slice(0, CALENDAR_CELL_INDICATORS).map((indicator) => (
+                    <View
+                      key={indicator.key}
+                      style={[styles.indicator, { backgroundColor: indicator.color }, indicator.shape === 'dot' ? styles.round : null]}
+                    />
+                  ))
+                )}
               </View>
             </Pressable>
           );
@@ -519,6 +585,202 @@ export function CrowdBar({ levels, accessibilityLabel }: CrowdBarProps) {
 export function Embedded({ children, height, aspectRatio }: EmbeddedProps) {
   return (
     <View style={[styles.embedded, height != null ? { height } : { aspectRatio: aspectRatio ?? 4 / 3 }]}>{children}</View>
+  );
+}
+
+export function NowCard({
+  eyebrow,
+  eyebrowDetail,
+  title,
+  subtitle,
+  rail,
+  footer,
+  footerDetail,
+  details,
+  accessibilityLabel,
+  onPress,
+}: NowCardProps) {
+  const palette = usePalette();
+  return (
+    <Pressable
+      accessible
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={accessibilityLabel}
+      disabled={!onPress}
+      onPress={onPress}
+      style={[styles.nowCard, { backgroundColor: palette.scheme === 'dark' ? NOW_CARD.dark : NOW_CARD.light }]}>
+      <View style={styles.nowLine}>
+        <Text style={[styles.nowEyebrow, { color: ON_NOW_CARD }]}>{eyebrow}</Text>
+        {eyebrowDetail ? <Text style={[styles.detail, { color: ON_NOW_CARD_SOFT }]}>{eyebrowDetail}</Text> : null}
+      </View>
+      <Text style={[styles.nowTitle, { color: ON_NOW_CARD }]}>{title}</Text>
+      {subtitle ? <Text style={[styles.subtitle, { color: ON_NOW_CARD_SOFT }]}>{subtitle}</Text> : null}
+      {rail ? <NowRailBars rail={rail} /> : null}
+      {footer || footerDetail ? (
+        <View style={styles.nowLine}>
+          <Text style={[styles.label, { color: ON_NOW_CARD }]}>{footer ?? ''}</Text>
+          {footerDetail ? <Text style={[styles.detail, { color: ON_NOW_CARD_SOFT }]}>{footerDetail}</Text> : null}
+        </View>
+      ) : null}
+      {details?.map((detail) => (
+        <View key={detail.key} style={[styles.nowLine, styles.nowDetail]}>
+          <Text style={[styles.detail, { color: ON_NOW_CARD_SOFT }]}>{detail.label}</Text>
+          <Text style={[styles.label, { color: ON_NOW_CARD }]}>{detail.value}</Text>
+        </View>
+      ))}
+    </Pressable>
+  );
+}
+
+export function TimetableGrid({ columns, rows, cells, breakAfter, onPress }: TimetableGridProps) {
+  const palette = usePalette();
+  return (
+    <View style={styles.week}>
+      <View style={styles.weekRow}>
+        <View style={styles.weekHeader} />
+        {columns.map((column) => (
+          <View key={column.key} accessible accessibilityRole="header" accessibilityLabel={column.accessibilityLabel ?? column.label} style={styles.weekCell}>
+            <Text style={[styles.label, styles.center, { color: column.highlighted ? palette.tint : palette.textSecondary }]}>{column.label}</Text>
+            {column.detail ? (
+              <Text style={[styles.overline, styles.center, { color: column.holiday ? palette.danger : palette.textSecondary }]}>
+                {column.holiday ? `${column.detail} ${column.holiday}` : column.detail}
+              </Text>
+            ) : null}
+          </View>
+        ))}
+      </View>
+      {rows.map((row, rowIndex) => (
+        <Fragment key={row.key}>
+          <View style={styles.weekRow}>
+            <View style={styles.weekHeader}>
+              <Text style={[styles.label, styles.center, { color: row.highlighted ? palette.tint : palette.text }]}>{row.label}</Text>
+              {row.detail ? <Text style={[styles.overline, styles.center, { color: palette.textSecondary }]}>{row.detail}</Text> : null}
+            </View>
+            {(cells[rowIndex] ?? []).map((cell, columnIndex) =>
+              // A covered cell (span 0) keeps its column's place, without its own content.
+              cell.span === 0 ? (
+                <View key={cell.key} style={[styles.weekCell, styles.weekSlot]} />
+              ) : (
+                <Pressable
+                  key={cell.key}
+                  accessibilityRole="button"
+                  accessibilityLabel={cell.accessibilityLabel}
+                  disabled={!onPress}
+                  onPress={() => onPress?.(rowIndex, columnIndex)}
+                  style={[
+                    styles.weekCell,
+                    styles.weekSlot,
+                    cell.empty ? [styles.weekEmpty, { borderColor: palette.separator }] : { backgroundColor: cell.color ?? palette.surface },
+                    columns[columnIndex]?.holiday ? styles.disabled : null,
+                  ]}>
+                  <Text numberOfLines={2} style={[styles.overline, styles.center, { color: cell.ink ?? palette.text }]}>{cell.text}</Text>
+                </Pressable>
+              ),
+            )}
+          </View>
+          {breakAfter?.index === rowIndex ? (
+            <Text style={[styles.overline, styles.center, { color: palette.textSecondary }]}>{breakAfter.label}</Text>
+          ) : null}
+        </Fragment>
+      ))}
+    </View>
+  );
+}
+
+export function DayStrip({ days, selectedKey, onSelect }: DayStripProps) {
+  const palette = usePalette();
+  return (
+    <View style={styles.inline}>
+      {days.map((day) => {
+        const selected = day.key === selectedKey;
+        return (
+          <Pressable
+            key={day.key}
+            accessibilityRole="button"
+            accessibilityLabel={day.accessibilityLabel}
+            accessibilityState={{ selected }}
+            onPress={() => onSelect(day.key)}
+            style={styles.weekCell}>
+            <Text style={[styles.overline, styles.center, { color: day.isToday ? palette.tint : palette.textSecondary }]}>
+              {day.isToday ? `▼ ${day.weekday}` : day.weekday}
+            </Text>
+            <Text
+              style={[
+                styles.title,
+                styles.center,
+                styles.bold,
+                selected ? [styles.dayCircle, { backgroundColor: palette.tint, color: palette.onTint }] : { color: day.holiday ? palette.danger : palette.text },
+              ]}>
+              {day.day}
+            </Text>
+            {day.holiday ? <Text style={[styles.markText, styles.center, { color: palette.danger }]}>{day.holiday}</Text> : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+export function ChoiceGrid({ options, value, onChange, accessibilityLabel }: ChoiceGridProps) {
+  const palette = usePalette();
+  return (
+    <View style={styles.chips}>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityRole="button"
+            accessibilityLabel={accessibilityLabel ? `${accessibilityLabel} ${option.label}` : option.label}
+            accessibilityState={{ selected }}
+            onPress={() => onChange(option.value)}
+            style={[styles.choice, { backgroundColor: selected ? palette.tint : palette.surfaceHighlight }]}>
+            <Text style={[styles.label, styles.center, { color: selected ? palette.onTint : palette.text }]}>{option.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** The bell rail with each period and break as wide as its minutes (flex), hidden from screen readers. */
+function NowRailBars({ rail }: { rail: NowRail }) {
+  const parts: { key: string; minutes: number; segment?: NowRail['segments'][number] }[] = [];
+  let cursor = rail.start;
+  for (const segment of rail.segments) {
+    if (segment.start > cursor) parts.push({ key: `gap-${segment.key}`, minutes: segment.start - cursor });
+    parts.push({ key: segment.key, minutes: Math.max(1, segment.end - segment.start), segment });
+    cursor = Math.max(cursor, segment.end);
+  }
+  const span = Math.max(1, rail.end - rail.start);
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.nowRail}>
+      <View style={styles.nowMarkerRow}>
+        {rail.now !== null ? (
+          <Text style={[styles.nowMarker, { left: `${((rail.now - rail.start) / span) * 100}%`, color: ON_NOW_CARD }]}>▼</Text>
+        ) : null}
+      </View>
+      <View style={styles.inline}>
+        {parts.map((part) => (
+          <View key={part.key} style={{ flex: part.minutes }}>
+            {part.segment?.kind === 'lesson' ? (
+              <View style={[styles.nowBar, { backgroundColor: NOW_RAIL_AHEAD }]}>
+                <View style={[styles.nowBar, { width: `${part.segment.progress * 100}%`, backgroundColor: ON_NOW_CARD }]} />
+              </View>
+            ) : part.segment?.kind === 'free' ? (
+              <View style={[styles.nowBar, styles.nowFree, { borderColor: part.segment.progress >= 1 ? ON_NOW_CARD : NOW_RAIL_AHEAD }]} />
+            ) : part.segment ? (
+              <View style={[styles.nowLunch, { backgroundColor: part.segment.progress >= 1 ? ON_NOW_CARD : NOW_RAIL_AHEAD }]} />
+            ) : null}
+            {part.segment ? (
+              <Text style={[styles.overline, styles.center, { color: part.segment.current ? ON_NOW_CARD : ON_NOW_CARD_SOFT }]}>
+                {part.segment.label}
+              </Text>
+            ) : null}
+          </View>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -563,12 +825,40 @@ const styles = StyleSheet.create({
   // Seven columns with no gap between them: a gap would push the seventh cell to the next line.
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: { width: '14.28%', paddingVertical: 6, borderRadius: 12, alignItems: 'center' },
-  indicators: { height: 6, gap: 2 },
+  indicators: { height: 14, gap: 2 },
+  markText: { fontSize: 10, lineHeight: 14, fontWeight: '700' },
+  mark: { minWidth: 24, alignItems: 'center', justifyContent: 'center' },
+  period: { width: 40, minHeight: 40, borderRadius: 12 },
+  square: { borderRadius: 3 },
+  prominentTitle: { fontSize: 20, fontWeight: '700' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  screenSubtitle: { paddingHorizontal: 4, marginBottom: 4 },
+  pageTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700' },
+  brandMark: { fontSize: 48 },
+  dayCircle: { width: 40, height: 40, lineHeight: 40, borderRadius: 20, overflow: 'hidden' },
+  choice: { minWidth: 56, minHeight: 44, borderRadius: 12, justifyContent: 'center', paddingHorizontal: 12 },
   indicator: { width: 5, height: 5, borderRadius: 1 },
   round: { borderRadius: 2.5 },
   pill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   car: { width: 18, height: 8, borderRadius: 4 },
   embedded: { width: '100%', overflow: 'hidden' },
+  nowCard: { borderRadius: 24, paddingHorizontal: 20, paddingVertical: 18, gap: 2 },
+  nowLine: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
+  nowEyebrow: { fontSize: 17, fontWeight: '600' },
+  nowTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700' },
+  nowRail: { paddingTop: 14, paddingBottom: 6 },
+  nowMarkerRow: { height: 10 },
+  nowMarker: { position: 'absolute', top: -2, width: 12, marginLeft: -6, fontSize: 9, textAlign: 'center' },
+  nowBar: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  nowFree: { borderWidth: 1 },
+  nowLunch: { height: 1, marginVertical: 2.5 },
+  nowDetail: { paddingTop: 10 },
+  week: { padding: 8, gap: 4 },
+  weekRow: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  weekHeader: { width: 34, alignItems: 'center' },
+  weekCell: { flex: 1, alignItems: 'center' },
+  weekSlot: { minHeight: 50, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 2 },
+  weekEmpty: { borderWidth: 1, borderStyle: 'dashed' },
 });
 
 // Compile-time check that this file implements the whole contract.
@@ -588,8 +878,12 @@ export default {
   Loading,
   FilterChips,
   TileGrid,
+  ChoiceGrid,
+  DayStrip,
   MonthCalendar,
   MetricPills,
   CrowdBar,
   Embedded,
+  NowCard,
+  TimetableGrid,
 } satisfies Kit;

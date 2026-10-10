@@ -129,7 +129,7 @@ function storesData(read: <S>(store: { getState: () => S; getInitialState: () =>
     news: { pinned: news.pinned, lastClearedTime: news.lastClearedTime },
     food: { favorites: food.favorites },
     transport: { youbike: transport.youbike, metro: transport.metro },
-    settings: { toolbar: settings.toolbar, homeWidgets: settings.homeWidgets },
+    settings: { homeWidgets: settings.homeWidgets },
   };
 }
 
@@ -161,6 +161,8 @@ export function finishLegacyImport(source: LegacySource): void {
         useFoodStore.setState(next.food);
         useTransportStore.setState(next.transport);
         useSettingsStore.setState(next.settings);
+        // The previous app knew the class: no need to ask 你是哪一班？
+        if (legacy.schedule?.userClass) useSettingsStore.setState({ welcomed: true });
       } finally {
         applying = false;
       }

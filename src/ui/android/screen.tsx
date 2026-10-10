@@ -7,9 +7,11 @@ import {
   Icon,
   LazyColumn,
   PullToRefreshBox,
+  Row as ComposeRow,
   Text,
+  TextButton,
 } from '@expo/ui/jetpack-compose';
-import { align, clip, fillMaxSize, fillMaxWidth, imePadding, padding, Shapes } from '@expo/ui/jetpack-compose/modifiers';
+import { align, clip, fillMaxSize, fillMaxWidth, imePadding, padding, Shapes, weight } from '@expo/ui/jetpack-compose/modifiers';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +20,8 @@ import { BRAND } from '@/theme/brand';
 
 import type { ButtonRowProps, ListScreenProps, SectionProps } from '../types';
 import { MonthCalendar } from './calendar';
-import { Embedded, EmptyState, Loading, Notice, TextBlock, TileGrid } from './content';
+import { ChoiceGrid, Embedded, EmptyState, Loading, Notice, TextBlock, TileGrid } from './content';
+import { DayStrip } from './day-strip';
 import { FilterChips, PickerRow, TextFieldRow } from './controls';
 import { MaskFirstDivider, RowDividerContext } from './divider';
 import { flattenChildren, slotDividers, type SlotKind } from './helpers';
@@ -38,6 +41,8 @@ const CONTENT = new Set<unknown>([
   Loading,
   FilterChips,
   TileGrid,
+  ChoiceGrid,
+  DayStrip,
   MonthCalendar,
   Embedded,
 ]);
@@ -67,7 +72,8 @@ function useKeyboardVisible(): boolean {
 /** Room the extended FAB (56dp + its 16dp margin) takes over the list's end. */
 const FAB_CLEARANCE = 80;
 
-export function ListScreen({ children, onRefresh, refreshing = false, fab }: ListScreenProps) {
+export function ListScreen({ children, subtitle, onRefresh, refreshing = false, fab }: ListScreenProps) {
+  const m = useM3();
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardVisible();
   const [pulling, setPulling] = useState(false);
@@ -104,6 +110,12 @@ export function ListScreen({ children, onRefresh, refreshing = false, fab }: Lis
         bottom: keyboardVisible ? 16 : insets.bottom + 16 + (fab ? FAB_CLEARANCE : 0),
       }}
       verticalArrangement={{ spacedBy: 16 }}>
+      {/* The screen's subtitle under the top app bar's title, e.g. today's date. */}
+      {subtitle ? (
+        <Text color={m.onSurfaceVariant} style={{ typography: 'bodyMedium' }} modifiers={[padding(16, 0, 16, 0)]}>
+          {subtitle}
+        </Text>
+      ) : null}
       {children}
     </LazyColumn>
   );
@@ -141,7 +153,17 @@ export function ListScreen({ children, onRefresh, refreshing = false, fab }: Lis
   );
 }
 
-export function Section({ title, footer, plain = false, children }: SectionProps) {
+export function Section({
+  title,
+  titleBadge,
+  detail,
+  action,
+  prominent = false,
+  footer,
+  footerAction,
+  plain = false,
+  children,
+}: SectionProps) {
   const m = useM3();
   const rows = flattenChildren(children);
 
@@ -183,10 +205,35 @@ export function Section({ title, footer, plain = false, children }: SectionProps
 
   return (
     <Column modifiers={[fillMaxWidth()]}>
-      {title ? (
-        <Text color={m.primary} style={{ typography: 'titleSmall' }} modifiers={[padding(16, 4, 16, 8)]}>
-          {title}
-        </Text>
+      {title || detail || action ? (
+        // A prominent header is the group's own title (titleLarge on the
+        // surface colour); the others are Material's small primary labels.
+        <ComposeRow verticalAlignment="center" modifiers={[fillMaxWidth(), padding(prominent ? 4 : 16, 4, prominent ? 4 : 16, action ? 0 : 8)]}>
+          <ComposeRow verticalAlignment="center" horizontalArrangement={{ spacedBy: 8 }} modifiers={[weight(1)]}>
+            {title ? (
+              <Text
+                color={prominent ? m.onSurface : m.primary}
+                style={prominent ? { typography: 'titleLarge', fontWeight: '700' } : { typography: 'titleSmall' }}>
+                {title}
+              </Text>
+            ) : null}
+            {titleBadge ? (
+              <Text color={m.primary} style={{ typography: prominent ? 'titleMedium' : 'labelMedium' }}>
+                {titleBadge}
+              </Text>
+            ) : null}
+          </ComposeRow>
+          {detail ? (
+            <Text color={m.onSurfaceVariant} style={{ typography: 'bodySmall' }}>
+              {detail}
+            </Text>
+          ) : null}
+          {action ? (
+            <TextButton onClick={action.onPress}>
+              <Text>{action.label}</Text>
+            </TextButton>
+          ) : null}
+        </ComposeRow>
       ) : null}
       <InCardContext.Provider value={!plain}>{body}</InCardContext.Provider>
       {footer ? (
@@ -196,6 +243,11 @@ export function Section({ title, footer, plain = false, children }: SectionProps
           modifiers={[padding(16, 8, 16, 0)]}>
           {footer}
         </Text>
+      ) : null}
+      {footerAction ? (
+        <TextButton onClick={footerAction.onPress} modifiers={[padding(4, 0, 4, 0)]}>
+          <Text>{footerAction.label}</Text>
+        </TextButton>
       ) : null}
     </Column>
   );

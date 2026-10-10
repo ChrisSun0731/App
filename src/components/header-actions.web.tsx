@@ -5,6 +5,13 @@ import type { HeaderActionsProps, HeaderItem, HeaderMenuEntry } from './header-a
 
 /** Every pressable a header item offers: menus (and their submenus) are spread out as plain buttons. */
 function buttonsOf(item: HeaderItem): { key: string; label: string; onPress: () => void; disabled?: boolean }[] {
+  if (item.kind === 'segmented') {
+    return item.options.map((option) => ({
+      key: `${item.key}-${option.value}`,
+      label: option.value === item.value ? `• ${option.label}` : option.label,
+      onPress: () => item.onChange(option.value),
+    }));
+  }
   if (item.kind !== 'menu') return [item];
   const actions = item.actions.flatMap((entry: HeaderMenuEntry) => (entry.kind === 'submenu' ? entry.actions : [entry]));
   return actions.map((action) => ({ ...action, disabled: item.disabled }));
